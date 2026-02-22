@@ -1,26 +1,32 @@
-// وظيفة فتح المودال العامة
-window.openModal = function(modalId) {
+// 1. التأكد من تعريف الدوال في النطاق العالمي (Global Scope)
+window.openModal = function (modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = 'block';
+    if (modal) {
+        // نستخدمclassList ليتماشى مع الـ CSS الخاص بك
+        modal.classList.add('show');
+    }
 };
 
-// وظيفة إغلاق المودال
-window.closeModal = function() {
-    document.getElementById('mediaModal').style.display = 'none';
+window.closeModal = function () {
+    const modal = document.getElementById('mediaModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
 };
 
-// 1. زر إضافة عمل جديد (تنظيف وتصفير)
-window.openAddModal = function() {
+// 2. دالة فتح إضافة عمل جديد
+window.openAddModal = function () {
+    console.log("فتح نافذة إضافة عمل جديد...");
     const form = document.getElementById('mediaForm');
-    if(form) form.reset();
+    if (form) form.reset();
     document.getElementById('media_id').value = '';
     document.getElementById('modalTitle').innerText = 'إضافة عمل جديد';
     document.getElementById('episodesSection').style.display = 'none';
     window.openModal('mediaModal');
 };
 
-// 2. زر تعديل العمل (جلب البيانات الحقيقية من السيرفر)
-window.editMedia = async function(mediaId) {
+// 3. دالة تعديل العمل (التي تجلب البيانات)
+window.editMedia = async function (mediaId) {
     console.log("جاري جلب بيانات العمل ID:", mediaId);
     try {
         const response = await fetch(`/api/media/details/${mediaId}`);
@@ -28,7 +34,7 @@ window.editMedia = async function(mediaId) {
 
         if (data.error) throw new Error(data.error);
 
-        // ملء البيانات الأساسية
+        // ملء البيانات في الفورم
         document.getElementById('media_id').value = data.id;
         document.getElementById('title').value = data.title;
         document.getElementById('story').value = data.story;
@@ -36,19 +42,15 @@ window.editMedia = async function(mediaId) {
         document.getElementById('category').value = data.category;
         document.getElementById('year').value = data.year;
 
-        // إدارة الحلقات (لو مسلسل)
+        // إظهار الحلقات لو مسلسل
         const epSection = document.getElementById('episodesSection');
-        const epList = document.getElementById('episodesList');
-
-        if (data.category === 'tv' && data.episodes && data.episodes.length > 0) {
+        if (data.category === 'tv') {
             epSection.style.display = 'block';
+            const epList = document.getElementById('episodesList');
             epList.innerHTML = data.episodes.map(ep => `
-                <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #eee;">
+                <div style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #444;">
                     <span>الحلقة ${ep.episode_number}</span>
-                    <div>
-                        <span class="badge">${ep.is_synced ? '✅ منشورة' : '⏳ انتظار'}</span>
-                        <button type="button" onclick="forceSync(${ep.id})" class="btn-mini">تعديل/نشر</button>
-                    </div>
+                    <button type="button" onclick="forceSync(${ep.id})">تصفير المزامنة</button>
                 </div>
             `).join('');
         } else {
@@ -57,14 +59,21 @@ window.editMedia = async function(mediaId) {
 
         document.getElementById('modalTitle').innerText = 'تعديل: ' + data.title;
         window.openModal('mediaModal');
-
     } catch (error) {
-        alert("❌ فشل جلب البيانات: " + error.message);
+        alert("خطأ في جلب البيانات: " + error.message);
     }
 };
 
-// إغلاق المودال عند الضغط خارجه
-window.onclick = function(event) {
-    const modal = document.getElementById('mediaModal');
-    if (event.target == modal) closeModal();
+// 4. دالة بلوجر (التي كانت تعطي الخطأ)
+window.toggleBlogger = async function (postId) {
+    console.log("تغيير حالة مقال بلوجر ID:", postId);
+    if (!postId || postId === 'None') return alert("لا يوجد ID مقال!");
+
+    try {
+        const response = await fetch(`/api/blogger/revert/${postId}`, { method: 'POST' });
+        const result = await response.json();
+        alert(result.error ? "خطأ: " + result.error : "✅ تم تحويل المقال لمسودة");
+    } catch (e) {
+        alert("فشل الاتصال بالسيرفر");
+    }
 };

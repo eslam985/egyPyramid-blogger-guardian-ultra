@@ -455,7 +455,7 @@ button {
     align-items: center;
     justify-content: center;
     pointer-events: none;
-    z-index: 1000;
+    z-index: 10000;
 }
 
 #modal-container:has(.modal.show) {
@@ -478,9 +478,12 @@ button {
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
+/* لضمان رؤية المودال فعلياً عند إضافة كلاس show */
 .modal.show {
     transform: scale(1);
     opacity: 1;
+    visibility: visible; /* إضافة هذا */
+    pointer-events: auto; /* لضمان القدرة على الضغط داخل المودال */
 }
 
 .modal-header {
