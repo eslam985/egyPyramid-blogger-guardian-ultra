@@ -81,3 +81,25 @@ window.toggleBlogger = async function (postId) {
         alert("فشل الاتصال بالسيرفر");
     }
 };
+
+// منطق تبديل الوضع الداكن/الفاتح
+const themeToggle = document.getElementById('theme-toggle');
+const body = document.body;
+
+// 1. التحقق من التفضيل المحفوظ سابقاً
+if (localStorage.getItem('theme') === 'dark') {
+    body.classList.add('dark-mode');
+}
+
+// 2. مستمع الحدث عند الضغط على الزر
+// استبدل الجزء القديم بهذا لضمان التوافق مع الـ Root
+themeToggle.addEventListener('click', () => {
+    // التعديل هنا: نستخدم documentElement بدلاً من body
+    document.documentElement.classList.toggle('dark-mode');
+    
+    if (document.documentElement.classList.contains('dark-mode')) {
+        localStorage.setItem('theme', 'dark');
+    } else {
+        localStorage.setItem('theme', 'light');
+    }
+});

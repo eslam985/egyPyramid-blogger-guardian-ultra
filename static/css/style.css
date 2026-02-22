@@ -37,7 +37,7 @@
 }
 
 /* الوضع الداكن (Dark Mode) - يتم تفعيله بإضافة class .dark-mode إلى عنصر <body> */
-.dark-mode {
+:root.dark-mode {
     --color-primary: #3b82f6;
     --color-primary-dark: #2563eb;
     --color-primary-light: #60a5fa;
@@ -444,23 +444,6 @@ button {
 /* ---------------------------------------- */
 /* حاوية المودال (Modal) - أنماط أساسية      */
 /* ---------------------------------------- */
-#modal-container {
-    /* سيتم إدارة ظهور المودال عبر JS، نحدد الطبقات فقط */
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-    z-index: 10000;
-}
-
-#modal-container:has(.modal.show) {
-    pointer-events: auto;
-}
 
 /* تنسيقات المودال الأساسية */
 #mediaModal {
@@ -471,47 +454,54 @@ button {
     transform: translate(-50%, -50%);
     width: 90%;
     max-width: 550px;
-    background-color:var(--color-text);
-    color: #ffffff;
+    background-color: var(--color-surface); /* يستخدم لون السطح حسب الوضع */
+    color: var(--color-text); /* يستخدم لون النص حسب الوضع */
     padding: 25px;
     border-radius: 15px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    box-shadow: var(--shadow-lg);
     z-index: 10001;
-    border: 1px solid #333;
+    border: 1px solid var(--color-border);
     max-height: 90vh;
     overflow-y: auto;
 }
 
-/* خلفية التعتيم (Overlay) */
-.modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 10000;
-}
-
 /* العناوين والحقول */
 .modal-header {
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 15px;
     margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
 }
 
-.modal-header h2 { color: #3498db; margin: 0; }
+.modal-header h2 { 
+    color: var(--color-primary); 
+    margin: 0; 
+    font-size: 1.5rem;
+}
 
 .form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; color: #bbb; }
+.form-group label { 
+    display: block; 
+    margin-bottom: 5px; 
+    color: var(--color-text-light); 
+    font-weight: 500;
+}
 
 .form-group input, .form-group textarea, .form-group select {
     width: 100%;
     padding: 10px;
-    background: #1e1e1e;
-    border: 1px solid #444;
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
     border-radius: 8px;
-    color: white;
+    color: var(--color-text);
+    transition: var(--transition);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--color-primary);
 }
 
 /* أزرار المودال */
@@ -520,26 +510,80 @@ button {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
+    border-top: 1px solid var(--color-border);
+    padding-top: 15px;
 }
 
-.btn-primary { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
-.btn-secondary { background: #444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+.btn-primary { 
+    background: var(--color-primary); 
+    color: white; 
+    border: none; 
+    padding: 10px 20px; 
+    border-radius: 8px; 
+    cursor: pointer;
+    font-weight: 600;
+}
 
-/* زر الإغلاق X */
-.close-btn { cursor: pointer; font-size: 24px; color: #777; }
-.close-btn:hover { color: #ff4d4d; }
+.btn-primary:hover { background: var(--color-primary-dark); }
 
+.btn-secondary { 
+    background: var(--color-text-muted); 
+    color: white; 
+    border: none; 
+    padding: 10px 20px; 
+    border-radius: 8px; 
+    cursor: pointer; 
+}
 
+/* إدارة الحلقات */
+.episodes-admin-list { 
+    max-height: 200px; 
+    overflow-y: auto; 
+    background: var(--color-bg); 
+    border-radius: 8px; 
+    padding: 10px; 
+    border: 1px solid var(--color-border);
+}
 
-/* أضف هذا لملف الـ CSS */
-.category-badge.tv { background-color: var(--color-badge-tv); }
-.category-badge.movie { background-color: var(--color-badge-movie); }
-.episodes-admin-list { max-height: 200px; overflow-y: auto; background: #1a1a1a; border-radius: 8px; padding: 10px; }
-.ep-admin-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #333; }
-.status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
-.status-badge.synced { background: #2ecc71; color: #fff; }
-.status-badge.pending { background: #e67e22; color: #fff; }
-.btn-mini-sync { background: #3498db; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.ep-admin-item { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 8px; 
+    border-bottom: 1px solid var(--color-border); 
+}
+
+/* ---------------------------------------- */
+/*  زر تبديل الوضع (Fixed)                */
+/* ---------------------------------------- */
+/* زر تبديل الوضع (Fixed) */
+.theme-toggle-btn {
+    position: fixed;
+    bottom: 25px;
+    left: 25px; /* لأنه RTL يفضل يكون على اليسار بعيداً عن الكلام */
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: var(--shadow-lg);
+    z-index: 9999;
+    border: 2px solid var(--color-surface);
+    transition: var(--transition);
+}
+
+.theme-toggle-btn:hover {
+    transform: scale(1.1) rotate(15deg);
+}
+
+/* تغيير الأيقونة عند تبديل الوضع */
+.dark-mode #theme-toggle i::before {
+    content: "\f185"; /* أيقونة الشمس من FontAwesome */
+}
 /* ---------------------------------------- */
 /* أنماط متجاوبة (Responsive)               */
 /* ---------------------------------------- */
