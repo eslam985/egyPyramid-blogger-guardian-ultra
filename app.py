@@ -129,16 +129,9 @@ async def revert_post(post_id: str, user: str = Depends(authenticate)):
 @app.post("/api/episodes/{ep_id}/reset-sync")
 async def reset_sync(ep_id: int, user: str = Depends(authenticate)):
     try:
-        # هنا نستخدم الكلاس بتاعك SupabaseService أو الوصول المباشر للـ client لو متاح
-        # الحقيقة الصارمة: لازم نستخدم الـ client اللي جوه السيرفيس بتاعك
-        from services.supabase_db import supabase  # تأكد أن supabase معرف في تلك الخدمة
-
-        supabase.table("episodes").update({"is_synced": False}).eq(
-            "id", ep_id
-        ).execute()
-        return {
-            "status": "success"
-        }  # FastAPI بيحول الديكشنري لـ JSON تلقائياً مش محتاج json.dumps
+        # الحقيقة الصارمة: نستخدم الكلاينت الموجود داخل السيرفيس
+        SupabaseService.client.table("episodes").update({"is_synced": False}).eq("id", ep_id).execute()
+        return {"status": "success"}
     except Exception as e:
         return {"error": str(e)}
 
