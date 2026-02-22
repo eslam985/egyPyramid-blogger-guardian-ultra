@@ -462,73 +462,72 @@ button {
     pointer-events: auto;
 }
 
-/* التعديل المطلوب لضمان الظهور */
-.modal {
-    display: none; /* سيتم تغييره عبر JS ليكون block */
+/* تنسيقات المودال الأساسية */
+#mediaModal {
+    display: none; 
     position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%); /* يضعه في نص الشاشة بالظبط */
+    transform: translate(-50%, -50%);
     width: 90%;
-    max-width: 600px;
-    background: #1a1a1a; /* لون غامق يليق بـ Guardian Ultra */
-    z-index: 99999; /* أعلى من أي شيء آخر */
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    max-width: 550px;
+    background-color: #121212; /* خلفية داكنة */
+    color: #ffffff;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    z-index: 10001;
     border: 1px solid #333;
-    opacity: 1 !important; /* نضمن عدم الشفافية */
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
-/* عندما يفتح المودال سنضيف هذا الكلاس لو أردنا أو نكتفي بـ display block */
-.modal.show {
-    display: block !important;
+/* خلفية التعتيم (Overlay) */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
 }
 
-/* لضمان رؤية المودال فعلياً عند إضافة كلاس show */
-.modal.show {
-    transform: scale(1);
-    opacity: 1;
-    visibility: visible; /* إضافة هذا */
-    pointer-events: auto; /* لضمان القدرة على الضغط داخل المودال */
-}
-
+/* العناوين والحقول */
 .modal-header {
+    border-bottom: 1px solid #333;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
 }
 
-.modal-header h3 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--color-text);
+.modal-header h2 { color: #3498db; margin: 0; }
+
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 5px; color: #bbb; }
+
+.form-group input, .form-group textarea, .form-group select {
+    width: 100%;
+    padding: 10px;
+    background: #1e1e1e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: white;
 }
 
-.modal-close {
-    font-size: 1.5rem;
-    color: var(--color-text-light);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.modal-close:hover {
-    color: var(--color-btn-delete);
-    transform: rotate(90deg);
-}
-
-.modal-body {
-    margin-bottom: 1.5rem;
-}
-
+/* أزرار المودال */
 .modal-footer {
+    margin-top: 20px;
     display: flex;
+    gap: 10px;
     justify-content: flex-end;
-    gap: 1rem;
-    border-top: 1px solid var(--color-border);
-    padding-top: 1.5rem;
 }
+
+.btn-primary { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+.btn-secondary { background: #444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+
+/* زر الإغلاق X */
+.close-btn { cursor: pointer; font-size: 24px; color: #777; }
+.close-btn:hover { color: #ff4d4d; }
 
 
 

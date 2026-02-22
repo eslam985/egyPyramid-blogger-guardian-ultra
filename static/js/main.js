@@ -1,5 +1,5 @@
 // 1. التأكد من تعريف الدوال في النطاق العالمي (Global Scope)
-window.openModal = function(modalId) {
+window.openModal = function (modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.style.display = 'block'; // دي اللي هتظهره فوراً
@@ -11,7 +11,10 @@ window.openModal = function(modalId) {
 window.closeModal = function () {
     const modal = document.getElementById('mediaModal');
     if (modal) {
-        modal.classList.remove('show');
+        modal.style.display = 'none';
+        // اختياري: لو أضفت خلفية تعتيم
+        const overlay = document.querySelector('.modal-overlay');
+        if (overlay) overlay.style.display = 'none';
     }
 };
 
