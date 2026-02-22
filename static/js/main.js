@@ -109,29 +109,30 @@ async function toggleBlogger(postId) {
 }
 
 // 3. وظيفة فتح نافذة الإضافة (سيتم ربطها بالفورم لاحقاً)
-function openModal(modalId) {
+// استبدل كل دوال فتح وإغلاق المودال بهذا الجزء الموحد
+window.openModal = function (modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = 'block';
-}
-
-// 4. إغلاق النوافذ عند الضغط خارجها
-window.onclick = function (event) {
-    if (event.target.className === 'modal') {
-        event.target.style.display = "none";
+    if (modal) {
+        modal.style.display = 'block';
     }
-}
+};
 
-// وظائف المودال
-function openAddModal() {
+window.closeModal = function () {
+    const modal = document.getElementById('mediaModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.getElementById('mediaForm').reset(); // تنظيف الفورم عند الإغلاق
+    }
+};
+
+window.openAddModal = function () {
     document.getElementById('mediaForm').reset();
     document.getElementById('media_id').value = '';
     document.getElementById('modalTitle').innerText = 'إضافة عمل جديد';
-    document.getElementById('mediaModal').style.display = 'block';
-}
+    document.getElementById('episodesSection').style.display = 'none'; // إخفاء قسم الحلقات عند الإضافة
+    window.openModal('mediaModal');
+};
 
-function closeModal() {
-    document.getElementById('mediaModal').style.display = 'none';
-}
 
 // إرسال البيانات (Submit Logic)
 document.getElementById('mediaForm').addEventListener('submit', async (e) => {
