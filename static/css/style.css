@@ -462,20 +462,27 @@ button {
     pointer-events: auto;
 }
 
+/* التعديل المطلوب لضمان الظهور */
 .modal {
-    background-color: var(--color-surface);
-    border-radius: 20px;
-    box-shadow: var(--shadow-lg);
-    max-width: 500px;
+    display: none; /* سيتم تغييره عبر JS ليكون block */
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* يضعه في نص الشاشة بالظبط */
     width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    padding: 2rem;
-    position: relative;
-    border: 1px solid var(--color-border);
-    transform: scale(0.9);
-    opacity: 0;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    max-width: 600px;
+    background: #1a1a1a; /* لون غامق يليق بـ Guardian Ultra */
+    z-index: 99999; /* أعلى من أي شيء آخر */
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    border: 1px solid #333;
+    opacity: 1 !important; /* نضمن عدم الشفافية */
+}
+
+/* عندما يفتح المودال سنضيف هذا الكلاس لو أردنا أو نكتفي بـ display block */
+.modal.show {
+    display: block !important;
 }
 
 /* لضمان رؤية المودال فعلياً عند إضافة كلاس show */

@@ -1,9 +1,10 @@
 // 1. التأكد من تعريف الدوال في النطاق العالمي (Global Scope)
-window.openModal = function (modalId) {
+window.openModal = function(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-        // نستخدمclassList ليتماشى مع الـ CSS الخاص بك
-        modal.classList.add('show');
+        modal.style.display = 'block'; // دي اللي هتظهره فوراً
+        modal.classList.add('show');  // ودي عشان الأنميشن لو موجود
+        console.log("المودال المفروض ظهر قدامك دلوقتي!");
     }
 };
 
