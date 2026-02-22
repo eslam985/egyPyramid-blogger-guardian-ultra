@@ -305,7 +305,8 @@ button {
 /* حاوية الصورة */
 .card-image {
     position: relative;
-    aspect-ratio: 2/3; /* نسبة عرض إلى ارتفاع تناسب الملصقات */
+    aspect-ratio: 2/3;
+    /* نسبة عرض إلى ارتفاع تناسب الملصقات */
     background-color: var(--color-surface);
     overflow: hidden;
 }
@@ -420,6 +421,7 @@ button {
 .btn-edit {
     background-color: var(--color-btn-edit);
 }
+
 .btn-edit:hover {
     background-color: var(--color-primary-dark);
     transform: scale(1.1);
@@ -428,6 +430,7 @@ button {
 .btn-blogger {
     background-color: var(--color-btn-blogger);
 }
+
 .btn-blogger:hover {
     background-color: #ea580c;
     transform: scale(1.1);
@@ -436,6 +439,7 @@ button {
 .btn-delete {
     background-color: var(--color-btn-delete);
 }
+
 .btn-delete:hover {
     background-color: #b91c1c;
     transform: scale(1.1);
@@ -445,17 +449,21 @@ button {
 /* حاوية المودال (Modal) - أنماط أساسية      */
 /* ---------------------------------------- */
 
+
+
 /* تنسيقات المودال الأساسية */
 #mediaModal {
-    display: none; 
+    display: none;
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 90%;
     max-width: 550px;
-    background-color: var(--color-surface); /* يستخدم لون السطح حسب الوضع */
-    color: var(--color-text); /* يستخدم لون النص حسب الوضع */
+    background-color: var(--color-surface);
+    /* يستخدم لون السطح حسب الوضع */
+    color: var(--color-text);
+    /* يستخدم لون النص حسب الوضع */
     padding: 25px;
     border-radius: 15px;
     box-shadow: var(--shadow-lg);
@@ -475,21 +483,26 @@ button {
     align-items: center;
 }
 
-.modal-header h2 { 
-    color: var(--color-primary); 
-    margin: 0; 
+.modal-header h2 {
+    color: var(--color-primary);
+    margin: 0;
     font-size: 1.5rem;
 }
 
-.form-group { margin-bottom: 15px; }
-.form-group label { 
-    display: block; 
-    margin-bottom: 5px; 
-    color: var(--color-text-light); 
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--color-text-light);
     font-weight: 500;
 }
 
-.form-group input, .form-group textarea, .form-group select {
+.form-group input,
+.form-group textarea,
+.form-group select {
     width: 100%;
     padding: 10px;
     background: var(--color-input-bg);
@@ -514,43 +527,45 @@ button {
     padding-top: 15px;
 }
 
-.btn-primary { 
-    background: var(--color-primary); 
-    color: white; 
-    border: none; 
-    padding: 10px 20px; 
-    border-radius: 8px; 
+.btn-primary {
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
 }
 
-.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-primary:hover {
+    background: var(--color-primary-dark);
+}
 
-.btn-secondary { 
-    background: var(--color-text-muted); 
-    color: white; 
-    border: none; 
-    padding: 10px 20px; 
-    border-radius: 8px; 
-    cursor: pointer; 
+.btn-secondary {
+    background: var(--color-text-muted);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
 }
 
 /* إدارة الحلقات */
-.episodes-admin-list { 
-    max-height: 200px; 
-    overflow-y: auto; 
-    background: var(--color-bg); 
-    border-radius: 8px; 
-    padding: 10px; 
+.episodes-admin-list {
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--color-bg);
+    border-radius: 8px;
+    padding: 10px;
     border: 1px solid var(--color-border);
 }
 
-.ep-admin-item { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    padding: 8px; 
-    border-bottom: 1px solid var(--color-border); 
+.ep-admin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid var(--color-border);
 }
 
 /* ---------------------------------------- */
@@ -560,7 +575,8 @@ button {
 .theme-toggle-btn {
     position: fixed;
     bottom: 25px;
-    left: 25px; /* لأنه RTL يفضل يكون على اليسار بعيداً عن الكلام */
+    left: 25px;
+    /* لأنه RTL يفضل يكون على اليسار بعيداً عن الكلام */
     width: 50px;
     height: 50px;
     border-radius: 50%;
@@ -582,8 +598,10 @@ button {
 
 /* تغيير الأيقونة عند تبديل الوضع */
 .dark-mode #theme-toggle i::before {
-    content: "\f185"; /* أيقونة الشمس من FontAwesome */
+    content: "\f185";
+    /* أيقونة الشمس من FontAwesome */
 }
+
 /* ---------------------------------------- */
 /* أنماط متجاوبة (Responsive)               */
 /* ---------------------------------------- */
@@ -591,7 +609,7 @@ button {
     .container {
         padding: 1.5rem;
     }
-    
+
     .media-grid {
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
@@ -603,47 +621,48 @@ button {
         padding: 1rem;
         gap: 0.8rem;
     }
-    
+
     .logo {
         font-size: 1.3rem;
     }
-    
+
     .search-bar {
         flex: 1 1 100%;
         order: 3;
         margin: 0.5rem 0 0;
     }
-    
+
     .search-bar form {
         width: 100%;
     }
-    
+
     .nav-actions {
         order: 2;
     }
-    
+
     .dashboard-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.8rem;
     }
-    
+
     .filters {
         width: 100%;
         justify-content: flex-start;
     }
-    
+
     .media-grid {
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         gap: 1rem;
     }
-    
+
     .card-content h3 {
         font-size: 1rem;
     }
-    
+
     .story-preview {
-        -webkit-line-clamp: 1; /* سطر واحد على الشاشات الصغيرة */
+        -webkit-line-clamp: 1;
+        /* سطر واحد على الشاشات الصغيرة */
     }
 }
 
@@ -651,23 +670,25 @@ button {
     .container {
         padding: 1rem;
     }
-    
+
     .media-grid {
-        grid-template-columns: 1fr; /* بطاقة واحدة في كل صف */
+        grid-template-columns: 1fr;
+        /* بطاقة واحدة في كل صف */
     }
-    
+
     .card-actions {
         justify-content: space-around;
     }
-    
+
     .btn-add span {
-        display: none; /* إخفاء النص والاحتفاظ بالأيقونة فقط */
+        display: none;
+        /* إخفاء النص والاحتفاظ بالأيقونة فقط */
     }
-    
+
     .btn-add i {
         margin: 0;
     }
-    
+
     .filter-tag {
         padding: 0.4rem 1rem;
         font-size: 0.85rem;

@@ -96,7 +96,7 @@ if (localStorage.getItem('theme') === 'dark') {
 themeToggle.addEventListener('click', () => {
     // التعديل هنا: نستخدم documentElement بدلاً من body
     document.documentElement.classList.toggle('dark-mode');
-    
+
     if (document.documentElement.classList.contains('dark-mode')) {
         localStorage.setItem('theme', 'dark');
     } else {
