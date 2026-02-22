@@ -471,7 +471,7 @@ button {
     transform: translate(-50%, -50%);
     width: 90%;
     max-width: 550px;
-    background-color: #121212; /* خلفية داكنة */
+    background-color:var(--color-text);
     color: #ffffff;
     padding: 25px;
     border-radius: 15px;
