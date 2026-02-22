@@ -1,0 +1,21 @@
+<!-- هذا الملف هو المسؤول عن شكل الفيلم/المسلسل الفردي. -->
+
+<div class="media-card" id="media-{{ media.id }}">
+    <div class="card-image">
+        <img src="{{ media.poster_url }}" alt="{{ media.title }}">
+        <span class="category-badge">{{ 'مسلسل' if media.category == 'tv' else 'فيلم' }}</span>
+    </div>
+    <div class="card-content">
+        <h3>{{ media.title }}</h3>
+        <p class="story-preview">{{ media.story[:100] }}...</p>
+        <div class="card-meta">
+            <span><i class="fa fa-film"></i> {{ media.episodes|length }} حلقة</span>
+            <span><i class="fa fa-calendar"></i> {{ media.year }}</span>
+        </div>
+        <div class="card-actions">
+            <button onclick="editMedia('{{ media.id }}')" class="btn-edit"><i class="fa fa-edit"></i></button>
+            <button onclick="toggleBlogger('{{ media.blogger_post_id }}')" class="btn-blogger"><i class="fa fa-blogger"></i></button>
+            <button onclick="deleteMedia('{{ media.id }}')" class="btn-delete"><i class="fa fa-trash"></i></button>
+        </div>
+    </div>
+</div>

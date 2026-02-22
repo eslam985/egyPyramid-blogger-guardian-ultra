@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian Ultra | مركز التحكم</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+
+    <nav class="main-nav">
+        <div class="logo">🚀 Guardian Ultra</div>
+        <div class="search-bar">
+            <form action="/" method="get">
+                <input type="text" name="search" placeholder="ابحث عن مسلسل أو فيلم..." value="{{ search or '' }}">
+                <button type="submit"><i class="fa fa-search"></i></button>
+            </form>
+        </div>
+        <div class="nav-actions">
+            <button onclick="openModal('addMediaModal')" class="btn-add"><i class="fa fa-plus"></i> إضافة عمل</button>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="dashboard-header">
+            <h2>إدارة المحتوى ({{ media_list|length }})</h2>
+            <div class="filters">
+                <a href="/" class="filter-tag">الكل</a>
+                <a href="/?cat=tv" class="filter-tag">مسلسلات</a>
+                <a href="/?cat=movie" class="filter-tag">أفلام</a>
+            </div>
+        </header>
+
+        <div class="media-grid">
+            {% for media in media_list %}
+            {% include 'components/media_card.html' %}
+            {% endfor %}
+        </div>
+    </main>
+
+    <div id="modal-container"></div>
+    <div id="mediaModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">إضافة عمل جديد</h2>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            <form id="mediaForm">
+                <input type="hidden" id="media_id" name="media_id">
+
+                <div class="form-group">
+                    <label>عنوان العمل</label>
+                    <input type="text" id="title" name="title" required placeholder="مثلاً: وننسي اللي كان">
+                </div>
+
+                <div class="form-group">
+                    <label>النوع</label>
+                    <select id="category" name="category">
+                        <option value="tv">مسلسل</option>
+                        <option value="movie">فيلم</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>رابط البوستر</label>
+                    <input type="url" id="poster_url" name="poster_url" required placeholder="https://...">
+                </div>
+
+                <div class="form-group">
+                    <label>سنة الإنتاج</label>
+                    <input type="number" id="year" name="year" value="2025">
+                </div>
+
+                <div class="form-group">
+                    <label>قصة العمل</label>
+                    <textarea id="story" name="story" rows="4" required></textarea>
+                </div>
+                <hr>
+                <div id="episodesSection" style="display:none;">
+                    <h3><i class="fa fa-list-ol"></i> إدارة الحلقات</h3>
+                    <div id="episodesList" class="episodes-admin-list">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" id="saveBtn" class="btn-primary">حفظ البيانات</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="static/js/main.js"></script>
+</body>
+
+</html>
