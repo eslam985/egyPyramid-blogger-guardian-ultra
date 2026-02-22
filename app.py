@@ -156,8 +156,11 @@ async def get_media_details(media_id: int, user: str = Depends(authenticate)):
             .execute()
         )
 
+        if not media_res.data:
+            return {"error": "العمل غير موجود"}
+        
         data = media_res.data
-        data["episodes"] = episodes_res.data
+        data["episodes"] = episodes_res.data if episodes_res.data else []
         return data
     except Exception as e:
         return {"error": str(e)}
