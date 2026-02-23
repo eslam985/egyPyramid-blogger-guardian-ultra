@@ -314,35 +314,33 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 
 
 @app.post("/api/blogger/toggle/{post_id}")
-async def toggle_post_status(post_id: str, username: str = Depends(authenticate)):
+async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
 
-        blogger = BloggerService(blog_id=os.getenv("BLOG_ID"))
-        service = blogger.get_service()
+        blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
+        service = blogger_service.get_service()
+        blog_id = os.getenv("BLOG_ID")
 
-        # جلب البيانات الحالية بدقة
-        post = (
-            service.posts().get(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
-        )
-        current_status = post.get("status")  # القيم الممكنة: LIVE أو DRAFT
+        # 1. جلب بيانات المقال الحالية من جوجل مباشرة
+        post = service.posts().get(blogId=blog_id, postId=post_id).execute()
+        current_status = post.get("status")  # ستكون إما 'LIVE' أو 'DRAFT'
 
         if current_status == "LIVE":
-            # أمر التحويل لمسودة (Revert)
-            service.posts().revert(
-                blogId=os.getenv("BLOG_ID"), postId=post_id
-            ).execute()
+            # 2. إذا كان منشوراً -> حوله لمسودة فوراً
+            service.posts().revert(blogId=blog_id, postId=post_id).execute()
             new_status = "draft"
+            print(f"✅ Post {post_id} reverted to DRAFT")
         else:
-            # أمر النشر (Publish)
-            service.posts().publish(
-                blogId=os.getenv("BLOG_ID"), postId=post_id
-            ).execute()
+            # 3. إذا كان مسودة -> انشره فوراً
+            service.posts().publish(blogId=blog_id, postId=post_id).execute()
             new_status = "live"
+            print(f"✅ Post {post_id} published to LIVE")
 
         return {"status": "success", "new_status": new_status}
+
     except Exception as e:
-        print(f"Error toggling post {post_id}: {e}")
+        print(f"❌ Error in toggle: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
@@ -350,10 +348,10 @@ async def toggle_post_status(post_id: str, username: str = Depends(authenticate)
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
-    page: int = 1, # أضفنا هذا
+    page: int = 1,  # أضفنا هذا
     search: str = None,
     cat: str = None,
-    status: str = None, # أضفنا هذا
+    status: str = None,  # أضفنا هذا
     user: str = Depends(authenticate),
 ):
     page_size = 12
@@ -372,22 +370,27 @@ async def index(
         query = query.not_.is_("blogger_post_id", "null")
 
     # تنفيذ الاستعلام
-    res = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
+    res = (
+        query.order("created_at", desc=True)
+        .range(offset, offset + page_size - 1)
+        .execute()
+    )
 
     # حساب الترقيم
     total_count = res.count if res.count is not None else 0
     total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
 
     return templates.TemplateResponse(
-        "index.html", {
+        "index.html",
+        {
             "request": request,
             "media_list": res.data,
             "search": search or "",
-            "current_page": page,        # هذا سيحل خطأ Jinja2
+            "current_page": page,  # هذا سيحل خطأ Jinja2
             "total_pages": total_pages,  # وهذا أيضاً
             "current_cat": cat or "",
-            "current_status": status or ""
-        }
+            "current_status": status or "",
+        },
     )
 
 

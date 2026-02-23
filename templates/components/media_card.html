@@ -14,9 +14,8 @@
     </div>
     <div class="card-actions">
       <button onclick="editMedia('{{ media.id }}')" class="btn-edit"><i class="fa fa-edit"></i></button>
-      <button onclick="toggleBlogger('{{ media.blogger_post_id }}')"
-        class="btn-blogger {{ 'is-live' if media.blogger_post_id and media.blogger_post_id != 'None' else 'is-draft' }}"
-        id="btn-{{ media.blogger_post_id }}" title="تبديل حالة المقال (نشر/مسودة)">
+      <button onclick="toggleBlogger('{{ media.blogger_post_id }}', event)"
+        class="btn-blogger {{ 'is-live' if media.blogger_post_id and media.blogger_post_id != 'None' else 'is-draft' }}">
         <i class="fab fa-blogger"></i>
       </button>
       <button onclick="deleteMedia('{{ media.id }}')" class="btn-delete"><i class="fa fa-trash"></i></button>

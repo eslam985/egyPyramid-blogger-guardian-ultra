@@ -88,31 +88,38 @@ window.editMedia = async function (mediaId) {
 };
 
 // 4. دالة بلوجر (التي كانت تعطي الخطأ)
-window.toggleBlogger = async function (postId) {
-	if (!postId || postId === 'None' || postId === '') return alert("⚠️ لا يوجد ID لهذا المقال (ربما لم يُنشر بعد)!");
+// أضفنا event هنا لضمان استلام الحدث بشكل صحيح
+window.toggleBlogger = async function (postId, event) { 
+  if (!postId || postId === 'None' || postId === '') return alert("⚠️ لا يوجد ID لهذا المقال!");
 
-	// تغيير شكل الأيقونة مؤقتاً للإشارة للجري
-	const btn = event.currentTarget;
-	const originalIcon = btn.innerHTML;
-	btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+  // الآن btn ستعمل بدقة 100%
+  const btn = event.currentTarget; 
+  const originalIcon = btn.innerHTML;
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
 
-	try {
-		// نرسل الطلب لمسار الـ toggle الجديد
-		const response = await fetch(`/api/blogger/toggle/${postId}`, { method: 'POST' });
-		const result = await response.json();
+  try {
+    const response = await fetch(`/api/blogger/toggle/${postId}`, { method: 'POST' });
+    const result = await response.json();
 
-		if (result.status === "success") {
-			alert(`✅ الحالة الجديدة: ${result.new_status === 'live' ? 'منشور (Live)' : 'مسودة (Draft)'}`);
-			// يمكنك هنا تغيير لون الزر برمجياً إذا أردت
-			btn.style.color = result.new_status === 'live' ? '#f57d00' : '#6b7280';
-		} else {
-			alert("❌ خطأ: " + result.error);
-		}
-	} catch (e) {
-		alert("❌ فشل الاتصال بالسيرفر");
-	} finally {
-		btn.innerHTML = originalIcon;
-	}
+    if (result.status === "success") {
+      alert(`✅ الحالة الجديدة: ${result.new_status === 'live' ? 'منشور (Live)' : 'مسودة (Draft)'}`);
+      
+      // تحديث الكلاسات ليتماشى مع التنسيق الذي وضعناه في CSS
+      if (result.new_status === 'live') {
+          btn.classList.add('is-live');
+          btn.classList.remove('is-draft');
+      } else {
+          btn.classList.add('is-draft');
+          btn.classList.remove('is-live');
+      }
+    } else {
+      alert("❌ خطأ: " + result.error);
+    }
+  } catch (e) {
+    alert("❌ فشل الاتصال بالسيرفر");
+  } finally {
+    btn.innerHTML = originalIcon;
+  }
 };
 
 window.addNewEpisodeRow = async function () {
