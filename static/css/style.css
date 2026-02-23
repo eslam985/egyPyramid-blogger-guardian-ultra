@@ -116,7 +116,7 @@ button {
 /* تخطيط الصفحة الرئيسي                     */
 /* ---------------------------------------- */
 .container {
- max-width: 1400px;
+ max-width: 1300px;
  margin: 0 auto;
  padding: 1.5rem 2rem;
  width: 100%;
@@ -333,7 +333,7 @@ button {
 .media-grid {
  display: grid;
  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
- gap: 1.5rem;
+ gap: 1rem;
  margin-top: 1rem;
 }
 /* تنسيق أزرار الترقيم */
