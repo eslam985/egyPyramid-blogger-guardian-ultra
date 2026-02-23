@@ -226,6 +226,62 @@ button {
     font-size: 1rem;
 }
 
+/* استهداف الزر عن طريق الـ ID لضمان أعلى أولوية */
+#publishBtn {
+    background-color: #ea580c;
+    /* البرتقالي الخاص بالمحرك */
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* تأثير عند الوقوف بالماوس */
+#publishBtn:hover {
+    background-color: #c2410c;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(234, 88, 12, 0.3);
+}
+
+/* تأثير عند الضغط */
+#publishBtn:active {
+    transform: translateY(0);
+}
+
+/* حالة الزر أثناء العمل (Disabled) */
+#publishBtn:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* أنيميشن اختياري: يجعل الزر "ينبض" ليجذب الانتباه */
+@keyframes pulse-orange {
+    0% {
+        box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(234, 88, 12, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(234, 88, 12, 0);
+    }
+}
+
+#publishBtn {
+    animation: pulse-orange 2s infinite;
+}
+
 /* ---------------------------------------- */
 /* رأس لوحة التحكم (Dashboard Header)       */
 /* ---------------------------------------- */

@@ -28,7 +28,16 @@ window.openAddModal = function () {
     document.getElementById('episodesSection').style.display = 'none';
     window.openModal('mediaModal');
 };
-
+window.deleteMedia = async function (mediaId) {
+    if (!confirm("⚠️ هل أنت متأكد من حذف هذا العمل نهائياً من ساب باز؟")) return;
+    try {
+        const response = await fetch(`/api/media/delete/${mediaId}`, { method: 'POST' });
+        const result = await response.json();
+        if (result.status === "deleted") {
+            location.reload();
+        }
+    } catch (e) { alert("فشل الحذف"); }
+};
 // 3. دالة تعديل العمل (التي تجلب البيانات)
 window.editMedia = async function (mediaId) {
     try {
@@ -229,6 +238,28 @@ window.syncToBlogger = async function (epId) {
         alert("فشل الاتصال بالسيرفر، تأكد أن تطبيق FastAPI يعمل.");
     }
 };
+
+window.triggerPublisher = function () {
+    const btn = document.getElementById('publishBtn');
+    if (!btn) return;
+
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ جاري البدء...";
+    btn.disabled = true;
+
+    fetch('/publisher/run', { method: 'POST' })
+        .then(response => {
+            if (response.status === 401) throw new Error("غير مصرح لك");
+            return response.json();
+        })
+        .then(data => alert("✅ " + data.message))
+        .catch(error => alert("❌ خطأ: " + error.message))
+        .finally(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+};
+
 window.deleteLink = async function (linkId) {
     if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
     await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });

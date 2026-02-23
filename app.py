@@ -8,6 +8,22 @@ from services.blogger_api import BloggerService
 import os
 import uvicorn
 from datetime import datetime
+from fastapi import BackgroundTasks
+from dotenv import load_dotenv
+load_dotenv() # شحن المتغيرات أولاً
+
+# ثم بقية الاستدعاءات
+from publisher.main_publisher import start_publishing_from_supabase
+
+# التأكد من المفتاح
+BLOG_ID = os.getenv("BLOG_ID")
+if not BLOG_ID:
+    raise ValueError("❌ BLOG_ID is missing from .env file!")
+
+blogger = BloggerService(blog_id=BLOG_ID)
+
+# --- المسارات (Routes) ---
+
 print("--- Project Structure ---")
 for root, dirs, files in os.walk("."):
     # تجاهل المجلدات المخفية مثل .git
@@ -31,7 +47,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 security = HTTPBasic()
 
-
 # 2. نظام الحماية (Authentication)
 def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     correct_email = os.getenv("ADMIN_EMAIL")
@@ -47,12 +62,13 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
+@app.post("/publisher/run")
+async def run_publisher(background_tasks: BackgroundTasks, user: str = Depends(authenticate)):
+    # استخدام BackgroundTasks ضروري جداً هنا
+    # لأن عملية النشر قد تأخذ دقائق، ولا نريد للمتصفح أن ينتظر (Timeout)
+    background_tasks.add_task(start_publishing_from_supabase)
+    return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
 
-# 3. تهيئة خدمة بلوجر من المتغيرات
-BLOG_ID = os.getenv("blog_id")
-blogger = BloggerService(blog_id=BLOG_ID)
-
-# --- المسارات (Routes) ---
 
 
 # الصفحة الرئيسية (محمية بكلمة سر)
@@ -95,20 +111,22 @@ async def add_new_work(
         "poster_url": poster_url,
     }
     new_media = SupabaseService.add_media(payload)
-    
+
     if new_media:
-        media_id = new_media['id']
+        media_id = new_media["id"]
         # 2. إنشاء مسودة في بلوجر فوراً لهذا العمل الجديد
         blogger_res = blogger.create_post(
-            title=title, 
-            content=f"<p>{story}</p>", 
-            is_draft=True # ينشر كمسودة كما تفضل
+            title=title,
+            content=f"<p>{story}</p>",
+            is_draft=True,  # ينشر كمسودة كما تفضل
         )
-        
+
         # 3. حفظ الـ Blogger ID الناتج في ساب باز داخل العمل نفسه
         if "id" in blogger_res:
-            SupabaseService.update_media(media_id, {"blogger_post_id": blogger_res['id']})
-            
+            SupabaseService.update_media(
+                media_id, {"blogger_post_id": blogger_res["id"]}
+            )
+
     return {"status": "success", "data": new_media}
 
 
@@ -262,22 +280,41 @@ async def update_link_api(
 async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate)):
     try:
         # 1. جلب بيانات الحلقة
-        ep_res = SupabaseService.client.table("episodes").select("*").eq("id", ep_id).single().execute()
-        
+        ep_res = (
+            SupabaseService.client.table("episodes")
+            .select("*")
+            .eq("id", ep_id)
+            .single()
+            .execute()
+        )
+
         # 2. التأكد من وجود روابط
-        links_res = SupabaseService.client.table("links").select("*").eq("episode_id", ep_id).execute()
+        links_res = (
+            SupabaseService.client.table("links")
+            .select("*")
+            .eq("episode_id", ep_id)
+            .execute()
+        )
         if not links_res.data:
-            return {"status": "error", "error": "لا توجد روابط! أضف روابط أولاً ثم اضغط مزامنة."}
+            return {
+                "status": "error",
+                "error": "لا توجد روابط! أضف روابط أولاً ثم اضغط مزامنة.",
+            }
 
-        # الحقيقة الصارمة: لا نغير is_synced لـ True هنا! 
+        # الحقيقة الصارمة: لا نغير is_synced لـ True هنا!
         # نتركها False لكي يراها الكولاب، لكن نحدث blogger_sync لنعطي إشارة للكولاب بالبدء
-        SupabaseService.client.table("episodes").update({
-            "is_synced": False, # تبقى فولس كما هي لكي يراها الكولاب
-            "blogger_sync": "Approved", # إشارة "الضوء الأخضر" للكولاب
-            "updated_at": datetime.utcnow().isoformat()
-        }).eq("id", ep_id).execute()
+        SupabaseService.client.table("episodes").update(
+            {
+                "is_synced": False,  # تبقى فولس كما هي لكي يراها الكولاب
+                "blogger_sync": "Approved",  # إشارة "الضوء الأخضر" للكولاب
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).eq("id", ep_id).execute()
 
-        return {"status": "success", "message": "تم اعتماد الحلقة. سيتولى الكولاب نشرها في الدورة القادمة."}
+        return {
+            "status": "success",
+            "message": "تم اعتماد الحلقة بنجاح. يرجى الضغط على زر (تشغيل المحرك) لبدء النشر الفوري.",
+        }
 
     except Exception as e:
         return {"status": "error", "error": str(e)}

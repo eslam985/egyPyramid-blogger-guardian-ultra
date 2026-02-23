@@ -1,7 +1,6 @@
 from supabase import create_client, Client
 import os
 
-# جلب البيانات من متغيرات البيئة
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 

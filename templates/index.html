@@ -20,7 +20,9 @@
       </form>
     </div>
     <div class="nav-actions">
-      <button onclick="openAddModal()" class="btn-add"><i class="fa fa-plus"></i> إضافة عمل</button>
+      <button onclick="triggerPublisher()" id="publishBtn">
+        🚀 تشغيل محرك النشر
+      </button>
     </div>
   </nav>
 
@@ -41,12 +43,12 @@
     </div>
   </main>
 
-  <div id="modal-container"></div>
   <div id="mediaModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
         <h2 id="modalTitle">إضافة عمل جديد</h2>
         <span class="close-btn" onclick="closeModal()">&times;</span>
+
       </div>
       <form id="mediaForm">
         <input type="hidden" id="media_id" name="media_id">

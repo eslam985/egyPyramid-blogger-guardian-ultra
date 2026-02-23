@@ -1,16 +1,22 @@
-    FROM python:3.11-slim
+FROM python:3.11-slim
 
-    WORKDIR /code
+WORKDIR /code
 
-    # تثبيت التبعيات الضرورية فقط وبأقل حجم
-    RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc python3-dev && \
-        apt-get clean && rm -rf /var/lib/apt/lists/*
+# تثبيت التبعيات الضرورية
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc python3-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-    COPY ./requirements.txt /code/requirements.txt
-    RUN pip install --no-cache-dir -r /code/requirements.txt
+# إيقاف تخزين المخرجات مؤقتاً لضمان ظهور الـ Logs في Hugging Face فوراً
+ENV PYTHONUNBUFFERED=1
 
-    COPY . .
+COPY ./requirements.txt /code/requirements.txt
+RUN pip install --no-cache-dir -r /code/requirements.txt
 
-    # زيادة مدة الـ Timeout وتقليل الـ Workers لأقصى درجة
-    CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1", "--timeout-keep-alive", "30"]
+# تحميل بيانات NLTK (مهم جداً لمكتبة TextBlob المستخدمة في utils)
+RUN python -m nltk.downloader punkt punkt_tab
+
+COPY . .
+
+# التعديل: زيادة مدة الـ Timeout لأن عمليات الـ AI والنشر تأخذ وقتاً
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1", "--timeout-keep-alive", "60"]
