@@ -6,6 +6,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
 import os
+import uvicorn
 
 print("--- Project Structure ---")
 for root, dirs, files in os.walk("."):
@@ -205,7 +206,33 @@ async def add_link(ep_id: int):
     return {"status": "success"}
 
 
+# تحديث بيانات رابط (سيرفر) معين
+@app.post("/api/links/{link_id}/update")
+async def update_link_api(
+    link_id: int,
+    server_name: str = Form(None),
+    link_url: str = Form(None),
+    user: str = Depends(authenticate),
+):
+    update_data = {}
+    if server_name is not None:
+        update_data["server_name"] = server_name
+    if link_url is not None:
+        update_data["link_url"] = link_url
+
+    SupabaseService.client.table("links").update(update_data).eq(
+        "id", link_id
+    ).execute()
+    return {"status": "success"}
+
+
+# حذف رابط معين
+@app.post("/api/links/{link_id}/delete")
+async def delete_link_api(link_id: int, user: str = Depends(authenticate)):
+    SupabaseService.client.table("links").delete().eq("id", link_id).execute()
+    return {"status": "deleted"}
+
+
 if __name__ == "__main__":
-    import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=7860)

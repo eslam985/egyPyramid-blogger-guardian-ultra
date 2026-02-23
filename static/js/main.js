@@ -143,7 +143,7 @@ window.addNewLink = async function () {
     manageLinks(currentEpisodeId); // تحديث القائمة
 };
 
-window.updateLink = async function(linkId, field, value) {
+window.updateLink = async function (linkId, field, value) {
     await fetch(`/api/links/${linkId}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -151,13 +151,26 @@ window.updateLink = async function(linkId, field, value) {
     });
 };
 
-window.deleteLink = async function(linkId) {
+window.deleteLink = async function (linkId) {
     if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
     await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
     manageLinks(currentEpisodeId); // إعادة تحميل القائمة
 };
 
-
+window.forceSync = async function (epId) {
+    if (!confirm("هل أنت متأكد من تصفير مزامنة هذه الحلقة؟")) return;
+    try {
+        const response = await fetch(`/api/episodes/${epId}/reset-sync`, { method: 'POST' });
+        const result = await response.json();
+        if (result.status === "success") {
+            alert("تم تصفير المزامنة بنجاح");
+        } else {
+            alert("خطأ: " + result.error);
+        }
+    } catch (e) {
+        alert("فشل الاتصال بالسيرفر");
+    }
+};
 // منطق تبديل الوضع الداكن/الفاتح
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;
