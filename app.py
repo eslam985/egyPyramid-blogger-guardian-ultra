@@ -317,30 +317,29 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
-        # 1. الاتصال بخدمة بلوجر
-        blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
-        service = blogger_service.get_service()
+        service = BloggerService(blog_id=os.getenv("BLOG_ID")).get_service()
         b_id = os.getenv("BLOG_ID")
 
-        # 2. جلب حالة المقال "الآن" من سيرفرات جوجل
+        # 1. جلب البيانات (الحروف الكبيرة هنا مصيرية!)
         post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
-        current_status = post_data.get("status") # ستكون LIVE أو DRAFT
-
-        print(f"DEBUG: Current status for {post_id} is {current_status}")
+        # نستخدم .upper() لضمان عدم حدوث خطأ في المقارنة
+        current_status = post_data.get("status", "").upper() 
 
         if current_status == "LIVE":
-            # إذا كان منشوراً -> اجعله مسودة
+            # إذا كان LIVE (منشور) -> حوله لمسودة
             service.posts().revert(blogId=b_id, postId=post_id).execute()
             final_status = "draft"
         else:
-            # إذا كان أي شيء آخر (غالباً DRAFT) -> انشره
+            # إذا كان DRAFT (مسودة) -> انشره
             service.posts().publish(blogId=b_id, postId=post_id).execute()
             final_status = "live"
+
+        # 2. تحديث ساب باز فوراً (اختياري لكن يفضل بشدة)
+        # SupabaseService.client.table("episodes").update({"blogger_status": final_status}).eq("blogger_post_id", post_id).execute()
 
         return {"status": "success", "new_status": final_status}
 
     except Exception as e:
-        print(f"❌ Toggle Error: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
