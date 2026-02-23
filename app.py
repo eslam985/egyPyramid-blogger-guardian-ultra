@@ -127,7 +127,7 @@ async def revert_post(post_id: str, user: str = Depends(authenticate)):
 
 # التعديل: تحويل المسار لنظام FastAPI وتصحيح استدعاء السوبابيز
 @app.post("/api/episodes/{ep_id}/reset-sync")
-async def reset_sync(ep_id: int, user: str = Depends(authenticate)):
+async def force_sync(ep_id: int, user: str = Depends(authenticate)):
     try:
         # الحقيقة الصارمة: نستخدم الكلاينت الموجود داخل السيرفيس
         SupabaseService.client.table("episodes").update({"is_synced": False}).eq(
@@ -182,6 +182,27 @@ async def add_episode(
         return {"status": "success"}
     except Exception as e:
         return {"error": str(e)}
+
+
+# جلب روابط حلقة معينة
+@app.get("/api/episodes/{ep_id}/links")
+async def get_links(ep_id: int):
+    res = (
+        SupabaseService.client.table("links")
+        .select("*")
+        .eq("episode_id", ep_id)
+        .execute()
+    )
+    return res.data
+
+
+# إضافة رابط جديد
+@app.post("/api/episodes/{ep_id}/add-link")
+async def add_link(ep_id: int):
+    SupabaseService.client.table("links").insert(
+        {"episode_id": ep_id, "server_name": "سيرفر جديد", "link_url": ""}
+    ).execute()
+    return {"status": "success"}
 
 
 if __name__ == "__main__":

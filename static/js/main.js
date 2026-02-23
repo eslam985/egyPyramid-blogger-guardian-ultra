@@ -52,11 +52,18 @@ window.editMedia = async function (mediaId) {
             epSection.style.display = 'block';
             const epList = document.getElementById('episodesList');
             epList.innerHTML = data.episodes.map(ep => `
-                <div style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #444;">
-                    <span>الحلقة ${ep.episode_number}</span>
-                    <button type="button" onclick="forceSync(${ep.id})">تصفير المزامنة</button>
-                </div>
-            `).join('');
+                    <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
+                        <span>الحلقة ${ep.episode_number}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
+                                <i class="fa fa-link"></i> السيرفرات
+                            </button>
+                            <button type="button" onclick="forceSync(${ep.id})" class="btn-mini" style="background:var(--color-text-muted); color:white; padding:4px 8px; border-radius:4px;">
+                                <i class="fa fa-sync"></i> تصفير
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
         } else {
             epSection.style.display = 'none';
         }
@@ -109,24 +116,59 @@ window.addNewEpisodeRow = async function () {
 };
 
 
+let currentEpisodeId = null;
+
+window.manageLinks = async function (episodeId) {
+    currentEpisodeId = episodeId;
+    const modal = document.getElementById('linksModal');
+    modal.style.display = 'block';
+
+    // جلب السيرفرات من قاعدة البيانات
+    const response = await fetch(`/api/episodes/${episodeId}/links`);
+    const links = await response.json();
+
+    const linksList = document.getElementById('linksList');
+    linksList.innerHTML = links.map(link => `
+        <div style="background:var(--color-bg); padding:10px; margin-bottom:5px; border-radius:8px; display:flex; gap:10px;">
+            <input type="text" value="${link.server_name}" onchange="updateLink(${link.id}, 'server_name', this.value)" style="width:30%">
+            <input type="text" value="${link.link_url}" onchange="updateLink(${link.id}, 'link_url', this.value)" style="flex:1">
+            <button onclick="deleteLink(${link.id})" style="color:var(--color-btn-delete)"><i class="fa fa-trash"></i></button>
+        </div>
+    `).join('');
+};
+
+window.addNewLink = async function () {
+    // إرسال طلب للسيرفر لإنشاء لينك فارغ مربوط بـ currentEpisodeId
+    await fetch(`/api/episodes/${currentEpisodeId}/add-link`, { method: 'POST' });
+    manageLinks(currentEpisodeId); // تحديث القائمة
+};
+
+window.updateLink = async function(linkId, field, value) {
+    await fetch(`/api/links/${linkId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `${field}=${encodeURIComponent(value)}`
+    });
+};
+
+window.deleteLink = async function(linkId) {
+    if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
+    await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
+    manageLinks(currentEpisodeId); // إعادة تحميل القائمة
+};
+
+
 // منطق تبديل الوضع الداكن/الفاتح
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;
 
-// 1. التحقق من التفضيل المحفوظ سابقاً
-if (localStorage.getItem('theme') === 'dark') {
-    body.classList.add('dark-mode');
-}
-
-// 2. مستمع الحدث عند الضغط على الزر
-// استبدل الجزء القديم بهذا لضمان التوافق مع الـ Root
+// التعديل الصحيح
 themeToggle.addEventListener('click', () => {
-    // التعديل هنا: نستخدم documentElement بدلاً من body
-    document.documentElement.classList.toggle('dark-mode');
-
-    if (document.documentElement.classList.contains('dark-mode')) {
-        localStorage.setItem('theme', 'dark');
-    } else {
-        localStorage.setItem('theme', 'light');
-    }
+    const isDark = document.documentElement.classList.toggle('dark-mode');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
+
+// ولضمان التنفيذ عند تحميل الصفحة:
+if (localStorage.getItem('theme') === 'dark') {
+    document.documentElement.classList.add('dark-mode');
+}

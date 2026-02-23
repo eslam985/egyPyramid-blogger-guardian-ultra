@@ -519,7 +519,8 @@ button {
 
 /* تنسيق زر إضافة حلقة داخل المودال */
 .btn-add-episode {
-    background-color: var(--color-btn-blogger); /* اللون البرتقالي المميز */
+    background-color: var(--color-btn-blogger);
+    /* اللون البرتقالي المميز */
     color: white;
     padding: 6px 14px;
     border-radius: 6px;
@@ -534,7 +535,8 @@ button {
 }
 
 .btn-add-episode:hover {
-    background-color: #ea580c; /* درجة أغمق عند التحويم */
+    background-color: #ea580c;
+    /* درجة أغمق عند التحويم */
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
 }

@@ -96,7 +96,14 @@
             </form>
         </div>
     </div>
-
+    <div id="linksModal" class="modal" style="z-index: 10002;">
+        <div class="modal-header">
+            <h3>إدارة سيرفرات الحلقة</h3>
+            <span class="close-btn" onclick="document.getElementById('linksModal').style.display='none'">×</span>
+        </div>
+        <div id="linksList" style="margin-bottom:15px;"></div>
+        <button type="button" onclick="addNewLink()" class="btn-primary" style="width:100%">+ إضافة سيرفر جديد</button>
+    </div>
     <button id="theme-toggle" class="theme-toggle-btn">
         <i class="fa fa-moon"></i>
     </button>

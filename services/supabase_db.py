@@ -5,27 +5,34 @@ import os
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+
 class SupabaseService:
     # إنشاء الكلاينت مرة واحدة فقط داخل الكلاس
     client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    
+
     @staticmethod
-    def get_media(search_query: str = None, category: str = None, only_pending: bool = False):
+    def get_media(
+        search_query: str = None, category: str = None, only_pending: bool = False
+    ):
         # نستخدم SupabaseService.client دائماً
         query = SupabaseService.client.table("medias").select("*, episodes(*)")
-        
+
         if search_query:
             query = query.ilike("title", f"%{search_query}%")
-        
+
         if category:
             query = query.eq("category", category)
-            
+
         result = query.order("created_at", desc=True).execute()
         data = result.data
 
         if only_pending:
-            data = [item for item in data if any(not ep['is_synced'] for ep in item['episodes'])]
-            
+            data = [
+                item
+                for item in data
+                if any(not ep["is_synced"] for ep in item["episodes"])
+            ]
+
         return data
 
     @staticmethod
@@ -35,18 +42,30 @@ class SupabaseService:
 
     @staticmethod
     def update_media(media_id: int, data: dict):
-        result = SupabaseService.client.table("medias").update(data).eq("id", media_id).execute()
+        result = (
+            SupabaseService.client.table("medias")
+            .update(data)
+            .eq("id", media_id)
+            .execute()
+        )
         return result.data
 
     @staticmethod
     def delete_media(media_id: int):
-        result = SupabaseService.client.table("medias").delete().eq("id", media_id).execute()
+        result = (
+            SupabaseService.client.table("medias").delete().eq("id", media_id).execute()
+        )
         return result.data
 
     @staticmethod
     def manage_episode(ep_data: dict, ep_id: int = None):
         if ep_id:
-            result = SupabaseService.client.table("episodes").update(ep_data).eq("id", ep_id).execute()
+            result = (
+                SupabaseService.client.table("episodes")
+                .update(ep_data)
+                .eq("id", ep_id)
+                .execute()
+            )
         else:
             result = SupabaseService.client.table("episodes").insert(ep_data).execute()
         return result.data
