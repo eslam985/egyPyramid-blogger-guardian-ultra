@@ -38,6 +38,7 @@ window.deleteMedia = async function (mediaId) {
 		}
 	} catch (e) { alert("فشل الحذف"); }
 };
+
 // 3. دالة تعديل العمل (التي تجلب البيانات)
 window.editMedia = async function (mediaId) {
 	try {
@@ -72,8 +73,8 @@ window.editMedia = async function (mediaId) {
                                 style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px;">
                             <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
                         </button>
-                        <button type="button" onclick="forceSync(${ep.id})" class="btn-mini" style="background:#6b7280; color:white; padding:4px 8px; border-radius:4px;">
-                            <i class="fa fa-sync"></i> تصفير
+                        <button type="button" onclick="deleteEpisode(${ep.id})" class="btn-mini" style="background:#ef4444; color:white; padding:4px 8px; border-radius:4px;">
+                            <i class="fa fa-trash"></i> حذف
                         </button>
                     </div>
                 </div>
@@ -119,34 +120,37 @@ window.toggleBlogger = async function (postId, event) {
 };
 
 window.addNewEpisodeRow = async function () {
-	const mediaId = document.getElementById('media_id').value;
-	const epNum = prompt("أدخل رقم الحلقة الجديدة:");
+  const mediaId = document.getElementById('media_id').value;
+  const epNum = prompt("أدخل رقم الحلقة الجديدة:");
 
-	if (!epNum) return;
+  if (!epNum) return;
 
-	// الحقيقة الصارمة: سنرسل طلب سريع للسيرفر لإنشاء حلقة فارغة لهذا المسلسل
-	try {
-		const response = await fetch(`/api/media/${mediaId}/add-episode`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-			body: `episode_number=${epNum}`
-		});
-		const result = await response.json();
+  try {
+    // 1. فحص هل الحلقة موجودة مسبقاً في القائمة المعروضة (لتوفير طلب سيرفر)
+    const epList = document.getElementById('episodesList');
+    if (epList.innerText.includes(`حلقة ${epNum} `)) {
+      return alert(`⚠️ الحلقة رقم ${epNum} موجودة فعلاً في هذا المسلسل!`);
+    }
 
-		if (result.status === "success") {
-			// تبديل الكلاسات برمجياً
-			if (result.new_status === 'live') {
-				btn.classList.remove('is-draft');
-				btn.classList.add('is-live');
-			} else {
-				btn.classList.remove('is-live');
-				btn.classList.add('is-draft');
-			}
-			console.log(`✅ تم تغيير الحالة إلى: ${result.new_status}`);
-		}
-	} catch (e) {
-		alert("فشل إضافة الحلقة");
-	}
+    // 2. إرسال طلب الإضافة
+    const response = await fetch(`/api/media/${mediaId}/add-episode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `episode_number=${epNum}`
+    });
+    
+    const result = await response.json();
+
+    if (result.status === "success") {
+      alert("✅ تمت إضافة الحلقة بنجاح");
+      window.editMedia(mediaId); // تحديث القائمة فوراً
+    } else {
+      // لو السيرفر رفض (مثلاً الحلقة موجودة في ساب باز فعلاً)
+      alert("❌ خطأ: " + (result.error || "فشل إضافة الحلقة"));
+    }
+  } catch (e) {
+    alert("فشل إضافة الحلقة، ربما رقم الحلقة مكرر في ساب باز.");
+  }
 };
 
 
@@ -296,19 +300,21 @@ window.closeLinksModal = function () {
 };
 
 
-window.forceSync = async function (epId) {
-	if (!confirm("هل أنت متأكد من تصفير مزامنة هذه الحلقة؟")) return;
-	try {
-		const response = await fetch(`/api/episodes/${epId}/reset-sync`, { method: 'POST' });
-		const result = await response.json();
-		if (result.status === "success") {
-			alert("تم تصفير المزامنة بنجاح");
-		} else {
-			alert("خطأ: " + result.error);
-		}
-	} catch (e) {
-		alert("فشل الاتصال بالسيرفر");
-	}
+window.deleteEpisode = async function (epId) {
+  if (!confirm("⚠️ هل أنت متأكد من حذف هذه الحلقة نهائياً بكل سيرفراتها؟")) return;
+  try {
+    const response = await fetch(`/api/episodes/${epId}/delete`, { method: 'POST' });
+    const result = await response.json();
+    if (result.status === "success") {
+      alert("✅ تم حذف الحلقة بنجاح");
+      const mediaId = document.getElementById('media_id').value;
+      window.editMedia(mediaId); // تحديث القائمة لإخفاء الحلقة المحذوفة
+    } else {
+      alert("❌ خطأ: " + result.error);
+    }
+  } catch (e) {
+    alert("❌ فشل الاتصال بالسيرفر");
+  }
 };
 
 

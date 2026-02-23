@@ -160,13 +160,6 @@ async def delete_media(media_id: int, user: str = Depends(authenticate)):
     return {"status": "deleted"}
 
 
-# تحويل مقال بلوجر لمسودة
-@app.post("/api/blogger/revert/{post_id}")
-async def revert_post(post_id: str, user: str = Depends(authenticate)):
-    res = blogger.change_post_status(post_id, revert=True)
-    return res
-
-
 # التعديل: تحويل المسار لنظام FastAPI وتصحيح استدعاء السوبابيز
 @app.post("/api/episodes/{ep_id}/reset-sync")
 async def force_sync(ep_id: int, user: str = Depends(authenticate)):
@@ -215,15 +208,31 @@ async def add_episode(
     media_id: int, episode_number: int = Form(...), user: str = Depends(authenticate)
 ):
     try:
+        # 1. التحقق من التكرار أولاً في ساب باز
+        check = (
+            SupabaseService.client.table("episodes")
+            .select("id")
+            .eq("media_id", media_id)
+            .eq("episode_number", episode_number)
+            .execute()
+        )
+
+        if check.data:
+            return {
+                "status": "error",
+                "error": f"الحلقة {episode_number} موجودة بالفعل!",
+            }
+
+        # 2. إذا لم تكن موجودة، قم بالإدخال
         data = {
             "media_id": media_id,
             "episode_number": episode_number,
-            "is_synced": False,  # تبدأ غير منشورة حتى تضغط أنت على المزامنة
+            "is_synced": False,
         }
         SupabaseService.client.table("episodes").insert(data).execute()
         return {"status": "success"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"status": "error", "error": str(e)}
 
 
 # جلب روابط حلقة معينة
@@ -318,14 +327,14 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
         from services.supabase_db import SupabaseService
-        
+
         blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
         service = blogger_service.get_service()
         b_id = os.getenv("BLOG_ID")
 
         # 1. جلب الحالة الحقيقية من جوجل وتجريدها من أي مسافات
         post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
-        current_status = str(post_data.get("status", "")).strip().upper() 
+        current_status = str(post_data.get("status", "")).strip().upper()
 
         # 2. المنطق المعكوس
         if current_status == "LIVE":
@@ -341,10 +350,11 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
 
         # 3. تحديث ساب باز فوراً (تأكد من أسماء الأعمدة والجداول)
         # تحديث جدول الميديا
-        SupabaseService.client.table("medias").update({
-            "blogger_status": final_status_db
-        }).eq("blogger_post_id", post_id).execute()
-
+        SupabaseService.client.table("medias").update(
+            {"blogger_status": final_status_db}
+        ).eq("blogger_post_id", post_id).execute()
+       # تحديث جدول الحلقات أيضاً لنفس الـ post_id
+        SupabaseService.client.table("episodes").update({"blogger_status": final_status_db}).eq("blogger_post_id", post_id).execute()
         return {"status": "success", "new_status": new_status_ui}
 
     except Exception as e:
@@ -408,6 +418,16 @@ async def index(
 async def delete_link_api(link_id: int, user: str = Depends(authenticate)):
     SupabaseService.client.table("links").delete().eq("id", link_id).execute()
     return {"status": "deleted"}
+
+
+@app.post("/api/episodes/{ep_id}/delete")
+async def delete_episode_api(ep_id: int, user: str = Depends(authenticate)):
+    try:
+        # حذف الحلقة (سيحذف الروابط تلقائياً لو عندك Cascade)
+        SupabaseService.client.table("episodes").delete().eq("id", ep_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 if __name__ == "__main__":
