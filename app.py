@@ -318,40 +318,38 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
         from services.supabase_db import SupabaseService
-
+        
         blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
         service = blogger_service.get_service()
         b_id = os.getenv("BLOG_ID")
 
-        # 1. السؤال عن الحالة الحالية من بلوجر (المصدر الموثوق)
+        # 1. جلب الحالة من المصدر الموثوق (Blogger)
         post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
-        current_status = post_data.get("status", "").upper()
+        current_status = post_data.get("status", "").upper() 
 
-        # 2. اتخاذ القرار وعكس الحالة
         if current_status == "LIVE":
-            # كان منشوراً -> اجعله مسودة
+            # تحويل لمسودة
             service.posts().revert(blogId=b_id, postId=post_id).execute()
             final_status = "draft"
-            db_status = "Draft"  # للتخزين في ساب باز
         else:
-            # كان مسودة -> انشره
+            # تحويل لمنشور
             service.posts().publish(blogId=b_id, postId=post_id).execute()
-            final_status = "live"
-            db_status = "Published"
+            final_status = "published"
 
-        # 3. "تسميع" الحالة في ساب باز فوراً (هذا ما كان ينقصك)
-        # نقوم بتحديث الجدولين (medias و episodes) لضمان الدقة
-        SupabaseService.client.table("medias").update({"blogger_status": db_status}).eq(
-            "blogger_post_id", post_id
-        ).execute()
-        SupabaseService.client.table("episodes").update({"blogger_sync": db_status}).eq(
-            "blogger_post_id", post_id
-        ).execute()
+        # 2. التحديث في ساب باز (بالمسميات الجديدة)
+        # نستخدم try/except داخلية لكل جدول لضمان عدم توقف الكود إذا كان الـ ID موجود في جدول واحد فقط
+        try:
+            SupabaseService.client.table("medias").update({"blogger_status": final_status}).eq("blogger_post_id", post_id).execute()
+        except: pass
+        
+        try:
+            SupabaseService.client.table("episodes").update({"blogger_status": final_status}).eq("blogger_post_id", post_id).execute()
+        except: pass
 
         return {"status": "success", "new_status": final_status}
 
     except Exception as e:
-        print(f"❌ Toggle Error: {str(e)}")
+        print(f"❌ Error: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
