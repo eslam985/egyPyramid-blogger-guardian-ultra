@@ -354,6 +354,7 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
 
 # الصفحة الرئيسية (محمية بكلمة سر)
 @app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
     page: int = 1,  # أضفنا هذا
