@@ -200,8 +200,9 @@ async def get_links(ep_id: int):
 # إضافة رابط جديد
 @app.post("/api/episodes/{ep_id}/add-link")
 async def add_link(ep_id: int):
+    # التعديل: استخدام url بدلاً من link_url
     SupabaseService.client.table("links").insert(
-        {"episode_id": ep_id, "server_name": "سيرفر جديد", "link_url": ""}
+        {"episode_id": ep_id, "server_name": "سيرفر جديد", "url": ""}
     ).execute()
     return {"status": "success"}
 
@@ -211,14 +212,14 @@ async def add_link(ep_id: int):
 async def update_link_api(
     link_id: int,
     server_name: str = Form(None),
-    link_url: str = Form(None),
+    url: str = Form(None), # تعديل هنا
     user: str = Depends(authenticate),
 ):
     update_data = {}
     if server_name is not None:
         update_data["server_name"] = server_name
-    if link_url is not None:
-        update_data["link_url"] = link_url
+    if url is not None:
+        update_data["url"] = url # تعديل هنا
 
     SupabaseService.client.table("links").update(update_data).eq(
         "id", link_id
@@ -234,5 +235,5 @@ async def delete_link_api(link_id: int, user: str = Depends(authenticate)):
 
 
 if __name__ == "__main__":
-
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
+    uvicorn.run("app:app", host="0.0.0.0", port=7860, reload=True)

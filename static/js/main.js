@@ -126,7 +126,7 @@ window.manageLinks = async function (episodeId) {
     const modal = document.getElementById('linksModal');
 
     modal.classList.add('show');
-
+    modal.style.display = 'block'; // تأكيد العرض
     try {
         const response = await fetch(`/api/episodes/${episodeId}/links`);
         const links = await response.json();
@@ -139,8 +139,8 @@ window.manageLinks = async function (episodeId) {
             <div class="link-row">
                 <input type="text" value="${link.server_name || ''}" placeholder="اسم السيرفر" 
                        onchange="updateLink(${link.id}, 'server_name', this.value)" style="width:30%">
-                <input type="text" value="${link.link_url || ''}" placeholder="الرابط" 
-                       onchange="updateLink(${link.id}, 'link_url', this.value)" style="flex:1">
+                <input type="text" value="${link.url || ''}" placeholder="الرابط" 
+                       onchange="updateLink(${link.id}, 'url', this.value)" style="flex:1">
                 <button type="button" onclick="deleteLink(${link.id})" style="color:red; background:none; border:none; cursor:pointer;">
                     <i class="fa fa-trash"></i>
                 </button>
@@ -163,24 +163,21 @@ window.updateLink = async function (linkId, field, value) {
         const result = await response.json();
         if (result.status === "success") {
             console.log(`✅ تم تحديث ${field} للرابط رقم ${linkId}`);
+        } else {
+            console.error("فشل التحديث:", result.error);
         }
     } catch (e) {
-        alert("فشل تحديث البيانات، تأكد من اتصال السيرفر.");
+        console.error("فشل الاتصال بالسيرفر:", e);
     }
 };
+
 window.addNewLink = async function () {
     // إرسال طلب للسيرفر لإنشاء لينك فارغ مربوط بـ currentEpisodeId
     await fetch(`/api/episodes/${currentEpisodeId}/add-link`, { method: 'POST' });
     manageLinks(currentEpisodeId); // تحديث القائمة
 };
 
-window.updateLink = async function (linkId, field, value) {
-    await fetch(`/api/links/${linkId}/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `${field}=${encodeURIComponent(value)}`
-    });
-};
+
 
 window.deleteLink = async function (linkId) {
     if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
