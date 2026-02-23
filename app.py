@@ -323,33 +323,32 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
         service = blogger_service.get_service()
         b_id = os.getenv("BLOG_ID")
 
-        # 1. جلب الحالة من المصدر الموثوق (Blogger)
+        # 1. جلب الحالة الحقيقية من جوجل وتجريدها من أي مسافات
         post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
-        current_status = post_data.get("status", "").upper() 
+        current_status = str(post_data.get("status", "")).strip().upper() 
 
+        # 2. المنطق المعكوس
         if current_status == "LIVE":
-            # تحويل لمسودة
+            # لو جوجل قالت LIVE -> اجبرها تبقى مسودة
             service.posts().revert(blogId=b_id, postId=post_id).execute()
-            final_status = "draft"
+            final_status_db = "draft"
+            new_status_ui = "draft"
         else:
-            # تحويل لمنشور
+            # لو جوجل قالت DRAFT أو أي شيء آخر -> اجبرها تبقى LIVE
             service.posts().publish(blogId=b_id, postId=post_id).execute()
-            final_status = "published"
+            final_status_db = "published"
+            new_status_ui = "live"
 
-        # 2. التحديث في ساب باز (بالمسميات الجديدة)
-        # نستخدم try/except داخلية لكل جدول لضمان عدم توقف الكود إذا كان الـ ID موجود في جدول واحد فقط
-        try:
-            SupabaseService.client.table("medias").update({"blogger_status": final_status}).eq("blogger_post_id", post_id).execute()
-        except: pass
-        
-        try:
-            SupabaseService.client.table("episodes").update({"blogger_status": final_status}).eq("blogger_post_id", post_id).execute()
-        except: pass
+        # 3. تحديث ساب باز فوراً (تأكد من أسماء الأعمدة والجداول)
+        # تحديث جدول الميديا
+        SupabaseService.client.table("medias").update({
+            "blogger_status": final_status_db
+        }).eq("blogger_post_id", post_id).execute()
 
-        return {"status": "success", "new_status": final_status}
+        return {"status": "success", "new_status": new_status_ui}
 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Toggle Critical Error: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
