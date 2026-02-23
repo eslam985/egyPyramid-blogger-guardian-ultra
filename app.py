@@ -78,20 +78,6 @@ async def run_publisher(
     return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
 
 
-# الصفحة الرئيسية (محمية بكلمة سر)
-@app.get("/", response_class=HTMLResponse)
-async def index(
-    request: Request,
-    user: str = Depends(authenticate),
-    search: str = None,
-    cat: str = None,
-):
-    media_list = SupabaseService.get_media(search_query=search, category=cat)
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "media_list": media_list, "search": search}
-    )
-
-
 # إضافة عمل جديد
 @app.post("/api/media/add")
 async def add_new_work(
@@ -360,55 +346,48 @@ async def toggle_post_status(post_id: str, username: str = Depends(authenticate)
         return {"status": "error", "error": str(e)}
 
 
+# الصفحة الرئيسية (محمية بكلمة سر)
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
-    page: int = 1,
-    cat: str = None,
-    status: str = None,
+    page: int = 1, # أضفنا هذا
     search: str = None,
-    username: str = Depends(authenticate),
+    cat: str = None,
+    status: str = None, # أضفنا هذا
+    user: str = Depends(authenticate),
 ):
     page_size = 12
     offset = (page - 1) * page_size
 
-    # 1. البدء ببناء الاستعلام
+    # بناء الاستعلام يدوياً لدعم الترقيم والفلترة
     query = SupabaseService.client.table("medias").select("*", count="exact")
 
-    # 2. تطبيق الفلاتر (قبل التنفيذ)
+    if search:
+        query = query.ilike("title", f"%{search}%")
     if cat:
         query = query.eq("category", cat)
-
     if status == "not_published":
         query = query.is_("blogger_post_id", "null")
     elif status == "published":
         query = query.not_.is_("blogger_post_id", "null")
 
-    if search:
-        query = query.ilike("title", f"%{search}%")
+    # تنفيذ الاستعلام
+    res = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
 
-    # 3. تنفيذ الاستعلام مع الترتيب والترقيم (هنا يولد res)
-    res = (
-        query.order("created_at", desc=True)
-        .range(offset, offset + page_size - 1)
-        .execute()
-    )
-
-    # 4. الحسابات بعد جلب البيانات
+    # حساب الترقيم
     total_count = res.count if res.count is not None else 0
     total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
 
     return templates.TemplateResponse(
-        "index.html",
-        {
+        "index.html", {
             "request": request,
             "media_list": res.data,
-            "current_page": page,
-            "total_pages": total_pages,
-            "current_cat": cat,
-            "current_status": status,
-            "search": search,
-        },
+            "search": search or "",
+            "current_page": page,        # هذا سيحل خطأ Jinja2
+            "total_pages": total_pages,  # وهذا أيضاً
+            "current_cat": cat or "",
+            "current_status": status or ""
+        }
     )
 
 
