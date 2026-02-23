@@ -653,6 +653,18 @@ button {
     border-radius: 5px;
 }
 
+.link-row input:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 5px var(--color-primary);
+}
+
+/* حالة اختيارية عند التغيير الناجح */
+.link-row input.saved {
+    border-color: #10b981;
+    background-color: rgba(16, 185, 129, 0.1);
+}
+
 /* ---------------------------------------- */
 /*  زر تبديل الوضع (Fixed)                */
 /* ---------------------------------------- */

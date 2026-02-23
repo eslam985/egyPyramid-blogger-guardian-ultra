@@ -152,6 +152,22 @@ window.manageLinks = async function (episodeId) {
     }
 };
 
+
+window.updateLink = async function (linkId, field, value) {
+    try {
+        const response = await fetch(`/api/links/${linkId}/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `${field}=${encodeURIComponent(value)}`
+        });
+        const result = await response.json();
+        if (result.status === "success") {
+            console.log(`✅ تم تحديث ${field} للرابط رقم ${linkId}`);
+        }
+    } catch (e) {
+        alert("فشل تحديث البيانات، تأكد من اتصال السيرفر.");
+    }
+};
 window.addNewLink = async function () {
     // إرسال طلب للسيرفر لإنشاء لينك فارغ مربوط بـ currentEpisodeId
     await fetch(`/api/episodes/${currentEpisodeId}/add-link`, { method: 'POST' });
