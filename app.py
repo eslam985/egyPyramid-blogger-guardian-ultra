@@ -317,30 +317,30 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
-
+        # 1. الاتصال بخدمة بلوجر
         blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
         service = blogger_service.get_service()
-        blog_id = os.getenv("BLOG_ID")
+        b_id = os.getenv("BLOG_ID")
 
-        # 1. جلب بيانات المقال الحالية من جوجل مباشرة
-        post = service.posts().get(blogId=blog_id, postId=post_id).execute()
-        current_status = post.get("status")  # ستكون إما 'LIVE' أو 'DRAFT'
+        # 2. جلب حالة المقال "الآن" من سيرفرات جوجل
+        post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
+        current_status = post_data.get("status") # ستكون LIVE أو DRAFT
+
+        print(f"DEBUG: Current status for {post_id} is {current_status}")
 
         if current_status == "LIVE":
-            # 2. إذا كان منشوراً -> حوله لمسودة فوراً
-            service.posts().revert(blogId=blog_id, postId=post_id).execute()
-            new_status = "draft"
-            print(f"✅ Post {post_id} reverted to DRAFT")
+            # إذا كان منشوراً -> اجعله مسودة
+            service.posts().revert(blogId=b_id, postId=post_id).execute()
+            final_status = "draft"
         else:
-            # 3. إذا كان مسودة -> انشره فوراً
-            service.posts().publish(blogId=blog_id, postId=post_id).execute()
-            new_status = "live"
-            print(f"✅ Post {post_id} published to LIVE")
+            # إذا كان أي شيء آخر (غالباً DRAFT) -> انشره
+            service.posts().publish(blogId=b_id, postId=post_id).execute()
+            final_status = "live"
 
-        return {"status": "success", "new_status": new_status}
+        return {"status": "success", "new_status": final_status}
 
     except Exception as e:
-        print(f"❌ Error in toggle: {str(e)}")
+        print(f"❌ Toggle Error: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
