@@ -31,48 +31,51 @@ window.openAddModal = function () {
 
 // 3. دالة تعديل العمل (التي تجلب البيانات)
 window.editMedia = async function (mediaId) {
-    console.log("جاري جلب بيانات العمل ID:", mediaId);
     try {
         const response = await fetch(`/api/media/details/${mediaId}`);
         const data = await response.json();
 
-        if (data.error) throw new Error(data.error);
-
-        // ملء البيانات في الفورم
+        // ملء كافة الحقول (القديمة والجديدة)
         document.getElementById('media_id').value = data.id;
         document.getElementById('title').value = data.title;
-        document.getElementById('story').value = data.story;
-        document.getElementById('poster_url').value = data.poster_url;
+        document.getElementById('tmdb_id').value = data.tmdb_id || '';
+        document.getElementById('year').value = data.year || '';
+        document.getElementById('rating').value = data.rating || '';
+        document.getElementById('labels').value = data.labels || '';
+        document.getElementById('runtime').value = data.runtime || '';
+        document.getElementById('poster_url').value = data.poster_url || '';
+        document.getElementById('story').value = data.story || '';
         document.getElementById('category').value = data.category;
-        document.getElementById('year').value = data.year;
 
-        // إظهار الحلقات لو مسلسل
         const epSection = document.getElementById('episodesSection');
         if (data.category === 'tv') {
             epSection.style.display = 'block';
             const epList = document.getElementById('episodesList');
+            // الحقيقة الصارمة: دمجنا الـ identifier مع أزرار التحكم في مكان واحد
             epList.innerHTML = data.episodes.map(ep => `
-                    <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
-                        <span>الحلقة ${ep.episode_number}</span>
-                        <div style="display:flex; gap:5px;">
-                            <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
-                                <i class="fa fa-link"></i> السيرفرات
-                            </button>
-                            <button type="button" onclick="forceSync(${ep.id})" class="btn-mini" style="background:var(--color-text-muted); color:white; padding:4px 8px; border-radius:4px;">
-                                <i class="fa fa-sync"></i> تصفير
-                            </button>
-                        </div>
+                <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
+                    <span>حلقة ${ep.episode_number} <small style="color:gray;">[${ep.identifier || 'بدون ID'}]</small></span>
+                    <div style="display:flex; gap:5px;">
+                        <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
+                            <i class="fa fa-link"></i> السيرفرات
+                        </button>
+                        <button type="button" onclick="syncToBlogger(${ep.id})" class="btn-mini" 
+                                style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px;">
+                            <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
+                        </button>
+                        <button type="button" onclick="forceSync(${ep.id})" class="btn-mini" style="background:#6b7280; color:white; padding:4px 8px; border-radius:4px;">
+                            <i class="fa fa-sync"></i> تصفير
+                        </button>
                     </div>
-                `).join('');
+                </div>
+            `).join('');
         } else {
             epSection.style.display = 'none';
         }
 
         document.getElementById('modalTitle').innerText = 'تعديل: ' + data.title;
         window.openModal('mediaModal');
-    } catch (error) {
-        alert("خطأ في جلب البيانات: " + error.message);
-    }
+    } catch (error) { alert("خطأ في جلب البيانات: " + error.message); }
 };
 
 // 4. دالة بلوجر (التي كانت تعطي الخطأ)
@@ -177,13 +180,40 @@ window.addNewLink = async function () {
     manageLinks(currentEpisodeId); // تحديث القائمة
 };
 
+document.getElementById('mediaForm').onsubmit = async function (e) {
+    e.preventDefault();
+    const mediaId = document.getElementById('media_id').value;
+    const formData = new FormData(this);
 
+    // تحديد المسار: إضافة أم تعديل
+    const url = mediaId ? `/api/media/update/${mediaId}` : `/api/media/add`;
+
+    try {
+        const response = await fetch(url, { method: 'POST', body: formData });
+        const result = await response.json();
+        if (result.status === "success") {
+            location.reload(); // تحديث الصفحة لرؤية التغييرات
+        } else {
+            alert("خطأ أثناء الحفظ: " + (result.error || "حاول مرة أخرى"));
+        }
+    } catch (e) {
+        alert("فشل الاتصال بالسيرفر");
+    }
+};
 
 window.deleteLink = async function (linkId) {
     if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
     await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
     manageLinks(currentEpisodeId); // إعادة تحميل القائمة
 };
+
+
+window.closeLinksModal = function () {
+    const modal = document.getElementById('linksModal');
+    modal.style.display = 'none';
+    modal.classList.remove('show');
+};
+
 
 window.forceSync = async function (epId) {
     if (!confirm("هل أنت متأكد من تصفير مزامنة هذه الحلقة؟")) return;
@@ -201,13 +231,6 @@ window.forceSync = async function (epId) {
 };
 
 
-window.closeLinksModal = function () {
-    const modal = document.getElementById('linksModal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.remove('show');
-    }
-};
 // منطق تبديل الوضع الداكن/الفاتح
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;

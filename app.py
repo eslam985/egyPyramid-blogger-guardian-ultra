@@ -76,7 +76,11 @@ async def add_new_work(
     title: str = Form(...),
     category: str = Form(...),
     story: str = Form(...),
-    year: int = Form(...),
+    year: str = Form(None), # تغيير من int لـ str لتوافق قاعدة البيانات
+    rating: str = Form(None),
+    tmdb_id: str = Form(None),
+    labels: str = Form(None),
+    runtime: str = Form(None),
     poster_url: str = Form(...),
 ):
     payload = {
@@ -84,6 +88,10 @@ async def add_new_work(
         "category": category,
         "story": story,
         "year": year,
+        "rating": rating,
+        "tmdb_id": tmdb_id,
+        "labels": labels,
+        "runtime": runtime,
         "poster_url": poster_url,
     }
     new_media = SupabaseService.add_media(payload)
@@ -98,15 +106,17 @@ async def update_media(
     title: str = Form(...),
     story: str = Form(...),
     category: str = Form(...),
-    year: int = Form(...),
-    poster_url: str = Form(...),
+    year: str = Form(None),
+    rating: str = Form(None),
+    tmdb_id: str = Form(None),
+    labels: str = Form(None),
+    runtime: str = Form(None),
+    poster_url: str = Form(...)
 ):
     data = {
-        "title": title,
-        "story": story,
-        "category": category,
-        "year": year,
-        "poster_url": poster_url,
+        "title": title, "story": story, "category": category,
+        "year": year, "rating": rating, "tmdb_id": tmdb_id,
+        "labels": labels, "runtime": runtime, "poster_url": poster_url
     }
     SupabaseService.update_media(media_id, data)
     return {"status": "success"}
