@@ -82,6 +82,33 @@ window.toggleBlogger = async function (postId) {
     }
 };
 
+window.addNewEpisodeRow = async function () {
+    const mediaId = document.getElementById('media_id').value;
+    const epNum = prompt("أدخل رقم الحلقة الجديدة:");
+
+    if (!epNum) return;
+
+    // الحقيقة الصارمة: سنرسل طلب سريع للسيرفر لإنشاء حلقة فارغة لهذا المسلسل
+    try {
+        const response = await fetch(`/api/media/${mediaId}/add-episode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `episode_number=${epNum}`
+        });
+        const result = await response.json();
+
+        if (result.status === "success") {
+            // إعادة تحميل بيانات المودال لتظهر الحلقة الجديدة
+            window.editMedia(mediaId);
+        } else {
+            alert("خطأ: " + result.error);
+        }
+    } catch (e) {
+        alert("فشل إضافة الحلقة");
+    }
+};
+
+
 // منطق تبديل الوضع الداكن/الفاتح
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;

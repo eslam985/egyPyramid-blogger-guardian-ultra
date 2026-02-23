@@ -79,8 +79,15 @@
                     <textarea id="story" name="story" rows="4" required></textarea>
                 </div>
                 <hr>
-                <div id="episodesSection" style="display:none;">
-                    <h3><i class="fa fa-list-ol"></i> إدارة الحلقات</h3>
+                <div id="episodesSection" style="display: none;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3><i class="fa fa-list-ol"></i> إدارة الحلقات</h3>
+                        <button type="button" onclick="addNewEpisodeRow()" class="btn-mini-sync"
+                            style="background: var(--color-btn-blogger);">
+                            <i class="fa fa-plus"></i> إضافة حلقة
+                        </button>
+                    </div>
                     <div id="episodesList" class="episodes-admin-list">
                     </div>
                 </div>

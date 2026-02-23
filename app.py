@@ -130,7 +130,9 @@ async def revert_post(post_id: str, user: str = Depends(authenticate)):
 async def reset_sync(ep_id: int, user: str = Depends(authenticate)):
     try:
         # الحقيقة الصارمة: نستخدم الكلاينت الموجود داخل السيرفيس
-        SupabaseService.client.table("episodes").update({"is_synced": False}).eq("id", ep_id).execute()
+        SupabaseService.client.table("episodes").update({"is_synced": False}).eq(
+            "id", ep_id
+        ).execute()
         return {"status": "success"}
     except Exception as e:
         return {"error": str(e)}
@@ -158,10 +160,26 @@ async def get_media_details(media_id: int, user: str = Depends(authenticate)):
 
         if not media_res.data:
             return {"error": "العمل غير موجود"}
-        
+
         data = media_res.data
         data["episodes"] = episodes_res.data if episodes_res.data else []
         return data
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/media/{media_id}/add-episode")
+async def add_episode(
+    media_id: int, episode_number: int = Form(...), user: str = Depends(authenticate)
+):
+    try:
+        data = {
+            "media_id": media_id,
+            "episode_number": episode_number,
+            "is_synced": False,  # تبدأ غير منشورة حتى تضغط أنت على المزامنة
+        }
+        SupabaseService.client.table("episodes").insert(data).execute()
+        return {"status": "success"}
     except Exception as e:
         return {"error": str(e)}
 
