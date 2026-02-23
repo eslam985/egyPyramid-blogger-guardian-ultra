@@ -10,7 +10,7 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
-import res
+
 
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
 supabase = SupabaseService.client
