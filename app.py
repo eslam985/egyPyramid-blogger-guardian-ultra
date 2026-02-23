@@ -7,7 +7,7 @@ from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
 import os
 import uvicorn
-
+from datetime import datetime
 print("--- Project Structure ---")
 for root, dirs, files in os.walk("."):
     # تجاهل المجلدات المخفية مثل .git
@@ -76,7 +76,7 @@ async def add_new_work(
     title: str = Form(...),
     category: str = Form(...),
     story: str = Form(...),
-    year: str = Form(None), # تغيير من int لـ str لتوافق قاعدة البيانات
+    year: str = Form(None),  # تغيير من int لـ str لتوافق قاعدة البيانات
     rating: str = Form(None),
     tmdb_id: str = Form(None),
     labels: str = Form(None),
@@ -95,6 +95,20 @@ async def add_new_work(
         "poster_url": poster_url,
     }
     new_media = SupabaseService.add_media(payload)
+    
+    if new_media:
+        media_id = new_media['id']
+        # 2. إنشاء مسودة في بلوجر فوراً لهذا العمل الجديد
+        blogger_res = blogger.create_post(
+            title=title, 
+            content=f"<p>{story}</p>", 
+            is_draft=True # ينشر كمسودة كما تفضل
+        )
+        
+        # 3. حفظ الـ Blogger ID الناتج في ساب باز داخل العمل نفسه
+        if "id" in blogger_res:
+            SupabaseService.update_media(media_id, {"blogger_post_id": blogger_res['id']})
+            
     return {"status": "success", "data": new_media}
 
 
@@ -111,12 +125,18 @@ async def update_media(
     tmdb_id: str = Form(None),
     labels: str = Form(None),
     runtime: str = Form(None),
-    poster_url: str = Form(...)
+    poster_url: str = Form(...),
 ):
     data = {
-        "title": title, "story": story, "category": category,
-        "year": year, "rating": rating, "tmdb_id": tmdb_id,
-        "labels": labels, "runtime": runtime, "poster_url": poster_url
+        "title": title,
+        "story": story,
+        "category": category,
+        "year": year,
+        "rating": rating,
+        "tmdb_id": tmdb_id,
+        "labels": labels,
+        "runtime": runtime,
+        "poster_url": poster_url,
     }
     SupabaseService.update_media(media_id, data)
     return {"status": "success"}
@@ -222,19 +242,45 @@ async def add_link(ep_id: int):
 async def update_link_api(
     link_id: int,
     server_name: str = Form(None),
-    url: str = Form(None), # تعديل هنا
+    url: str = Form(None),  # تعديل هنا
     user: str = Depends(authenticate),
 ):
     update_data = {}
     if server_name is not None:
         update_data["server_name"] = server_name
     if url is not None:
-        update_data["url"] = url # تعديل هنا
+        update_data["url"] = url  # تعديل هنا
 
     SupabaseService.client.table("links").update(update_data).eq(
         "id", link_id
     ).execute()
     return {"status": "success"}
+
+
+# مسار المزامنة الفعلي مع بلوجر
+@app.post("/api/episodes/{ep_id}/sync")
+async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate)):
+    try:
+        # 1. جلب بيانات الحلقة
+        ep_res = SupabaseService.client.table("episodes").select("*").eq("id", ep_id).single().execute()
+        
+        # 2. التأكد من وجود روابط
+        links_res = SupabaseService.client.table("links").select("*").eq("episode_id", ep_id).execute()
+        if not links_res.data:
+            return {"status": "error", "error": "لا توجد روابط! أضف روابط أولاً ثم اضغط مزامنة."}
+
+        # الحقيقة الصارمة: لا نغير is_synced لـ True هنا! 
+        # نتركها False لكي يراها الكولاب، لكن نحدث blogger_sync لنعطي إشارة للكولاب بالبدء
+        SupabaseService.client.table("episodes").update({
+            "is_synced": False, # تبقى فولس كما هي لكي يراها الكولاب
+            "blogger_sync": "Approved", # إشارة "الضوء الأخضر" للكولاب
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", ep_id).execute()
+
+        return {"status": "success", "message": "تم اعتماد الحلقة. سيتولى الكولاب نشرها في الدورة القادمة."}
+
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 # حذف رابط معين

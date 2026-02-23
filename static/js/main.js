@@ -201,6 +201,34 @@ document.getElementById('mediaForm').onsubmit = async function (e) {
     }
 };
 
+
+// دالة المزامنة مع بلوجر (التي كانت ناقصة وتسبب الخطأ)
+window.syncToBlogger = async function (epId) {
+    // إشعار مستخدم بسيط قبل البدء
+    console.log("جاري بدء عملية المزامنة للحلقة:", epId);
+
+    try {
+        // الحقيقة الصارمة: سنرسل الطلب لمسار المزامنة في الباك اند
+        // ملاحظة: تأكد من وجود هذا المسار في app.py لاحقاً
+        const response = await fetch(`/api/episodes/${epId}/sync`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+            alert("✅ تم نشر الحلقة وتحديث مقال بلوجر بنجاح!");
+            // إعادة جلب البيانات لتحديث لون الزر من برتقالي لأخضر
+            const mediaId = document.getElementById('media_id').value;
+            window.editMedia(mediaId);
+        } else {
+            alert("❌ خطأ في المزامنة: " + (result.error || "فشل غير معروف"));
+        }
+    } catch (e) {
+        console.error("Connection Error:", e);
+        alert("فشل الاتصال بالسيرفر، تأكد أن تطبيق FastAPI يعمل.");
+    }
+};
 window.deleteLink = async function (linkId) {
     if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
     await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });

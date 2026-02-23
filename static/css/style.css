@@ -483,9 +483,9 @@ button {
 .modal-content {
     background-color: var(--color-surface);
     margin: 5% auto;
-    /* توسيط عمودي */
     position: relative;
-    /* ... باقي التنسيقات الموجودة عندك */
+    padding: 16px;
+    border-radius: 12px;
 }
 
 /* العناوين والحقول */
