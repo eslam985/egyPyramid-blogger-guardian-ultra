@@ -10,6 +10,7 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
+import res
 
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
 supabase = SupabaseService.client
@@ -330,22 +331,29 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 async def toggle_post_status(post_id: str, username: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
+
         blogger = BloggerService(blog_id=os.getenv("BLOG_ID"))
         service = blogger.get_service()
-        
+
         # جلب البيانات الحالية بدقة
-        post = service.posts().get(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
-        current_status = post.get("status") # القيم الممكنة: LIVE أو DRAFT
+        post = (
+            service.posts().get(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+        )
+        current_status = post.get("status")  # القيم الممكنة: LIVE أو DRAFT
 
         if current_status == "LIVE":
             # أمر التحويل لمسودة (Revert)
-            service.posts().revert(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+            service.posts().revert(
+                blogId=os.getenv("BLOG_ID"), postId=post_id
+            ).execute()
             new_status = "draft"
         else:
             # أمر النشر (Publish)
-            service.posts().publish(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+            service.posts().publish(
+                blogId=os.getenv("BLOG_ID"), postId=post_id
+            ).execute()
             new_status = "live"
-            
+
         return {"status": "success", "new_status": new_status}
     except Exception as e:
         print(f"Error toggling post {post_id}: {e}")
@@ -354,49 +362,55 @@ async def toggle_post_status(post_id: str, username: str = Depends(authenticate)
 
 @app.get("/", response_class=HTMLResponse)
 async def index(
-    request: Request, 
-    page: int = 1, 
-    cat: str = None, 
-    status: str = None, 
+    request: Request,
+    page: int = 1,
+    cat: str = None,
+    status: str = None,
     search: str = None,
-    username: str = Depends(authenticate)
+    username: str = Depends(authenticate),
 ):
     page_size = 12
     offset = (page - 1) * page_size
-    
-    # بناء الاستعلام لـ Supabase
-    query = supabase.table("medias").select("*", count="exact")
-    
-    # 1. فلترة النوع (فيلم/مسلسل)
+
+    # 1. البدء ببناء الاستعلام
+    query = SupabaseService.client.table("medias").select("*", count="exact")
+
+    # 2. تطبيق الفلاتر (قبل التنفيذ)
     if cat:
         query = query.eq("category", cat)
-    
-    # 2. فلترة الحالة (منشور/مسودة/غير منشور)
-    # ملاحظة: غير منشور يعني blogger_post_id هو NULL
+
     if status == "not_published":
         query = query.is_("blogger_post_id", "null")
     elif status == "published":
         query = query.not_.is_("blogger_post_id", "null")
-    
-    # 3. البحث
+
     if search:
         query = query.ilike("title", f"%{search}%")
-    
-    # جلب البيانات مع الترتيب (الأحدث أولاً) والترقيم
-    res = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
-    
-    total_count = res.count
-    total_pages = (total_count + page_size - 1) // page_size
-    
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "media_list": res.data,
-        "current_page": page,
-        "total_pages": total_pages,
-        "current_cat": cat,
-        "current_status": status,
-        "search": search
-    })
+
+    # 3. تنفيذ الاستعلام مع الترتيب والترقيم (هنا يولد res)
+    res = (
+        query.order("created_at", desc=True)
+        .range(offset, offset + page_size - 1)
+        .execute()
+    )
+
+    # 4. الحسابات بعد جلب البيانات
+    total_count = res.count if res.count is not None else 0
+    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "media_list": res.data,
+            "current_page": page,
+            "total_pages": total_pages,
+            "current_cat": cat,
+            "current_status": status,
+            "search": search,
+        },
+    )
+
 
 # حذف رابط معين
 @app.post("/api/links/{link_id}/delete")
