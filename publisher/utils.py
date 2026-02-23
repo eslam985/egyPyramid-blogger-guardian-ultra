@@ -1,22 +1,36 @@
 import os
-import re  # حل مشكلة Undefined name "re"
+import re
+import time
+import requests
+import datetime
+import random
 from groq import Groq
 from google import genai
 from google.genai import types
 from textblob import TextBlob
 from deep_translator import GoogleTranslator
-import _random as random
-import time
-import requests
-import datetime
+from dotenv import load_dotenv # أضف هذا السطر
 
-# استدعاء المفاتيح من ملف .env
+# 1. شحن المتغيرات (هذا يقرأ ملف .env في جهازك المحلي)
+load_dotenv() 
+
+# 2. استدعاء المفاتيح
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# تعريف الـ Clients (حل مشكلة Undefined name "client_groq")
-client_groq = Groq(api_key=GROQ_API_KEY)
-client_gemini = genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})
+# 3. تعريف الـ Clients مع فحص الأخطاء
+# الحقيقة الصارمة: لو المفتاح مش موجود، السطر ده هيوقع السيرفر كله (Crash)
+if not GROQ_API_KEY:
+    print("⚠️ Warning: GROQ_API_KEY is missing!")
+    client_groq = None
+else:
+    client_groq = Groq(api_key=GROQ_API_KEY)
+
+if not GEMINI_API_KEY:
+    print("⚠️ Warning: GEMINI_API_KEY is missing!")
+    client_gemini = None
+else:
+    client_gemini = genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})
 
 
 def ar_to_en(text):
