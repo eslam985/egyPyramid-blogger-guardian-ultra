@@ -116,25 +116,36 @@ window.addNewEpisodeRow = async function () {
 };
 
 
+// تأكد أن هذا السطر في أعلى الملف تماماً خارج كل الدوال
 let currentEpisodeId = null;
 
 window.manageLinks = async function (episodeId) {
-    currentEpisodeId = episodeId;
+    currentEpisodeId = episodeId; // حفظ الـ ID لاستخدامه عند إضافة سيرفر
     const modal = document.getElementById('linksModal');
+
     modal.style.display = 'block';
+    modal.classList.add('show');
 
-    // جلب السيرفرات من قاعدة البيانات
-    const response = await fetch(`/api/episodes/${episodeId}/links`);
-    const links = await response.json();
+    try {
+        const response = await fetch(`/api/episodes/${episodeId}/links`);
+        const links = await response.json();
 
-    const linksList = document.getElementById('linksList');
-    linksList.innerHTML = links.map(link => `
-        <div style="background:var(--color-bg); padding:10px; margin-bottom:5px; border-radius:8px; display:flex; gap:10px;">
-            <input type="text" value="${link.server_name}" onchange="updateLink(${link.id}, 'server_name', this.value)" style="width:30%">
-            <input type="text" value="${link.link_url}" onchange="updateLink(${link.id}, 'link_url', this.value)" style="flex:1">
-            <button onclick="deleteLink(${link.id})" style="color:var(--color-btn-delete)"><i class="fa fa-trash"></i></button>
-        </div>
-    `).join('');
+        const linksList = document.getElementById('linksList');
+        // الحقيقة الصارمة: تأكد من وجود مفتاح للحذف وتعديل البيانات
+        linksList.innerHTML = links.map(link => `
+            <div class="ep-admin-item" style="gap:10px; margin-bottom:8px;">
+                <input type="text" value="${link.server_name}" placeholder="اسم السيرفر" 
+                       onchange="updateLink(${link.id}, 'server_name', this.value)" style="width:30%">
+                <input type="text" value="${link.link_url}" placeholder="رابط السيرفر" 
+                       onchange="updateLink(${link.id}, 'link_url', this.value)" style="flex:1">
+                <button type="button" onclick="deleteLink(${link.id})" style="color:var(--color-btn-delete); border:none; background:none; cursor:pointer;">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error("فشل جلب السيرفرات:", e);
+    }
 };
 
 window.addNewLink = async function () {

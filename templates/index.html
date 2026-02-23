@@ -96,13 +96,20 @@
             </form>
         </div>
     </div>
-    <div id="linksModal" class="modal" style="z-index: 10002;">
-        <div class="modal-header">
-            <h3>إدارة سيرفرات الحلقة</h3>
-            <span class="close-btn" onclick="document.getElementById('linksModal').style.display='none'">×</span>
+    <div id="linksModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>إدارة سيرفرات الحلقة</h3>
+                <span class="close-btn"
+                    onclick="document.getElementById('linksModal').style.display='none'">&times;</span>
+            </div>
+            <div id="linksList" class="episodes-admin-list" style="margin-bottom:15px; min-height:100px;">
+            </div>
+            <button type="button" onclick="addNewLink()" class="btn-add-episode"
+                style="width:100%; justify-content:center;">
+                <i class="fa fa-plus-circle"></i> إضافة سيرفر جديد
+            </button>
         </div>
-        <div id="linksList" style="margin-bottom:15px;"></div>
-        <button type="button" onclick="addNewLink()" class="btn-primary" style="width:100%">+ إضافة سيرفر جديد</button>
     </div>
     <button id="theme-toggle" class="theme-toggle-btn">
         <i class="fa fa-moon"></i>
