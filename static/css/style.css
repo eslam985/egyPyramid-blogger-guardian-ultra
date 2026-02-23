@@ -517,6 +517,47 @@ button {
     border-color: var(--color-primary);
 }
 
+/* تنسيق زر إضافة حلقة داخل المودال */
+.btn-add-episode {
+    background-color: var(--color-btn-blogger); /* اللون البرتقالي المميز */
+    color: white;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-add-episode:hover {
+    background-color: #ea580c; /* درجة أغمق عند التحويم */
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-add-episode i {
+    font-size: 1rem;
+}
+
+/* تحسين شكل رأس قسم الحلقات */
+.episodes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 0 5px;
+}
+
+.episodes-header h3 {
+    font-size: 1.1rem;
+    color: var(--color-primary);
+    margin: 0;
+}
+
 /* أزرار المودال */
 .modal-footer {
     margin-top: 20px;
