@@ -10,7 +10,8 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
-load_dotenv() # شحن المتغيرات أولاً
+
+load_dotenv()  # شحن المتغيرات أولاً
 
 # ثم بقية الاستدعاءات
 from publisher.main_publisher import start_publishing_from_supabase
@@ -47,6 +48,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 security = HTTPBasic()
 
+
 # 2. نظام الحماية (Authentication)
 def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     correct_email = os.getenv("ADMIN_EMAIL")
@@ -62,13 +64,15 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
+
 @app.post("/publisher/run")
-async def run_publisher(background_tasks: BackgroundTasks, user: str = Depends(authenticate)):
+async def run_publisher(
+    background_tasks: BackgroundTasks, user: str = Depends(authenticate)
+):
     # استخدام BackgroundTasks ضروري جداً هنا
     # لأن عملية النشر قد تأخذ دقائق، ولا نريد للمتصفح أن ينتظر (Timeout)
     background_tasks.add_task(start_publishing_from_supabase)
     return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
-
 
 
 # الصفحة الرئيسية (محمية بكلمة سر)
@@ -315,6 +319,36 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
             "status": "success",
             "message": "تم اعتماد الحلقة بنجاح. يرجى الضغط على زر (تشغيل المحرك) لبدء النشر الفوري.",
         }
+
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/api/blogger/toggle/{post_id}")
+async def toggle_post_status(post_id: str, username: str = Depends(authenticate)):
+    try:
+        from services.blogger_api import BloggerService
+
+        blogger = BloggerService(blog_id=os.getenv("BLOG_ID"))
+        service = blogger.get_service()
+
+        # 1. جلب حالة المقال الحالية
+        post = (
+            service.posts().get(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+        )
+
+        if post.get("status") == "LIVE":
+            # تحويل لمسودة
+            service.posts().revert(
+                blogId=os.getenv("BLOG_ID"), postId=post_id
+            ).execute()
+            return {"status": "success", "new_status": "draft"}
+        else:
+            # إعادة نشر
+            service.posts().publish(
+                blogId=os.getenv("BLOG_ID"), postId=post_id
+            ).execute()
+            return {"status": "success", "new_status": "live"}
 
     except Exception as e:
         return {"status": "error", "error": str(e)}
