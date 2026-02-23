@@ -120,31 +120,35 @@ window.addNewEpisodeRow = async function () {
 let currentEpisodeId = null;
 
 window.manageLinks = async function (episodeId) {
-    currentEpisodeId = episodeId; // حفظ الـ ID لاستخدامه عند إضافة سيرفر
+    if (!episodeId) return alert("خطأ: لم يتم العثور على ID الحلقة");
+
+    currentEpisodeId = episodeId; // تأكد أنك عرفت let currentEpisodeId في أعلى الملف
     const modal = document.getElementById('linksModal');
 
-    modal.style.display = 'block';
     modal.classList.add('show');
 
     try {
         const response = await fetch(`/api/episodes/${episodeId}/links`);
         const links = await response.json();
 
+        // التأكد أن البيانات مصفوفة لتجنب خطأ .map
+        if (!Array.isArray(links)) throw new Error("بيانات غير صالحة");
+
         const linksList = document.getElementById('linksList');
-        // الحقيقة الصارمة: تأكد من وجود مفتاح للحذف وتعديل البيانات
         linksList.innerHTML = links.map(link => `
-            <div class="ep-admin-item" style="gap:10px; margin-bottom:8px;">
-                <input type="text" value="${link.server_name}" placeholder="اسم السيرفر" 
+            <div class="link-row">
+                <input type="text" value="${link.server_name || ''}" placeholder="اسم السيرفر" 
                        onchange="updateLink(${link.id}, 'server_name', this.value)" style="width:30%">
-                <input type="text" value="${link.link_url}" placeholder="رابط السيرفر" 
+                <input type="text" value="${link.link_url || ''}" placeholder="الرابط" 
                        onchange="updateLink(${link.id}, 'link_url', this.value)" style="flex:1">
-                <button type="button" onclick="deleteLink(${link.id})" style="color:var(--color-btn-delete); border:none; background:none; cursor:pointer;">
+                <button type="button" onclick="deleteLink(${link.id})" style="color:red; background:none; border:none; cursor:pointer;">
                     <i class="fa fa-trash"></i>
                 </button>
             </div>
         `).join('');
     } catch (e) {
-        console.error("فشل جلب السيرفرات:", e);
+        console.error("خطأ:", e);
+        document.getElementById('linksList').innerHTML = "لا توجد سيرفرات مضافة حالياً.";
     }
 };
 
