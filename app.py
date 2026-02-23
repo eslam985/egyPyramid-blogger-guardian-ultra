@@ -317,29 +317,41 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
-        service = BloggerService(blog_id=os.getenv("BLOG_ID")).get_service()
+        from services.supabase_db import SupabaseService
+
+        blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
+        service = blogger_service.get_service()
         b_id = os.getenv("BLOG_ID")
 
-        # 1. جلب البيانات (الحروف الكبيرة هنا مصيرية!)
+        # 1. السؤال عن الحالة الحالية من بلوجر (المصدر الموثوق)
         post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
-        # نستخدم .upper() لضمان عدم حدوث خطأ في المقارنة
-        current_status = post_data.get("status", "").upper() 
+        current_status = post_data.get("status", "").upper()
 
+        # 2. اتخاذ القرار وعكس الحالة
         if current_status == "LIVE":
-            # إذا كان LIVE (منشور) -> حوله لمسودة
+            # كان منشوراً -> اجعله مسودة
             service.posts().revert(blogId=b_id, postId=post_id).execute()
             final_status = "draft"
+            db_status = "Draft"  # للتخزين في ساب باز
         else:
-            # إذا كان DRAFT (مسودة) -> انشره
+            # كان مسودة -> انشره
             service.posts().publish(blogId=b_id, postId=post_id).execute()
             final_status = "live"
+            db_status = "Published"
 
-        # 2. تحديث ساب باز فوراً (اختياري لكن يفضل بشدة)
-        # SupabaseService.client.table("episodes").update({"blogger_status": final_status}).eq("blogger_post_id", post_id).execute()
+        # 3. "تسميع" الحالة في ساب باز فوراً (هذا ما كان ينقصك)
+        # نقوم بتحديث الجدولين (medias و episodes) لضمان الدقة
+        SupabaseService.client.table("medias").update({"blogger_status": db_status}).eq(
+            "blogger_post_id", post_id
+        ).execute()
+        SupabaseService.client.table("episodes").update({"blogger_sync": db_status}).eq(
+            "blogger_post_id", post_id
+        ).execute()
 
         return {"status": "success", "new_status": final_status}
 
     except Exception as e:
+        print(f"❌ Toggle Error: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
