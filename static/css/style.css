@@ -664,7 +664,31 @@ button {
     border-color: #10b981;
     background-color: rgba(16, 185, 129, 0.1);
 }
+/* تحسين زر الإغلاق */
+.close-btn {
+    cursor: pointer;
+    font-size: 2rem; /* تكبير الحجم */
+    font-weight: bold;
+    color: var(--color-text-muted);
+    transition: color 0.2s;
+    padding: 10px; /* مساحة ضغط أكبر */
+    line-height: 1;
+    display: inline-block;
+}
 
+.close-btn:hover {
+    color: var(--color-btn-delete); /* يتغير للأحمر عند الوقوف عليه */
+}
+
+/* ضمان تموضع الزر في زاوية المودال */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
 /* ---------------------------------------- */
 /*  زر تبديل الوضع (Fixed)                */
 /* ---------------------------------------- */

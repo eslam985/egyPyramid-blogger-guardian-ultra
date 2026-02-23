@@ -199,6 +199,15 @@ window.forceSync = async function (epId) {
         alert("فشل الاتصال بالسيرفر");
     }
 };
+
+
+window.closeLinksModal = function () {
+    const modal = document.getElementById('linksModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    }
+};
 // منطق تبديل الوضع الداكن/الفاتح
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;
