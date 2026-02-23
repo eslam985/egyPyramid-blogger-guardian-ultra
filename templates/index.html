@@ -36,11 +36,35 @@
         <a href="/?cat=movie" class="filter-tag">أفلام</a>
       </div>
     </header>
-
+    <div class="dashboard-controls">
+      <div class="filters-bar">
+        <a href="/?status=published" class="btn-filter {{ 'active' if current_status == 'published' }}">✅ منشور</a>
+        <a href="/?status=not_published" class="btn-filter {{ 'active' if current_status == 'not_published' }}">⏳ غير
+          منشور</a>
+        <select onchange="location.href='/?cat='+this.value">
+          <option value="">كل الأنواع</option>
+          <option value="tv" {{ 'selected' if current_cat=='tv' }}>مسلسلات</option>
+          <option value="movie" {{ 'selected' if current_cat=='movie' }}>أفلام</option>
+        </select>
+      </div>
+    </div>
     <div class="media-grid">
       {% for media in media_list %}
       {% include 'components/media_card.html' %}
       {% endfor %}
+    </div>
+    <div class="pagination">
+      {% if current_page > 1 %}
+      <a href="/?page={{ current_page - 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}"
+        class="btn-page">السابق</a>
+      {% endif %}
+
+      <span class="page-info">صفحة {{ current_page }} من {{ total_pages }}</span>
+
+      {% if current_page < total_pages %} <a
+        href="/?page={{ current_page + 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}"
+        class="btn-page">التالي</a>
+        {% endif %}
     </div>
   </main>
 

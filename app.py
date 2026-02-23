@@ -11,6 +11,8 @@ from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 
+# ثم قم بتعريف المتغير الذي يشتكي منه الكود:
+supabase = SupabaseService.client
 load_dotenv()  # شحن المتغيرات أولاً
 
 # ثم بقية الاستدعاءات
@@ -328,31 +330,73 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 async def toggle_post_status(post_id: str, username: str = Depends(authenticate)):
     try:
         from services.blogger_api import BloggerService
-
         blogger = BloggerService(blog_id=os.getenv("BLOG_ID"))
         service = blogger.get_service()
+        
+        # جلب البيانات الحالية بدقة
+        post = service.posts().get(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+        current_status = post.get("status") # القيم الممكنة: LIVE أو DRAFT
 
-        # 1. جلب حالة المقال الحالية
-        post = (
-            service.posts().get(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
-        )
-
-        if post.get("status") == "LIVE":
-            # تحويل لمسودة
-            service.posts().revert(
-                blogId=os.getenv("BLOG_ID"), postId=post_id
-            ).execute()
-            return {"status": "success", "new_status": "draft"}
+        if current_status == "LIVE":
+            # أمر التحويل لمسودة (Revert)
+            service.posts().revert(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+            new_status = "draft"
         else:
-            # إعادة نشر
-            service.posts().publish(
-                blogId=os.getenv("BLOG_ID"), postId=post_id
-            ).execute()
-            return {"status": "success", "new_status": "live"}
-
+            # أمر النشر (Publish)
+            service.posts().publish(blogId=os.getenv("BLOG_ID"), postId=post_id).execute()
+            new_status = "live"
+            
+        return {"status": "success", "new_status": new_status}
     except Exception as e:
+        print(f"Error toggling post {post_id}: {e}")
         return {"status": "error", "error": str(e)}
 
+
+@app.get("/", response_class=HTMLResponse)
+async def index(
+    request: Request, 
+    page: int = 1, 
+    cat: str = None, 
+    status: str = None, 
+    search: str = None,
+    username: str = Depends(authenticate)
+):
+    page_size = 12
+    offset = (page - 1) * page_size
+    
+    # بناء الاستعلام لـ Supabase
+    query = supabase.table("medias").select("*", count="exact")
+    
+    # 1. فلترة النوع (فيلم/مسلسل)
+    if cat:
+        query = query.eq("category", cat)
+    
+    # 2. فلترة الحالة (منشور/مسودة/غير منشور)
+    # ملاحظة: غير منشور يعني blogger_post_id هو NULL
+    if status == "not_published":
+        query = query.is_("blogger_post_id", "null")
+    elif status == "published":
+        query = query.not_.is_("blogger_post_id", "null")
+    
+    # 3. البحث
+    if search:
+        query = query.ilike("title", f"%{search}%")
+    
+    # جلب البيانات مع الترتيب (الأحدث أولاً) والترقيم
+    res = query.order("created_at", desc=True).range(offset, offset + page_size - 1).execute()
+    
+    total_count = res.count
+    total_pages = (total_count + page_size - 1) // page_size
+    
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "media_list": res.data,
+        "current_page": page,
+        "total_pages": total_pages,
+        "current_cat": cat,
+        "current_status": status,
+        "search": search
+    })
 
 # حذف رابط معين
 @app.post("/api/links/{link_id}/delete")
