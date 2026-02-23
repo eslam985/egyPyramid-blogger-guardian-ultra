@@ -831,7 +831,9 @@ button {
         box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
     }
 }
-
+.btn-blogger i {
+    color: #f57d00; /* لون بلوجر الرسمي */
+}
 @media (max-width: 600px) {
     .form-grid {
         grid-template-columns: 1fr;
