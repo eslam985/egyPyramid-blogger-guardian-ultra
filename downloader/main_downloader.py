@@ -52,22 +52,36 @@ def save_to_supabase(
             "rating": str(meta_rating),
         }
 
-        media_res = (
+        # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
+        existing_media = (
             supabase.table("medias")
-            .upsert(media_payload, on_conflict="title,year")
+            .select("id")
+            .eq("title", c_title)
+            .eq("year", str(meta_year))
             .execute()
         )
-        m_id = media_res.data[0]["id"]
 
+        if existing_media.data:
+            # المسلسل موجود، خذ الـ ID فقط ولا تعدل القصة أو البوستر
+            m_id = existing_media.data[0]["id"]
+        else:
+            # المسلسل غير موجود، قم بإنشائه لأول مرة بالبيانات المتاحة
+            media_res = supabase.table("medias").insert(media_payload).execute()
+            m_id = media_res.data[0]["id"]
+
+        # بناء بيانات الحلقة
         ep_payload = {
             "media_id": m_id,
             "episode_number": actual_ep_no,
             "identifier": identifier,
             "is_synced": False,
         }
+
+        # التعديل هنا: نستخدم 'media_id, episode_number' لمنع التكرار
+        # بدلاً من الـ identifier المتقلب
         ep_res = (
             supabase.table("episodes")
-            .upsert(ep_payload, on_conflict="identifier")
+            .upsert(ep_payload, on_conflict="media_id, episode_number")
             .execute()
         )
         e_id = ep_res.data[0]["id"]
