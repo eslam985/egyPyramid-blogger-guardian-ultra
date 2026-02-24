@@ -10,12 +10,15 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
+
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 import socket
 import requests
+
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
+
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
@@ -478,11 +481,8 @@ async def get_all_progress(user: str = Depends(authenticate)):
         return []
 
 
-
-
-
 def advanced_tg_diagnostic():
-    token = "توكن_بوت_تليجرام_الخاص_بك" # ضع توكن البوت هنا للتجربة الحقيقية
+    token = "توكن_بوت_تليجرام_الخاص_بك"  # ضع توكن البوت هنا للتجربة الحقيقية
     print("\n🚀 يبدأ رادار فحص تليجرام المطور...")
     print("-" * 40)
 
@@ -500,7 +500,9 @@ def advanced_tg_diagnostic():
         if response.status_code == 200:
             print("✅ HTTP/443: اتصال ناجح! (Hugging Face يسمح بطلبات الويب العادية)")
         else:
-            print(f"⚠️ HTTP/443: السيرفر رد بكود {response.status_code} (ربما التوكن خطأ)")
+            print(
+                f"⚠️ HTTP/443: السيرفر رد بكود {response.status_code} (ربما التوكن خطأ)"
+            )
     except requests.exceptions.Timeout:
         print("❌ HTTP/443: مهلة الطلب انتهت (Timeout). (الحجب على مستوى بورت الويب)")
     except Exception as e:
@@ -522,6 +524,13 @@ def advanced_tg_diagnostic():
 
     print("-" * 40)
 
+
 if __name__ == "__main__":
-    # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
+    # 1. استدعاء الفحص أولاً ليطبع النتائج في اللوج فوراً
+    try:
+        advanced_tg_diagnostic()
+    except Exception as e:
+        print(f"⚠️ فشل بدء الرادار: {e}")
+
+    # 2. بدء التطبيق
     uvicorn.run("app:app", host="0.0.0.0", port=7860, reload=True)
