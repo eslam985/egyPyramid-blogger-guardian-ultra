@@ -458,16 +458,30 @@ async def delete_episode_api(ep_id: int, user: str = Depends(authenticate)):
 
 
 # 1. مسار بدء التحميل
+# 1. مسار بدء التحميل (نسخة التحكم عن بعد)
 @app.post("/api/download/run")
 async def run_download_task(
-    background_tasks: BackgroundTasks,
     url: str = Form(...),
     name: str = Form(...),
     user: str = Depends(authenticate),
 ):
-    # تشغيل "الوحش" في الخلفية لكي لا يتوقف المتصفح
-    background_tasks.add_task(start_download_process, url, name)
-    return {"status": "success", "message": "بدأت عملية التحميل والمعالجة..."}
+    try:
+        # الحقيقة الصارمة: هاجينج فيس الآن يرسل الأمر فقط
+        # نبحث عن الحلقة عن طريق الرابط أو الاسم ونحدث حالتها
+        SupabaseService.client.table("episodes").update(
+            {
+                "status": "pending",
+                "status_message": "في انتظار استجابة الوحش من Kaggle...",
+                "progress_percent": 0,
+            }
+        ).eq("download_url", url).execute()
+
+        return {
+            "status": "success",
+            "message": "تم إرسال الإشارة للوحش في Kaggle بنجاح!",
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"فشل إرسال الأمر: {str(e)}"}
 
 
 # 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
@@ -492,7 +506,7 @@ async def get_all_progress(user: str = Depends(authenticate)):
 
 
 def advanced_tg_diagnostic():
-    token = "8570381824:AAHiKQkpqHOBW7ymvaOeat3u0ad8sA1EeW8" # ضع توكن البوت هنا للتجربة الحقيقية
+    token = "8570381824:AAHiKQkpqHOBW7ymvaOeat3u0ad8sA1EeW8"  # ضع توكن البوت هنا للتجربة الحقيقية
     # بدلاً من الطباعة العادية، استخدم هذا الشكل لكل السطور:
     print("\n🚀 يبدأ رادار فحص تليجرام المطور...", flush=True)
     print("-" * 40, flush=True)
