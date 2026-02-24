@@ -483,15 +483,19 @@ async def get_all_progress(user: str = Depends(authenticate)):
 
 def advanced_tg_diagnostic():
     token = "توكن_بوت_تليجرام_الخاص_بك"  # ضع توكن البوت هنا للتجربة الحقيقية
-    print("\n🚀 يبدأ رادار فحص تليجرام المطور...")
-    print("-" * 40)
+    # بدلاً من الطباعة العادية، استخدم هذا الشكل لكل السطور:
+    print("\n🚀 يبدأ رادار فحص تليجرام المطور...", flush=True)
+    print("-" * 40, flush=True)
+    # ... وهكذا لكل سطر print في الدالة ...
 
     # 1. فحص الـ DNS
     try:
         ip = socket.gethostbyname("api.telegram.org")
         print(f"✅ DNS: تم العثور على عنوان IP لتليجرام: {ip}")
+        print("-" * 40, flush=True)
     except Exception as e:
         print(f"❌ DNS: فشل في ترجمة العنوان. (الحجب على مستوى الـ DNS)")
+        print("-" * 40, flush=True)
 
     # 2. فحص الـ HTTPS (المنفذ 443) عبر مكتبة requests
     try:
@@ -499,14 +503,19 @@ def advanced_tg_diagnostic():
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             print("✅ HTTP/443: اتصال ناجح! (Hugging Face يسمح بطلبات الويب العادية)")
+            print("-" * 40, flush=True)
         else:
             print(
                 f"⚠️ HTTP/443: السيرفر رد بكود {response.status_code} (ربما التوكن خطأ)"
+                
             )
+            print("-" * 40, flush=True)
     except requests.exceptions.Timeout:
         print("❌ HTTP/443: مهلة الطلب انتهت (Timeout). (الحجب على مستوى بورت الويب)")
+        print("-" * 40, flush=True)
     except Exception as e:
         print(f"❌ HTTP/443: فشل الاتصال لسبب آخر: {e}")
+        print("-" * 40, flush=True)
 
     # 3. فحص البورتات البديلة (أحياناً ينجح 80 أو 88)
     for port in [443, 80, 88, 2048]:
@@ -516,8 +525,10 @@ def advanced_tg_diagnostic():
             result = s.connect_ex(("api.telegram.org", port))
             if result == 0:
                 print(f"✅ Socket: المنفذ {port} مفتوح ومتاح للاتصال.")
+                print("-" * 40, flush=True)
             else:
                 print(f"❌ Socket: المنفذ {port} مغلق (Code: {result}).")
+                print("-" * 40, flush=True)
             s.close()
         except:
             pass
