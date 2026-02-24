@@ -10,6 +10,7 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
 
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
@@ -279,42 +280,61 @@ async def update_link_api(
 @app.post("/api/episodes/{ep_id}/sync")
 async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate)):
     try:
-        # 1. جلب بيانات الحلقة
+        # 1. جلب بيانات الحلقة والعمل المرتبط بها
         ep_res = (
-            SupabaseService.client.table("episodes")
-            .select("*")
+            supabase.table("episodes")
+            .select("*, medias(blogger_post_id)")
             .eq("id", ep_id)
             .single()
             .execute()
         )
+        if not ep_res.data:
+            return {"status": "error", "error": "الحلقة غير موجودة"}
 
-        # 2. التأكد من وجود روابط
+        episode = ep_res.data
+        post_id = episode.get("medias", {}).get("blogger_post_id")
+        if not post_id:
+            return {"status": "error", "error": "هذا العمل غير مرتبط بمقال بلوجر!"}
+
+        # 2. جلب الروابط وتجهيز الـ HTML الجديد للحلقة
         links_res = (
-            SupabaseService.client.table("links")
-            .select("*")
-            .eq("episode_id", ep_id)
-            .execute()
+            supabase.table("links").select("*").eq("episode_id", ep_id).execute()
         )
         if not links_res.data:
-            return {
-                "status": "error",
-                "error": "لا توجد روابط! أضف روابط أولاً ثم اضغط مزامنة.",
-            }
+            return {"status": "error", "error": "لا توجد روابط لهذه الحلقة!"}
 
-        # الحقيقة الصارمة: لا نغير is_synced لـ True هنا!
-        # نتركها False لكي يراها الكولاب، لكن نحدث blogger_sync لنعطي إشارة للكولاب بالبدء
-        SupabaseService.client.table("episodes").update(
-            {
-                "is_synced": False,  # تبقى فولس كما هي لكي يراها الكولاب
-                "blogger_sync": "Approved",  # إشارة "الضوء الأخضر" للكولاب
-                "updated_at": datetime.utcnow().isoformat(),
-            }
+        # تجهيز روابط السيرفرات للدالة (بناء الـ HTML اللي هيتحقن)
+        # ملاحظة: استبدل الروابط حسب أسماء السيرفرات عندك (Voe, VK, Archive, الخ)
+        servers = {l["server_name"].lower(): l["url"] for l in links_res.data}
+        new_ep_html = f"""<div class="ep-btn" onclick="playEp(this, '{servers.get('voe', '')}', '{servers.get('vidtube', '')}', '{episode['episode_number']}', '{servers.get('download', '')}', '{servers.get('archive', '')}', '{servers.get('vk', '')}')">{episode['episode_number']}</div>"""
+
+        # 3. جلب محتوى المقال الحالي من بلوجر
+        service = blogger.get_service()
+        post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
+        soup = BeautifulSoup(post["content"], "html.parser")
+
+        # 4. عملية الحقن (Injection) داخل كلاس ep-More
+        container = soup.find(class_="ep-More")
+        if not container:
+            return {"status": "error", "error": "كلاس ep-More غير موجود في المقال!"}
+
+        # التحقق إذا كانت الحلقة موجودة مسبقاً لمنع التكرار
+        if f">{episode['episode_number']}</div>" in str(container):
+            return {"status": "success", "message": "الحلقة موجودة بالفعل في المقال!"}
+
+        # حقن الحلقة الجديدة في بداية القائمة
+        container.insert(0, BeautifulSoup(new_ep_html, "html.parser"))
+
+        # 5. تحديث المقال في بلوجر وإعادة إرساله
+        post["content"] = str(soup)
+        service.posts().update(blogId=BLOG_ID, postId=post_id, body=post).execute()
+
+        # 6. تحديث الحالة في سوبابيز بنجاح
+        supabase.table("episodes").update(
+            {"is_synced": True, "blogger_sync": "Done"}
         ).eq("id", ep_id).execute()
 
-        return {
-            "status": "success",
-            "message": "تم اعتماد الحلقة بنجاح. يرجى الضغط على زر (تشغيل المحرك) لبدء النشر الفوري.",
-        }
+        return {"status": "success", "message": "تم الحقن والتحديث في بلوجر فوراً!"}
 
     except Exception as e:
         return {"status": "error", "error": str(e)}
