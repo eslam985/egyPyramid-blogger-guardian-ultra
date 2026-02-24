@@ -104,11 +104,12 @@ def save_to_supabase(
 
 
 async def pyramid_ultimate_beast(url, name, meta_data=None):
-    # أضف هذا السطر في بداية الدالة
-
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    # الحقيقة الصارمة: تحديد مسار العمل ليكون في المجلد المسموح به
+    BASE_DIR = os.getcwd() 
+    if "/kaggle/input" in BASE_DIR: # تأمين إضافي
+        BASE_DIR = "/kaggle/working"
+        
     await ensure_dependencies()
-    timestamp = int(time.time())
 
     # --- 1. تنظيف الاسم وجلب البيانات الذكية ---
 
@@ -225,6 +226,7 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
     )
 
     # أولاً: تعريف وإنشاء المجلد الفريد
+    # التعديل لضمان أن المجلد ينشأ في مكان مسموح
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
     os.makedirs(extract_dir, exist_ok=True)
 
@@ -581,7 +583,12 @@ async def start_download_process(url, name):
     """المدخل الرئيسي للداشبورد - الآن يعمل بشكل مستقل تماماً"""
     print(f"\n🚀 انطلاق الوحش لمعالجة: {name}")
     try:
-        # استدعاء المحرك مباشرة لكل مهمة بدلاً من المرور عبر Loop ينتظر
+        # الحقيقة الصارمة: إجبار الكود على العمل في المجلد المسموح به في كاجل
+        if "KAGGLER_WORKING_DIR" in os.environ or os.path.exists("/kaggle/working"):
+            os.chdir("/kaggle/working")
+            print(f"📂 تم تغيير مسار العمل إلى: {os.getcwd()}")
+
+        # استدعاء المحرك
         await pyramid_ultimate_beast(url, name)
     except Exception as e:
         print(f"❌ خطأ كارثي في معالجة '{name}': {e}")
