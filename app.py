@@ -306,37 +306,66 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
         # تجهيز روابط السيرفرات للدالة (بناء الـ HTML اللي هيتحقن)
         # ملاحظة: استبدل الروابط حسب أسماء السيرفرات عندك (Voe, VK, Archive, الخ)
         servers = {l["server_name"].lower(): l["url"] for l in links_res.data}
-        new_ep_html = f"""<div class="ep-btn" onclick="playEp(this, '{servers.get('voe', '')}', '{servers.get('vidtube', '')}', '{episode['episode_number']}', '{servers.get('download', '')}', '{servers.get('archive', '')}', '{servers.get('vk', '')}')">{episode['episode_number']}</div>"""
+        # --- [1] معالجة وتصحيح الروابط (الخوارزمية الذكية) ---
+        servers = {l["server_name"].lower(): l["url"] for l in links_res.data}
 
-        # 3. جلب محتوى المقال الحالي من بلوجر
+        # تصحيح رابط Archive (من details لـ embed)
+        archive_url = servers.get("archive", "")
+        if "details/" in archive_url:
+            archive_url = archive_url.replace("details/", "embed/")
+
+        # تصحيح رابط VK (تحويله لـ Embed)
+        vk_url = servers.get("vk", "")
+        if "vk.com/video" in vk_url and "video_ext.php" not in vk_url:
+            # استخراج الايدي من الرابط (مثال: -235805578_456239056)
+            import re
+
+            match = re.search(r"video(-?\d+_\d+)", vk_url)
+            if match:
+                video_id = match.group(1).split("_")
+                vk_url = f"https://vk.com/video_ext.php?oid={video_id[0]}&id={video_id[1]}&hash=ba0a378e109e5cd7&hd=3"
+
+        # بناء الـ HTML الجديد للحلقة (الحقن)
+        new_ep_html = f"""<div class="ep-btn" onclick="playEp(this, '{servers.get('voe', '')}', '{servers.get('vidtube', '')}', '{episode['episode_number']}', '{servers.get('download', '')}', '{archive_url}', '{vk_url}')">{episode['episode_number']}</div>"""
+
+        # --- [2] جلب المحتوى وبدء المعالجة بـ BeautifulSoup ---
+        # --- [2] جلب المحتوى وبدء المعالجة بـ BeautifulSoup ---
         service = blogger.get_service()
         post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
         soup = BeautifulSoup(post["content"], "html.parser")
 
-        # 4. عملية الحقن (Injection) داخل كلاس ep-More
+        # --- [3] تحديث زر التحميل الرئيسي (أعلى المقال) ---
+        main_download_btn = soup.find("a", id="download-btn")
+        if main_download_btn and servers.get("download"):
+            main_download_btn["href"] = servers.get("download")
+            main_download_btn.string = (
+                f" 📥 تحميل الحلقة {episode['episode_number']} HD "
+            )
+
+        # --- [4] حقن الحلقة في الحاوية (Injection) ---
         container = soup.find(class_="ep-More")
         if not container:
             return {"status": "error", "error": "كلاس ep-More غير موجود في المقال!"}
 
-        # التحقق إذا كانت الحلقة موجودة مسبقاً لمنع التكرار
+        # التحقق لمنع التكرار
         if f">{episode['episode_number']}</div>" in str(container):
-            return {"status": "success", "message": "الحلقة موجودة بالفعل في المقال!"}
+            return {"status": "success", "message": "الحلقة موجودة بالفعل!"}
 
-        # حقن الحلقة الجديدة في بداية القائمة
+        # الحقن الفعلي
         container.insert(0, BeautifulSoup(new_ep_html, "html.parser"))
 
-        # 5. تحديث المقال في بلوجر وإعادة إرساله
+        # --- [5] حفظ التغييرات في بلوجر وسوبابيز ---
         post["content"] = str(soup)
         service.posts().update(blogId=BLOG_ID, postId=post_id, body=post).execute()
 
-        # 6. تحديث الحالة في سوبابيز بنجاح
         supabase.table("episodes").update(
             {"is_synced": True, "blogger_sync": "Done"}
         ).eq("id", ep_id).execute()
 
-        return {"status": "success", "message": "تم الحقن والتحديث في بلوجر فوراً!"}
+        return {"status": "success", "message": "تم الحقن وتحديث زر التحميل بنجاح!"}
 
     except Exception as e:
+        print(f"❌ Sync Error: {str(e)}")
         return {"status": "error", "error": str(e)}
 
 
