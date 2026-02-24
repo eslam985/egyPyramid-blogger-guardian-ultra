@@ -91,66 +91,66 @@ window.editMedia = async function (mediaId) {
 // 4. دالة بلوجر (التي كانت تعطي الخطأ)
 // أضفنا event هنا لضمان استلام الحدث بشكل صحيح
 window.toggleBlogger = async function (postId, event) {
-    if (!postId || postId === 'None' || postId === '') return alert("⚠️ لا يوجد ID لهذا المقال!");
+	if (!postId || postId === 'None' || postId === '') return alert("⚠️ لا يوجد ID لهذا المقال!");
 
-    const btn = event.currentTarget;
-    const originalIcon = btn.innerHTML;
-    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+	const btn = event.currentTarget;
+	const originalIcon = btn.innerHTML;
+	btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
 
-    try {
-        // التغيير الجوهري هنا: نستخدم مسار toggle وليس revert
-        const response = await fetch(`/api/blogger/toggle/${postId}`, { method: 'POST' });
-        const result = await response.json();
+	try {
+		// التغيير الجوهري هنا: نستخدم مسار toggle وليس revert
+		const response = await fetch(`/api/blogger/toggle/${postId}`, { method: 'POST' });
+		const result = await response.json();
 
-        if (result.status === "success") {
-            const isLive = result.new_status === 'live';
-            alert(`✅ الحالة الجديدة: ${isLive ? 'منشور (Live)' : 'مسودة (Draft)'}`);
-            
-            // تحديث الشكل بصرياً فوراً
-            btn.classList.toggle('is-live', isLive);
-            btn.classList.toggle('is-draft', !isLive);
-        } else {
-            alert("❌ خطأ: " + result.error);
-        }
-    } catch (e) {
-        alert("❌ فشل الاتصال بالسيرفر");
-    } finally {
-        btn.innerHTML = originalIcon;
-    }
+		if (result.status === "success") {
+			const isLive = result.new_status === 'live';
+			alert(`✅ الحالة الجديدة: ${isLive ? 'منشور (Live)' : 'مسودة (Draft)'}`);
+
+			// تحديث الشكل بصرياً فوراً
+			btn.classList.toggle('is-live', isLive);
+			btn.classList.toggle('is-draft', !isLive);
+		} else {
+			alert("❌ خطأ: " + result.error);
+		}
+	} catch (e) {
+		alert("❌ فشل الاتصال بالسيرفر");
+	} finally {
+		btn.innerHTML = originalIcon;
+	}
 };
 
 window.addNewEpisodeRow = async function () {
-  const mediaId = document.getElementById('media_id').value;
-  const epNum = prompt("أدخل رقم الحلقة الجديدة:");
+	const mediaId = document.getElementById('media_id').value;
+	const epNum = prompt("أدخل رقم الحلقة الجديدة:");
 
-  if (!epNum) return;
+	if (!epNum) return;
 
-  try {
-    // 1. فحص هل الحلقة موجودة مسبقاً في القائمة المعروضة (لتوفير طلب سيرفر)
-    const epList = document.getElementById('episodesList');
-    if (epList.innerText.includes(`حلقة ${epNum} `)) {
-      return alert(`⚠️ الحلقة رقم ${epNum} موجودة فعلاً في هذا المسلسل!`);
-    }
+	try {
+		// 1. فحص هل الحلقة موجودة مسبقاً في القائمة المعروضة (لتوفير طلب سيرفر)
+		const epList = document.getElementById('episodesList');
+		if (epList.innerText.includes(`حلقة ${epNum} `)) {
+			return alert(`⚠️ الحلقة رقم ${epNum} موجودة فعلاً في هذا المسلسل!`);
+		}
 
-    // 2. إرسال طلب الإضافة
-    const response = await fetch(`/api/media/${mediaId}/add-episode`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `episode_number=${epNum}`
-    });
-    
-    const result = await response.json();
+		// 2. إرسال طلب الإضافة
+		const response = await fetch(`/api/media/${mediaId}/add-episode`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: `episode_number=${epNum}`
+		});
 
-    if (result.status === "success") {
-      alert("✅ تمت إضافة الحلقة بنجاح");
-      window.editMedia(mediaId); // تحديث القائمة فوراً
-    } else {
-      // لو السيرفر رفض (مثلاً الحلقة موجودة في ساب باز فعلاً)
-      alert("❌ خطأ: " + (result.error || "فشل إضافة الحلقة"));
-    }
-  } catch (e) {
-    alert("فشل إضافة الحلقة، ربما رقم الحلقة مكرر في ساب باز.");
-  }
+		const result = await response.json();
+
+		if (result.status === "success") {
+			alert("✅ تمت إضافة الحلقة بنجاح");
+			window.editMedia(mediaId); // تحديث القائمة فوراً
+		} else {
+			// لو السيرفر رفض (مثلاً الحلقة موجودة في ساب باز فعلاً)
+			alert("❌ خطأ: " + (result.error || "فشل إضافة الحلقة"));
+		}
+	} catch (e) {
+		alert("فشل إضافة الحلقة، ربما رقم الحلقة مكرر في ساب باز.");
+	}
 };
 
 
@@ -286,6 +286,67 @@ window.triggerPublisher = function () {
 		});
 };
 
+
+
+document.getElementById('downloadForm').addEventListener('submit', function (e) {
+	e.preventDefault();
+
+	const formData = new FormData(this);
+
+	fetch('/api/download/run', {
+		method: 'POST',
+		body: formData
+	})
+		.then(response => response.json())
+		.then(data => {
+			alert(data.message); // سيقول لك "بدأت العملية في الخلفية"
+			document.getElementById('downloadTaskModal').style.display = 'none';
+			this.reset();
+		})
+		.catch(error => {
+			console.error('Error:', error);
+			alert('حدث خطأ أثناء بدء المهمة');
+		});
+});
+function updateDownloadProgress() {
+	fetch('/api/download/progress')
+		.then(response => response.json())
+		.then(data => {
+			const container = document.getElementById('progress-container');
+			if (data.length === 0) {
+				container.style.display = 'none'; // إخفاء الحاوية لو مفيش تحميل
+				return;
+			}
+
+			container.style.display = 'block';
+			let htmlContent = '<h5>⏳ جاري المعالجة الحية</h5>';
+
+			data.forEach(item => {
+				htmlContent += `
+                    <div class="progress-item mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-white">${item.status_message}</small>
+                            <small class="text-warning">${item.download_speed}</small>
+                        </div>
+                        <div class="progress" style="height: 10px; background: #333;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                 role="progressbar" 
+                                 style="width: ${item.progress_percent}%">
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-info">${item.progress_percent}%</small>
+                        </div>
+                    </div>
+                `;
+			});
+			container.innerHTML = htmlContent;
+		})
+		.catch(err => console.error('Error fetching progress:', err));
+}
+
+// تشغيل الدالة كل 2 ثانية
+setInterval(updateDownloadProgress, 2000);
 window.deleteLink = async function (linkId) {
 	if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
 	await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
@@ -301,20 +362,20 @@ window.closeLinksModal = function () {
 
 
 window.deleteEpisode = async function (epId) {
-  if (!confirm("⚠️ هل أنت متأكد من حذف هذه الحلقة نهائياً بكل سيرفراتها؟")) return;
-  try {
-    const response = await fetch(`/api/episodes/${epId}/delete`, { method: 'POST' });
-    const result = await response.json();
-    if (result.status === "success") {
-      alert("✅ تم حذف الحلقة بنجاح");
-      const mediaId = document.getElementById('media_id').value;
-      window.editMedia(mediaId); // تحديث القائمة لإخفاء الحلقة المحذوفة
-    } else {
-      alert("❌ خطأ: " + result.error);
-    }
-  } catch (e) {
-    alert("❌ فشل الاتصال بالسيرفر");
-  }
+	if (!confirm("⚠️ هل أنت متأكد من حذف هذه الحلقة نهائياً بكل سيرفراتها؟")) return;
+	try {
+		const response = await fetch(`/api/episodes/${epId}/delete`, { method: 'POST' });
+		const result = await response.json();
+		if (result.status === "success") {
+			alert("✅ تم حذف الحلقة بنجاح");
+			const mediaId = document.getElementById('media_id').value;
+			window.editMedia(mediaId); // تحديث القائمة لإخفاء الحلقة المحذوفة
+		} else {
+			alert("❌ خطأ: " + result.error);
+		}
+	} catch (e) {
+		alert("❌ فشل الاتصال بالسيرفر");
+	}
 };
 
 

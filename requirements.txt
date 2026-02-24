@@ -15,3 +15,12 @@ groq
 google-genai
 textblob
 deep-translator
+pyrogram
+tgcrypto
+internetarchive
+google-generativeai
+tqdm
+yt-dlp
+nest-asyncio
+cloudinary
+nltk

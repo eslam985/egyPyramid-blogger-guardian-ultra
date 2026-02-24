@@ -1,3 +1,4 @@
+<!-- web-frontend/templates/index.html -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
@@ -10,7 +11,7 @@
 </head>
 
 <body>
-
+  <!-- Navigation -->
   <nav class="main-nav">
     <div class="logo">🚀 Guardian Ultra</div>
     <div class="search-bar">
@@ -24,10 +25,15 @@
       <button onclick="triggerPublisher()" id="publishBtn">
         🚀 تشغيل محرك النشر
       </button>
+      <button onclick="document.getElementById('downloadTaskModal').style.display='block'" class="btn-add"
+        style="background: #e67e22;">
+        <i class="fa fa-download"></i> مهمة سحب
+      </button>
     </div>
   </nav>
-
+  <!-- Main Content -->
   <main class="container">
+    <!-- Dashboard Header -->
     <header class="dashboard-header">
       <h2>إدارة المحتوى ({{ media_list|length }})</h2>
       <div class="filters">
@@ -36,6 +42,7 @@
         <a href="/?cat=movie" class="filter-tag">أفلام</a>
       </div>
     </header>
+    <!-- Dashboard Controls -->
     <div class="dashboard-controls">
       <div class="filters-bar">
         <a href="/?status=published" class="btn-filter {{ 'active' if current_status == 'published' }}">✅ منشور</a>
@@ -48,11 +55,13 @@
         </select>
       </div>
     </div>
+    <!-- Media Grid -->
     <div class="media-grid">
       {% for media in media_list %}
       {% include 'components/media_card.html' %}
       {% endfor %}
     </div>
+    <!-- Pagination Controls -->
     <div class="pagination">
       {% if current_page > 1 %}
       <a href="/?page={{ current_page - 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}"
@@ -67,17 +76,18 @@
         {% endif %}
     </div>
   </main>
-
+  <!-- Modal for adding/editing media -->
   <div id="mediaModal" class="modal">
     <div class="modal-content">
+      <!-- Modal Header -->
       <div class="modal-header">
         <h2 id="modalTitle">إضافة عمل جديد</h2>
         <span class="close-btn" onclick="closeModal()">&times;</span>
-
       </div>
+      <!-- Modal Form -->
       <form id="mediaForm">
         <input type="hidden" id="media_id" name="media_id">
-
+        <!-- Form Fields -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
           <div class="form-group">
             <label>عنوان العمل</label>
@@ -128,6 +138,7 @@
           <textarea id="story" name="story" rows="4" required></textarea>
         </div>
         <hr>
+        <!-- Episodes Section -->
         <div id="episodesSection" style="display: none;">
           <div class="episodes-header">
             <h3><i class="fa fa-list-ol"></i> إدارة الحلقات</h3>
@@ -138,6 +149,7 @@
           <div id="episodesList" class="episodes-admin-list">
           </div>
         </div>
+        <!-- Modal Footer -->
         <div class="modal-footer">
           <button type="submit" id="saveBtn" class="btn-primary">حفظ البيانات</button>
           <button type="button" class="btn-secondary" onclick="closeModal()">إلغاء</button>
@@ -145,6 +157,7 @@
       </form>
     </div>
   </div>
+  <!-- Modal for managing links -->
   <div id="linksModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -158,9 +171,36 @@
       </button>
     </div>
   </div>
+  <!-- Progress Bar -->
+  <div id="progress-container"></div>
+  <!-- Modal for downloading tasks -->
+  <div id="downloadTaskModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🚀 إضافة مهمة سحب جديدة</h2>
+        <span class="close-btn"
+          onclick="document.getElementById('downloadTaskModal').style.display='none'">&times;</span>
+      </div>
+      <form id="downloadForm">
+        <div class="form-group">
+          <label>رابط المصدر (Link)</label>
+          <input type="url" name="url" id="taskUrl" required placeholder="https://vidtube.one/e/...">
+        </div>
+        <div class="form-group">
+          <label>اسم العمل (كما سيظهر في ساب باز)</label>
+          <input type="text" name="name" id="taskName" required placeholder="مثلاً: المداح الحلقة 1">
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn-primary">ابدأ السحب والمعالجة</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- Theme Toggle -->
   <button id="theme-toggle" class="theme-toggle-btn">
     <i class="fa fa-moon"></i>
   </button>
+  <!-- JavaScript -->
   <script src="/static/js/main.js"></script>
 </body>
 

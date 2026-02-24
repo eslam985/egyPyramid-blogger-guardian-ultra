@@ -11,6 +11,8 @@ from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 
+# أضف هذا السطر مع الاستدعاءات في الأعلى
+from downloader.main_downloader import start_download_process
 
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
 supabase = SupabaseService.client
@@ -45,10 +47,14 @@ print("--------------------------")
 app = FastAPI()
 
 # ده السطر اللي هيريحك من قصة الـ HTTP/HTTPS
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# الحصول على المسار الحالي للملف
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# تعديل ربط الملفات الثابتة والقوالب
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # 3. الإعدادات الأخرى
-templates = Jinja2Templates(directory="templates")
 security = HTTPBasic()
 
 
@@ -353,8 +359,10 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
         SupabaseService.client.table("medias").update(
             {"blogger_status": final_status_db}
         ).eq("blogger_post_id", post_id).execute()
-       # تحديث جدول الحلقات أيضاً لنفس الـ post_id
-        SupabaseService.client.table("episodes").update({"blogger_status": final_status_db}).eq("blogger_post_id", post_id).execute()
+        # تحديث جدول الحلقات أيضاً لنفس الـ post_id
+        SupabaseService.client.table("episodes").update(
+            {"blogger_status": final_status_db}
+        ).eq("blogger_post_id", post_id).execute()
         return {"status": "success", "new_status": new_status_ui}
 
     except Exception as e:
@@ -428,6 +436,37 @@ async def delete_episode_api(ep_id: int, user: str = Depends(authenticate)):
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+# 1. مسار بدء التحميل
+@app.post("/api/download/run")
+async def run_download_task(
+    background_tasks: BackgroundTasks,
+    url: str = Form(...),
+    name: str = Form(...),
+    user: str = Depends(authenticate),
+):
+    # تشغيل "الوحش" في الخلفية لكي لا يتوقف المتصفح
+    background_tasks.add_task(start_download_process, url, name)
+    return {"status": "success", "message": "بدأت عملية التحميل والمعالجة..."}
+
+
+# 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
+@app.get("/api/download/progress")
+async def get_all_progress(user: str = Depends(authenticate)):
+    try:
+        # جلب آخر 5 عمليات تحميل نشطة أو لم تكتمل بعد
+        res = (
+            SupabaseService.client.table("episodes")
+            .select("id, status_message, progress_percent, download_speed")
+            .neq("download_speed", "Done")
+            .order("updated_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+        return res.data
+    except Exception as e:
+        return []
 
 
 if __name__ == "__main__":
