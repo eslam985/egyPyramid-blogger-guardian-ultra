@@ -492,7 +492,7 @@ async def get_all_progress(user: str = Depends(authenticate)):
 
 
 def advanced_tg_diagnostic():
-    token = "توكن_بوت_تليجرام_الخاص_بك"  # ضع توكن البوت هنا للتجربة الحقيقية
+    token = "8570381824:AAHiKQkpqHOBW7ymvaOeat3u0ad8sA1EeW8" # ضع توكن البوت هنا للتجربة الحقيقية
     # بدلاً من الطباعة العادية، استخدم هذا الشكل لكل السطور:
     print("\n🚀 يبدأ رادار فحص تليجرام المطور...", flush=True)
     print("-" * 40, flush=True)
