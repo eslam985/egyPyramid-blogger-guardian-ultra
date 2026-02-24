@@ -334,15 +334,14 @@ function updateDownloadProgress() {
 			}
 
 			const activeTasks = data.filter(task => {
-				// تأمين ضد العناصر الفارغة داخل المصفوفة
 				if (!task || !task.status_message) return false;
 
-				const isFinalDone = task.download_speed === 'Done';
-				const hasError = task.status_message.includes("❌") ||
-					task.status_message.includes("خطأ") ||
-					task.download_speed === 'Error';
+				// الحقيقة الصارمة: المهمة نشطة إذا كانت الحالة ليست 'idle' وسرعة التحميل ليست 'Done'
+				const isPending = task.status_message.includes("انتظار") || task.status_message.includes("Kaggle");
+				const isProcessing = task.download_speed !== 'Done' && task.progress_percent < 100;
+				const hasError = task.status_message.includes("❌") || task.status_message.includes("خطأ");
 
-				return !isFinalDone || hasError;
+				return isPending || isProcessing || hasError;
 			});
 			// ... بقية الكود كما هو عندك ...
 			if (!activeTasks || activeTasks.length === 0) {
@@ -365,7 +364,7 @@ function updateDownloadProgress() {
 
 				if (task.status_message.includes("تليجرام")) barClass = "bg-info";
 				if (task.status_message.includes("VK")) barClass = "bg-primary";
-
+				if (task.status_message.includes("انتظار")) barClass = "bg-secondary progress-bar-striped";
 				// إذا وجد خطأ، اقلب الألوان للأحمر فوراً
 				if (task.status_message.includes("❌") || task.status_message.includes("خطأ") || task.download_speed === 'Error') {
 					barClass = "bg-danger";
@@ -402,7 +401,7 @@ function updateDownloadProgress() {
 }
 
 // تشغيل الدالة كل 2 ثانية
-setInterval(updateDownloadProgress, 5000);
+setInterval(updateDownloadProgress, 3000);
 window.deleteLink = async function (linkId) {
 	if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
 	await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
