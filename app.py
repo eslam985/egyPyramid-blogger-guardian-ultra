@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-
+import requests
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 
@@ -276,6 +276,39 @@ async def update_link_api(
     return {"status": "success"}
 
 
+def convert_vk_to_embed(url):
+    if (
+        not url
+        or not any(domain in url for domain in ["vk.com", "vkvideo.ru"])
+        or "video_ext.php" in url
+    ):
+        return url
+    try:
+        import re
+
+        match_ids = re.search(r"video(-?\d+)_(\d+)", url)
+        if not match_ids:
+            return url
+
+        fixed_oid = match_ids.group(1)
+        fixed_id = match_ids.group(2)
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        hash_match = re.search(r"hash=([a-z0-9]+)", response.text)
+
+        if hash_match:
+            final_hash = hash_match.group(1)
+            return f"https://vk.com/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
+        else:
+            return f"https://vk.com/video_ext.php?oid={fixed_oid}&id={fixed_id}"
+    except Exception as e:
+        print(f"⚠️ VK Hash Error: {e}")
+        return url
+
+
 # مسار المزامنة الفعلي مع بلوجر
 @app.post("/api/episodes/{ep_id}/sync")
 async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate)):
@@ -315,15 +348,11 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
             archive_url = archive_url.replace("details/", "embed/")
 
         # تصحيح رابط VK (تحويله لـ Embed)
-        vk_url = servers.get("vk", "")
-        if "vk.com/video" in vk_url and "video_ext.php" not in vk_url:
-            # استخراج الايدي من الرابط (مثال: -235805578_456239056)
-            import re
+        # استيراد requests في بداية الدالة أو الملف
 
-            match = re.search(r"video(-?\d+_\d+)", vk_url)
-            if match:
-                video_id = match.group(1).split("_")
-                vk_url = f"https://vk.com/video_ext.php?oid={video_id[0]}&id={video_id[1]}&hash=ba0a378e109e5cd7&hd=3"
+        # تصحيح رابط VK باستخدام الخوارزمية الأصلية
+        # تصحيح رابط VK (استدعاء الخوارزمية الذكية)
+        vk_url = convert_vk_to_embed(servers.get("vk", ""))
 
         # بناء الـ HTML الجديد للحلقة (الحقن)
         new_ep_html = f"""<div class="ep-btn" onclick="playEp(this, '{servers.get('voe', '')}', '{servers.get('vidtube', '')}', '{episode['episode_number']}', '{servers.get('download', '')}', '{archive_url}', '{vk_url}')">{episode['episode_number']}</div>"""
