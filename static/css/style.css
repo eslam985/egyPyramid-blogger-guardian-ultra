@@ -1020,17 +1020,30 @@ button {
 }
 
 /* تنسيقات حاوية التقدم الثابتة أسفل الشاشة */
+/* التنسيق الجديد لحاوية التقدم - احترافي وعائم */
 .download-progress-fixed {
-    display: none;
-    /* يتم إظهاره عبر JS */
-    padding: 20px;
-    background: #111;
-    border-top: 2px solid #28a745;
+    display: none; /* مخفي افتراضياً */
     position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
+    bottom: 20px; /* مرفوع قليلاً عن الحافة */
+    left: 20px;   /* في الزاوية اليسرى */
+    width: 350px; /* عرض محدد لا يغطي الصفحة */
+    max-height: 400px; /* أقصى طول مسموح به */
+    overflow-y: auto;  /* سكرول داخلي إذا زادت المهام */
+    background: rgba(17, 17, 17, 0.95); /* شفافية بسيطة لمظهر عصري */
+    border: 1px solid #28a745;
+    border-radius: 12px;
+    padding: 15px;
     z-index: 10000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); /* ظل لإبرازها */
+}
+
+/* تحسين السكرول بار الداخلي */
+.download-progress-fixed::-webkit-scrollbar {
+    width: 5px;
+}
+.download-progress-fixed::-webkit-scrollbar-thumb {
+    background: #28a745;
+    border-radius: 10px;
 }
 
 .progress-label {

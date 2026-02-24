@@ -319,33 +319,40 @@ function updateDownloadProgress() {
 		.then(data => {
 			const container = document.getElementById('progress-container');
 
-			if (!data || data.length === 0) {
+			// 1. تصفية المهام: استبعاد المهام المنتهية تماماً لتنظيف اللوحة
+			const activeTasks = data.filter(task => task.download_speed !== 'Done' && (task.progress_percent < 100 || task.status_message.includes('جاري')));
+
+			if (!activeTasks || activeTasks.length === 0) {
 				container.style.display = 'none';
+				container.innerHTML = ''; // تنظيف المحتوى تماماً
 				return;
 			}
 
 			container.style.display = 'block';
 
-			// بناء محتوى الحاوية ديناميكياً لكل المهام النشطة
-			let htmlContent = `<h5 style="color: #28a745; margin-bottom: 15px;">⏳ جاري المعالجة الحية (${data.length})</h5>`;
+			// 2. بناء العنوان مع العدد الحقيقي للمهام النشطة
+			let htmlContent = `<h5 style="color: #28a745; margin-bottom: 12px; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 8px;">⏳ معالجة نشطة (${activeTasks.length})</h5>`;
 
-			data.forEach(task => {
+			activeTasks.forEach(task => {
 				const percent = task.progress_percent || 0;
+				// تقصير النصوص الطويلة لضمان جمال المظهر في العرض الصغير
+				const statusMsg = task.status_message && task.status_message.length > 30 ? task.status_message.substring(0, 30) + '...' : (task.status_message || 'جاري البدء...');
+
 				htmlContent += `
-                    <div class="progress-item mb-3" style="border-bottom: 1px solid #222; padding-bottom: 10px;">
-                        <div class="d-flex justify-content-between mb-1">
-                            <small class="text-white">${task.status_message || 'جاري المعالجة...'}</small>
-                            <small class="text-warning">${task.download_speed || '--'}</small>
+                    <div class="progress-item mb-2" style="border-bottom: 1px solid #222; padding-bottom: 8px;">
+                        <div class="d-flex justify-content-between mb-1" style="font-size: 11px;">
+                            <small class="text-white" title="${task.status_message}">${statusMsg}</small>
+                            <small class="text-warning fw-bold">${task.download_speed || '--'}</small>
                         </div>
-                        <div class="progress" style="height: 12px; background: #333; border-radius: 5px; overflow: hidden;">
+                        <div class="progress" style="height: 8px; background: #222; border-radius: 4px; overflow: hidden;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
                                  role="progressbar" 
-                                 style="width: ${percent}%; height: 100%; transition: width 0.5s ease;">
-                                 ${percent}%
+                                 style="width: ${percent}%; height: 100%; transition: width 0.4s ease;">
                             </div>
                         </div>
-                        <div style="text-align: left; margin-top: 5px;">
-                            <small class="text-info">${percent}%</small>
+                        <div class="d-flex justify-content-between mt-1" style="font-size: 10px;">
+                            <span class="text-info">${percent}%</span>
+                            <span style="color: #555;">ID: ${task.id}</span>
                         </div>
                     </div>
                 `;
@@ -353,7 +360,11 @@ function updateDownloadProgress() {
 
 			container.innerHTML = htmlContent;
 		})
-		.catch(err => console.error('Error fetching progress:', err));
+		.catch(err => {
+			console.error('Error fetching progress:', err);
+			// في حالة الخطأ المتكرر يفضل إخفاء الحاوية
+			document.getElementById('progress-container').style.display = 'none';
+		});
 }
 
 // تشغيل الدالة كل 2 ثانية
