@@ -13,11 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
-import socket
 
-
-# أضف هذا السطر مع الاستدعاءات في الأعلى
-from downloader.main_downloader import start_download_process
 
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -443,22 +439,26 @@ async def run_download_task(
     user: str = Depends(authenticate),
 ):
     try:
-        # الحقيقة الصارمة: هاجينج فيس الآن يرسل الأمر فقط
-        # نبحث عن الحلقة عن طريق الرابط أو الاسم ونحدث حالتها
-        SupabaseService.client.table("episodes").update(
-            {
-                "status": "pending",
-                "status_message": "في انتظار استجابة الوحش من Kaggle...",
-                "progress_percent": 0,
-            }
-        ).eq("download_url", url).execute()
-
-        return {
-            "status": "success",
-            "message": "تم إرسال الإشارة للوحش في Kaggle بنجاح!",
+        # الحقيقة الصارمة: تحديث البيانات أو إضافتها لضمان أن كاجل يراها
+        # نستخدم upsert بناءً على الرابط
+        data = {
+            "download_url": url,
+            "file_name": name,
+            "status": "pending",
+            "status_message": "في انتظار استجابة الوحش من Kaggle...",
+            "progress_percent": 0,
+            "download_speed": "Waiting...",
         }
+
+        # تنفيذ التحديث بناءً على الرابط (أو id لو أردت)
+        SupabaseService.client.table("episodes").upsert(
+            data, on_conflict="download_url"
+        ).execute()
+
+        return {"status": "success", "message": "تم إرسال الإشارة للوحش!"}
     except Exception as e:
-        return {"status": "error", "message": f"فشل إرسال الأمر: {str(e)}"}
+        print(f"❌ Error in run_download: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
