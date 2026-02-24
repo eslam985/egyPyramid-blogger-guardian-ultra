@@ -10,12 +10,15 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
+
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 import socket
 import requests
+
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
+
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
@@ -34,16 +37,26 @@ blogger = BloggerService(blog_id=BLOG_ID)
 
 # --- المسارات (Routes) ---
 
-print("--- Project Structure ---")
-for root, dirs, files in os.walk("."):
-    # تجاهل المجلدات المخفية مثل .git
-    dirs[:] = [d for d in dirs if not d.startswith(".")]
-    level = root.replace(".", "").count(os.sep)
-    indent = " " * 4 * (level)
-    print(f"{indent}{os.path.basename(root)}/")
-    subindent = " " * 4 * (level + 1)
-    for f in files:
-        print(f"{subindent}{f}")
+print("--- اختبار الاتصال بالسيرفر الخاص بتليجرام ---")
+
+
+# الحقيقة الصارمة: تخطي حجب الـ DNS يدوياً
+try:
+    # العناوين الفعلية لسيرفرات تليجرام
+    TELEGRAM_IP = "149.154.167.220"
+
+    # تعريف دالة بديلة لجلب العنوان
+    def getaddrinfo_wrapper(host, port, family=0, type=0, proto=0, flags=0):
+        if host == "api.telegram.org":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (TELEGRAM_IP, port))]
+        return original_getaddrinfo(host, port, family, type, proto, flags)
+
+    # استبدال الدالة الأصلية في نظام التشغيل داخل الحاوية
+    original_getaddrinfo = socket.getaddrinfo
+    socket.getaddrinfo = getaddrinfo_wrapper
+    print("✅ تم حقن عنوان تليجرام يدوياً لتخطي حجب الـ DNS", flush=True)
+except Exception as e:
+    print(f"❌ فشل حقن العنوان: {e}", flush=True)
 print("--------------------------")
 
 # 1. تعريف التطبيق والإعدادات الأساسية
@@ -478,7 +491,6 @@ async def get_all_progress(user: str = Depends(authenticate)):
         return []
 
 
-
 def advanced_tg_diagnostic():
     token = "توكن_بوت_تليجرام_الخاص_بك"  # ضع توكن البوت هنا للتجربة الحقيقية
     # بدلاً من الطباعة العادية، استخدم هذا الشكل لكل السطور:
@@ -505,7 +517,6 @@ def advanced_tg_diagnostic():
         else:
             print(
                 f"⚠️ HTTP/443: السيرفر رد بكود {response.status_code} (ربما التوكن خطأ)"
-                
             )
             print("-" * 40, flush=True)
     except requests.exceptions.Timeout:
@@ -532,6 +543,7 @@ def advanced_tg_diagnostic():
             pass
 
     print("-" * 40)
+
 
 # استدعيها هنا
 advanced_tg_diagnostic()
