@@ -4,9 +4,11 @@ import asyncio
 import re
 from supabase import create_client, Client as SupabaseClient
 from urllib.parse import unquote
+
 # أضف هذه الاستيرادات في الأعلى فوراً
 import shutil
 import subprocess
+
 # احذف الأسطر الأربعة الخاصة بالـ imports لـ processors و engine واستبدلها بهذين السطرين فقط:
 from .processors import *
 from .engine import *
@@ -215,20 +217,20 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
     if not e_id:
         print("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")
     # --- 3. استكمال العمل في حال كان الفيلم جديداً ---
-    # فتح شيت النشر الأساسي (الذي سيتم الكتابة فيه)
     clean_name = (
         "".join([c for c in display_title if c.isalnum() or c in (" ", ".", "_")])
         .strip()
         .replace(" ", "_")
     )
-    download_name = f"down_{timestamp}"
-    # ثم عند إنشاء المجلد:
+
+    # أولاً: تعريف وإنشاء المجلد الفريد
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
     os.makedirs(extract_dir, exist_ok=True)
 
+    # ثانياً: تعريف قالب التحميل داخل المجلد المنشأ
+    download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
+
     print(f"📡 جاري فحص الرابط وبدء السحب...")
-    # التعديل لإصلاح Error 2: تنظيف الهيدرز ووضع الرابط بشكل آمن
-    referer_header = "https://cdn-tube.xyz/" if "cdn-tube" in url else url
 
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
     cmd = [
@@ -253,7 +255,7 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
         "best",
         f"{url}",
         "-o",
-        download_name,
+        download_path_template,
         "--newline",
         "--progress-template",
         "download:[%(progress._percent_str)s]",
@@ -267,7 +269,7 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
     pbar_dl = tqdm(total=100, desc=f"📥 جاري التحميل: {display_title[:20]}", unit="%")
 
     last_db_update = 0
-    last_percent = 0 # أضف هذا السطر هنا
+    last_percent = 0  # أضف هذا السطر هنا
     for line in process.stdout:
         match = re.search(r"(\d+(?:\.\d+)?)%", line)
         if match:
@@ -300,25 +302,38 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
         print("💡 نصيحة: الرابط غالباً انتهت صلاحيته أو محمي بـ IP جهازك.")
     pbar_dl.close()
 
-    if process.returncode == 0 and os.path.exists(download_name):
-        # 1. فحص الهوية الحقيقية للملف عبر أداة النظام (file)
-        # هذه الأداة تعرف نوع الملف حتى لو قمت بتغيير اسمه أو مسح امتداده
-        file_info = subprocess.getoutput(f'file "{download_name}"').lower()
+    # جلب المسار الحقيقي للملف الذي تم تحميله داخل المجلد الفريد
+    downloaded_files = [
+        os.path.join(extract_dir, f)
+        for f in os.listdir(extract_dir)
+        if f.startswith(f"down_{timestamp}")
+    ]
+    actual_downloaded_path = downloaded_files[0] if downloaded_files else None
 
+    if process.returncode == 0 and actual_downloaded_path:
+        # فحص الهوية الحقيقية للملف
+        file_info = subprocess.getoutput(f'file "{actual_downloaded_path}"').lower()
         is_rar = "rar archive" in file_info or "zip archive" in file_info
 
         if is_rar:
             print(f"🔓 تم اكتشاف ملف مضغوط حقيقي، جاري فك الضغط...")
-            # ابحث عن سطر subprocess.run الخاص بـ unrar واستبدله بهذا:
             subprocess.run(
-                ["unrar", "e", "-y", download_name, os.path.join(extract_dir, "")], 
-                capture_output=True
+                [
+                    "unrar",
+                    "e",
+                    "-y",
+                    actual_downloaded_path,
+                    os.path.join(extract_dir, ""),
+                ],
+                capture_output=True,
             )
-            os.remove(download_name)
+            if os.path.exists(actual_downloaded_path):
+                os.remove(actual_downloaded_path)
         else:
             print(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
-            # نقل الفيديو المباشر إلى مجلد المعالجة مع إضافة امتداد mp4 للتعرف عليه
-            shutil.move(download_name, os.path.join(extract_dir, f"{clean_name}.mp4"))
+            # نقل الفيديو وتغيير اسمه للاسم النظيف للعمل
+            final_video_path = os.path.join(extract_dir, f"{clean_name}.mp4")
+            shutil.move(actual_downloaded_path, final_video_path)
 
         # 2. جرد الفيديوهات (هذا السطر مهم جداً أن يشمل كل الامتدادات)
         # 1. جرد الفيديوهات
@@ -371,7 +386,7 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                 stream.close()
                 pbar_archive.close()
                 archive_url = f"https://archive.org/details/{identifier}"  # Get the archive URL after successful upload
-                
+
             except Exception as e:
                 print(f"❌ خطأ أرشيف: {e}")
 
@@ -467,18 +482,22 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
             if os.path.exists(vid_path):
                 try:
                     os.remove(vid_path)
-                    print(f"🗑️ تم تنظيف الملف المحلي بنجاح: {os.path.basename(vid_path)}")
+                    print(
+                        f"🗑️ تم تنظيف الملف المحلي بنجاح: {os.path.basename(vid_path)}"
+                    )
                 except Exception as e:
                     print(f"⚠️ لم يتم مسح الملف المؤقت: {e}")
 
             # --- هذا هو المكان الصحيح للكود الجديد ---
             # تحديث الحالة النهائية للحلقة (بمحاذاة بلوك الـ try/except بالأعلى)
             try:
-                supabase.table("episodes").update({
-                    "progress_percent": 100,
-                    "status_message": "✅ اكتملت المعالجة والرفع بنجاح",
-                    "download_speed": "Done"
-                }).eq("id", e_id).execute()
+                supabase.table("episodes").update(
+                    {
+                        "progress_percent": 100,
+                        "status_message": "✅ اكتملت المعالجة والرفع بنجاح",
+                        "download_speed": "Done",
+                    }
+                ).eq("id", e_id).execute()
             except:
                 pass
 
@@ -501,7 +520,12 @@ async def run_pyramid_tasks(task_list):
             print(f"❌ خطأ في '{task['name']}': {e}")
 
 
+# التعديل المطلوب لضمان الاستقلالية التامة
 async def start_download_process(url, name):
-    """المدخل الرئيسي للداشبورد"""
-    tasks = [{"url": url, "name": name}]
-    await run_pyramid_tasks(tasks)
+    """المدخل الرئيسي للداشبورد - الآن يعمل بشكل مستقل تماماً"""
+    print(f"\n🚀 انطلاق الوحش لمعالجة: {name}")
+    try:
+        # استدعاء المحرك مباشرة لكل مهمة بدلاً من المرور عبر Loop ينتظر
+        await pyramid_ultimate_beast(url, name)
+    except Exception as e:
+        print(f"❌ خطأ كارثي في معالجة '{name}': {e}")

@@ -298,17 +298,15 @@ document.getElementById('downloadForm').addEventListener('submit', function (e) 
 		body: formData
 	})
 		.then(response => response.json())
+		// استبدل الجزء داخل الـ then في مستمع الحدث submit بهذا:
 		.then(data => {
-			// --- التعديل هنا ---
 			document.getElementById('downloadTaskModal').style.display = 'none';
 			this.reset();
 
-			// إظهار الشريط فوراً برسالة تمهيدية قبل أول تحديث من السيرفر
+			// إظهار الحاوية فوراً
 			const container = document.getElementById('progress-container');
 			container.style.display = 'block';
-			document.getElementById('progress-text').innerText = "🚀 جاري بدء المحرك...";
-			document.getElementById('main-progress-bar').style.width = '5%';
-			// ------------------
+			// ملاحظة: لا داعي لتحديث النص هنا يدوياً لأن setInterval ستمسحه وتضع البيانات الحقيقية فوراً
 		})
 		.catch(error => {
 			console.error('Error:', error);
@@ -320,28 +318,40 @@ function updateDownloadProgress() {
 		.then(response => response.json())
 		.then(data => {
 			const container = document.getElementById('progress-container');
-			const progressBar = document.getElementById('main-progress-bar');
-			const progressText = document.getElementById('progress-text');
-			const progressSpeed = document.getElementById('progress-speed');
 
 			if (!data || data.length === 0) {
 				container.style.display = 'none';
 				return;
 			}
 
-			// نأخذ بيانات أول عملية تحميل نشطة (الأحدث)
-			const task = data[0];
-
 			container.style.display = 'block';
 
-			// تحديث العرض (Width) والنسبة المئوية
-			const percent = task.progress_percent || 0;
-			progressBar.style.width = percent + '%';
-			progressBar.innerText = percent + '%';
+			// بناء محتوى الحاوية ديناميكياً لكل المهام النشطة
+			let htmlContent = `<h5 style="color: #28a745; margin-bottom: 15px;">⏳ جاري المعالجة الحية (${data.length})</h5>`;
 
-			// تحديث النصوص
-			progressText.innerText = `⏳ ${task.status_message || 'جاري المعالجة...'}`;
-			progressSpeed.innerText = `🚀 السرعة الحالية: ${task.download_speed || '--'}`;
+			data.forEach(task => {
+				const percent = task.progress_percent || 0;
+				htmlContent += `
+                    <div class="progress-item mb-3" style="border-bottom: 1px solid #222; padding-bottom: 10px;">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-white">${task.status_message || 'جاري المعالجة...'}</small>
+                            <small class="text-warning">${task.download_speed || '--'}</small>
+                        </div>
+                        <div class="progress" style="height: 12px; background: #333; border-radius: 5px; overflow: hidden;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                 role="progressbar" 
+                                 style="width: ${percent}%; height: 100%; transition: width 0.5s ease;">
+                                 ${percent}%
+                            </div>
+                        </div>
+                        <div style="text-align: left; margin-top: 5px;">
+                            <small class="text-info">${percent}%</small>
+                        </div>
+                    </div>
+                `;
+			});
+
+			container.innerHTML = htmlContent;
 		})
 		.catch(err => console.error('Error fetching progress:', err));
 }
