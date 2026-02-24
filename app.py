@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 import socket
+import requests
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
@@ -478,26 +479,48 @@ async def get_all_progress(user: str = Depends(authenticate)):
 
 
 
-def check_telegram_connectivity():
-    targets = [
-        ("api.telegram.org", 443),
-        ("149.154.167.220", 443), # أحد سيرفرات تليجرام المباشرة
-    ]
-    
-    print("\n🔍 جاري فحص الاتصال بتليجرام من داخل السيرفر...")
-    for host, port in targets:
-        try:
-            # محاولة فتح اتصال بسيط جداً (TCP Handshake)
-            socket.create_connection((host, port), timeout=5)
-            print(f"✅ تم الاتصال بنجاح بـ {host}:{port}")
-        except socket.timeout:
-            print(f"❌ فشل: مهلة الاتصال انتهت (Timeout) لـ {host}. غالباً محجوب.")
-        except Exception as e:
-            print(f"❌ فشل: خطأ غير متوقع مع {host}: {e}")
-    print("-------------------------------------------\n")
 
-# استدعيها هنا
-check_telegram_connectivity()
+
+def advanced_tg_diagnostic():
+    token = "توكن_بوت_تليجرام_الخاص_بك" # ضع توكن البوت هنا للتجربة الحقيقية
+    print("\n🚀 يبدأ رادار فحص تليجرام المطور...")
+    print("-" * 40)
+
+    # 1. فحص الـ DNS
+    try:
+        ip = socket.gethostbyname("api.telegram.org")
+        print(f"✅ DNS: تم العثور على عنوان IP لتليجرام: {ip}")
+    except Exception as e:
+        print(f"❌ DNS: فشل في ترجمة العنوان. (الحجب على مستوى الـ DNS)")
+
+    # 2. فحص الـ HTTPS (المنفذ 443) عبر مكتبة requests
+    try:
+        url = f"https://api.telegram.org/bot{token}/getMe"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            print("✅ HTTP/443: اتصال ناجح! (Hugging Face يسمح بطلبات الويب العادية)")
+        else:
+            print(f"⚠️ HTTP/443: السيرفر رد بكود {response.status_code} (ربما التوكن خطأ)")
+    except requests.exceptions.Timeout:
+        print("❌ HTTP/443: مهلة الطلب انتهت (Timeout). (الحجب على مستوى بورت الويب)")
+    except Exception as e:
+        print(f"❌ HTTP/443: فشل الاتصال لسبب آخر: {e}")
+
+    # 3. فحص البورتات البديلة (أحياناً ينجح 80 أو 88)
+    for port in [443, 80, 88, 2048]:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(5)
+            result = s.connect_ex(("api.telegram.org", port))
+            if result == 0:
+                print(f"✅ Socket: المنفذ {port} مفتوح ومتاح للاتصال.")
+            else:
+                print(f"❌ Socket: المنفذ {port} مغلق (Code: {result}).")
+            s.close()
+        except:
+            pass
+
+    print("-" * 40)
 
 if __name__ == "__main__":
     # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
