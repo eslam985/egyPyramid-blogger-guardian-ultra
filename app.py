@@ -35,29 +35,6 @@ if not BLOG_ID:
 
 blogger = BloggerService(blog_id=BLOG_ID)
 
-# --- المسارات (Routes) ---
-
-print("--- اختبار الاتصال بالسيرفر الخاص بتليجرام ---")
-
-
-# الحقيقة الصارمة: تخطي حجب الـ DNS يدوياً
-try:
-    # العناوين الفعلية لسيرفرات تليجرام
-    TELEGRAM_IP = "149.154.167.220"
-
-    # تعريف دالة بديلة لجلب العنوان
-    def getaddrinfo_wrapper(host, port, family=0, type=0, proto=0, flags=0):
-        if host == "api.telegram.org":
-            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (TELEGRAM_IP, port))]
-        return original_getaddrinfo(host, port, family, type, proto, flags)
-
-    # استبدال الدالة الأصلية في نظام التشغيل داخل الحاوية
-    original_getaddrinfo = socket.getaddrinfo
-    socket.getaddrinfo = getaddrinfo_wrapper
-    print("✅ تم حقن عنوان تليجرام يدوياً لتخطي حجب الـ DNS", flush=True)
-except Exception as e:
-    print(f"❌ فشل حقن العنوان: {e}", flush=True)
-print("--------------------------")
 
 # 1. تعريف التطبيق والإعدادات الأساسية
 # 1. تعريف التطبيق
@@ -504,63 +481,6 @@ async def get_all_progress(user: str = Depends(authenticate)):
         print(f"❌ Error fetching progress: {e}")
         return []
 
-
-def advanced_tg_diagnostic():
-    token = "8570381824:AAHiKQkpqHOBW7ymvaOeat3u0ad8sA1EeW8"  # ضع توكن البوت هنا للتجربة الحقيقية
-    # بدلاً من الطباعة العادية، استخدم هذا الشكل لكل السطور:
-    print("\n🚀 يبدأ رادار فحص تليجرام المطور...", flush=True)
-    print("-" * 40, flush=True)
-    # ... وهكذا لكل سطر print في الدالة ...
-
-    # 1. فحص الـ DNS
-    try:
-        ip = socket.gethostbyname("api.telegram.org")
-        print(f"✅ DNS: تم العثور على عنوان IP لتليجرام: {ip}")
-        print("-" * 40, flush=True)
-    except Exception as e:
-        print(f"❌ DNS: فشل في ترجمة العنوان. (الحجب على مستوى الـ DNS)")
-        print("-" * 40, flush=True)
-
-    # 2. فحص الـ HTTPS (المنفذ 443) عبر مكتبة requests
-    try:
-        url = f"https://api.telegram.org/bot{token}/getMe"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            print("✅ HTTP/443: اتصال ناجح! (Hugging Face يسمح بطلبات الويب العادية)")
-            print("-" * 40, flush=True)
-        else:
-            print(
-                f"⚠️ HTTP/443: السيرفر رد بكود {response.status_code} (ربما التوكن خطأ)"
-            )
-            print("-" * 40, flush=True)
-    except requests.exceptions.Timeout:
-        print("❌ HTTP/443: مهلة الطلب انتهت (Timeout). (الحجب على مستوى بورت الويب)")
-        print("-" * 40, flush=True)
-    except Exception as e:
-        print(f"❌ HTTP/443: فشل الاتصال لسبب آخر: {e}")
-        print("-" * 40, flush=True)
-
-    # 3. فحص البورتات البديلة (أحياناً ينجح 80 أو 88)
-    for port in [443, 80, 88, 2048]:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(5)
-            result = s.connect_ex(("api.telegram.org", port))
-            if result == 0:
-                print(f"✅ Socket: المنفذ {port} مفتوح ومتاح للاتصال.")
-                print("-" * 40, flush=True)
-            else:
-                print(f"❌ Socket: المنفذ {port} مغلق (Code: {result}).")
-                print("-" * 40, flush=True)
-            s.close()
-        except:
-            pass
-
-    print("-" * 40)
-
-
-# استدعيها هنا
-advanced_tg_diagnostic()
 
 if __name__ == "__main__":
     # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
