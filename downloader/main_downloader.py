@@ -104,13 +104,20 @@ def save_to_supabase(
 
 
 async def pyramid_ultimate_beast(url, name, meta_data=None):
-    # الحقيقة الصارمة: تحديد مسار العمل ليكون في المجلد المسموح به
-    BASE_DIR = os.getcwd() 
-    if "/kaggle/input" in BASE_DIR: # تأمين إضافي
-        BASE_DIR = "/kaggle/working"
-        
-    await ensure_dependencies()
+    # 1. تثبيت المسار القابل للكتابة (الورشة)
+    BASE_DIR = "/kaggle/working/project"
 
+    # 2. التأكد من الانتقال إليه فعلياً لضمان أن أي ملف نسبي يُنشأ هناك
+    if os.path.exists(BASE_DIR):
+        os.chdir(BASE_DIR)
+
+    # 3. طباعة المسار للتأكد في اللوجات (اختياري لل debugging)
+    print(f"🛠️ مسار العمل الحالي للوحش: {os.getcwd()}")
+
+    await ensure_dependencies()
+    timestamp = int(time.time())
+
+    # ... بقية الكود كما هو ...
     # --- 1. تنظيف الاسم وجلب البيانات الذكية ---
 
     if "topcinema.rip" in str(name):
