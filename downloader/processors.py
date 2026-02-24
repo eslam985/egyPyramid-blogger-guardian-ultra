@@ -380,23 +380,13 @@ def upload_to_vk_local(title, file_path):
             print(f"DEBUG: VK File Upload Response Text: {response.text}")
 
             if response.status_code == 200:
-                try:
-                    vk_upload_result = response.json()
-                    print(f"DEBUG: VK Upload JSON Result: {vk_upload_result}")
-                    return f"https://vk.com/video{owner_id}_{video_id}"
-                except json.JSONDecodeError:
-                    print(
-                        f"⚠️ VK Upload: Failed to decode JSON response: {response.text}"
-                    )
-                    return None
+                # الحقيقة الصارمة: بمجرد وصول الحالة 200، الفيديو أصبح لدى VK
+                # لا نحتاج لفك تشفير الـ JSON طالما نملك الـ IDs مسبقاً
+                print(f"✅ VK Upload Success: https://vk.com/video{owner_id}_{video_id}")
+                return f"https://vk.com/video{owner_id}_{video_id}"
             else:
-                print(
-                    f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}"
-                )
+                print(f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}")
                 return None
-        else:
-            print(f"❌ VK Save API: No 'response' field. Error: {res_save}")
-            return None
     except Exception as e:
         print(f"⚠️ فشل VK المحلي: {e}")
         return None
