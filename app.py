@@ -10,13 +10,16 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
+load_dotenv()  # شحن المتغيرات أولاً
+import logging
 
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
-
+# إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
 supabase = SupabaseService.client
-load_dotenv()  # شحن المتغيرات أولاً
+
 
 # ثم بقية الاستدعاءات
 from publisher.main_publisher import start_publishing_from_supabase

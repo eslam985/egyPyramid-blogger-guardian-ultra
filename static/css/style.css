@@ -1110,7 +1110,28 @@ button {
 .text-end {
     text-align: left;
 }
+/* الألوان الأساسية */
+.bg-success { background-color: #28a745 !important; }
+.bg-info    { background-color: #17a2b8 !important; }
+.bg-primary { background-color: #007bff !important; }
+.bg-danger  { background-color: #dc3545 !important; }
+.bg-warning { background-color: #ffc107 !important; }
 
+/* تأثير الحركة للشريط */
+.progress-bar-animated {
+    background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+    from { background-position: 1rem 0; }
+    to { background-position: 0 0; }
+}
+
+/* نصوص الخطأ */
+.text-danger { color: #ff4d4d !important; }
+.fw-black { font-weight: 900 !important; }
 /* بما أن الموقع RTL، الـ end هو اليسار */
 
 .progress-bar-striped {

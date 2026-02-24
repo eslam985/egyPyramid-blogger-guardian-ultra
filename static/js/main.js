@@ -313,22 +313,38 @@ document.getElementById('downloadForm').addEventListener('submit', function (e) 
 			alert('حدث خطأ أثناء بدء المهمة');
 		});
 });
+
+
 function updateDownloadProgress() {
+	const container = document.getElementById('progress-container');
+	// إذا لم يجد الحاوية في الصفحة، لا يكمل الكود (يخرج بصمت)
+	if (!container) return;
+
 	fetch('/api/download/progress')
-		.then(response => response.json())
+		.then(response => {
+			// إذا كان السيرفر يعطي خطأ (ليس 200)، لا تحاول معالجة JSON
+			if (!response.ok) throw new Error("Server Error");
+			return response.json();
+		})
 		.then(data => {
-			const container = document.getElementById('progress-container');
+			// التأكد أن البيانات مصفوفة وليست فارغة أو null
+			if (!data || !Array.isArray(data)) {
+				container.style.display = 'none';
+				return;
+			}
 
-			// 1. تصفية المهام: استبعاد المهام المنتهية تماماً لتنظيف اللوحة
 			const activeTasks = data.filter(task => {
-				const isDone = task.download_speed === 'Done' || task.progress_percent >= 100;
-				const isPending = task.status_message && task.status_message.includes('Pending');
-				const isProcessing = task.status_message && task.status_message.includes('جاري');
+				// تأمين ضد العناصر الفارغة داخل المصفوفة
+				if (!task || !task.status_message) return false;
 
-				// اظهر المهمة فقط إذا لم تكن منتهية وكان لها حالة نشطة
-				return !isDone && (isProcessing || isPending);
+				const isFinalDone = task.download_speed === 'Done';
+				const hasError = task.status_message.includes("❌") ||
+					task.status_message.includes("خطأ") ||
+					task.download_speed === 'Error';
+
+				return !isFinalDone || hasError;
 			});
-
+			// ... بقية الكود كما هو عندك ...
 			if (!activeTasks || activeTasks.length === 0) {
 				container.style.display = 'none';
 				container.innerHTML = ''; // تنظيف المحتوى تماماً
@@ -342,24 +358,37 @@ function updateDownloadProgress() {
 
 			activeTasks.forEach(task => {
 				const percent = task.progress_percent || 0;
-				// تقصير النصوص الطويلة لضمان جمال المظهر في العرض الصغير
-				const statusMsg = task.status_message && task.status_message.length > 30 ? task.status_message.substring(0, 30) + '...' : (task.status_message || 'جاري البدء...');
+				// تغيير لون الشريط بناءً على المرحلة
+				// استبدل تحديد barClass بهذا المنطق المتطور:
+				let barClass = "bg-success";
+				let textClass = "text-white";
+
+				if (task.status_message.includes("تليجرام")) barClass = "bg-info";
+				if (task.status_message.includes("VK")) barClass = "bg-primary";
+
+				// إذا وجد خطأ، اقلب الألوان للأحمر فوراً
+				if (task.status_message.includes("❌") || task.status_message.includes("خطأ") || task.download_speed === 'Error') {
+					barClass = "bg-danger";
+					textClass = "text-danger fw-black";
+				}
+
+				if (task.download_speed === 'Done') barClass = "bg-warning";
 
 				htmlContent += `
                     <div class="progress-item mb-2" style="border-bottom: 1px solid #222; padding-bottom: 8px;">
                         <div class="d-flex justify-content-between mb-1" style="font-size: 11px;">
-                            <small class="text-white" title="${task.status_message}">${statusMsg}</small>
-                            <small class="text-warning fw-bold">${task.download_speed || '--'}</small>
+							<small class="${textClass} fw-bold">${task.status_message}</small>
+                            <small class="text-warning">${task.download_speed || '--'}</small>
                         </div>
-                        <div class="progress" style="height: 8px; background: #222; border-radius: 4px; overflow: hidden;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                        <div class="progress" style="height: 6px; background: #111; border-radius: 10px;">
+                            <div class="progress-bar progress-bar-striped ${task.download_speed !== 'Done' ? 'progress-bar-animated' : ''} ${barClass}" 
                                  role="progressbar" 
-                                 style="width: ${percent}%; height: 100%; transition: width 0.4s ease;">
+                                 style="width: ${percent}%; transition: width 0.6s ease;">
                             </div>
                         </div>
-                        <div class="d-flex justify-content-between mt-1" style="font-size: 10px;">
-                            <span class="text-info">${percent}%</span>
-                            <span style="color: #555;">ID: ${task.id}</span>
+                        <div class="d-flex justify-content-between mt-1" style="font-size: 9px; opacity: 0.7;">
+                            <span class="text-light">${percent}%</span>
+                            <span class="text-muted">ID: ${task.id.toString().length > 8 ? task.id.toString().substring(0, 8) : task.id}</span>
                         </div>
                     </div>
                 `;
