@@ -388,66 +388,64 @@ function updateDownloadProgress() {
                         </div>
                         <div class="d-flex justify-content-between mt-1" style="font-size: 9px; opacity: 0.7;">
                             <span class="text-light">${percent}%</span>
-                            <span class="text-muted">ID: ${task.id.toString().length > 8 ? task.id.toString().substring(0, 8) : task.id}</span>
+                            <span class="text-muted">ID: ${task.id ? (task.id.toString().substring(0, 8)) : '---'}</span>
                         </div>
                     </div>
                 `;
 			});
-
+			if (!container) return;
 			container.innerHTML = htmlContent;
 		})
 		.catch(err => {
-			console.error('Error fetching progress:', err);
-			// في حالة الخطأ المتكرر يفضل إخفاء الحاوية
-			document.getElementById('progress-container').style.display = 'none';
+			// الحقيقة الصارمة: لا تفعل شيئاً، فقط انتظر الدورة القادمة (5 ثوانٍ)
+			// هذا يمنع الانهيار أثناء الـ Refresh
 		});
-}
 
-// تشغيل الدالة كل 2 ثانية
-setInterval(updateDownloadProgress, 2000);
-window.deleteLink = async function (linkId) {
-	if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
-	await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
-	manageLinks(currentEpisodeId); // إعادة تحميل القائمة
-};
-
-
-window.closeLinksModal = function () {
-	const modal = document.getElementById('linksModal');
-	modal.style.display = 'none';
-	modal.classList.remove('show');
-};
+	// تشغيل الدالة كل 2 ثانية
+	setInterval(updateDownloadProgress, 5000);
+	window.deleteLink = async function (linkId) {
+		if (!confirm("هل تريد حذف هذا السيرفر؟")) return;
+		await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
+		manageLinks(currentEpisodeId); // إعادة تحميل القائمة
+	};
 
 
-window.deleteEpisode = async function (epId) {
-	if (!confirm("⚠️ هل أنت متأكد من حذف هذه الحلقة نهائياً بكل سيرفراتها؟")) return;
-	try {
-		const response = await fetch(`/api/episodes/${epId}/delete`, { method: 'POST' });
-		const result = await response.json();
-		if (result.status === "success") {
-			alert("✅ تم حذف الحلقة بنجاح");
-			const mediaId = document.getElementById('media_id').value;
-			window.editMedia(mediaId); // تحديث القائمة لإخفاء الحلقة المحذوفة
-		} else {
-			alert("❌ خطأ: " + result.error);
+	window.closeLinksModal = function () {
+		const modal = document.getElementById('linksModal');
+		modal.style.display = 'none';
+		modal.classList.remove('show');
+	};
+
+
+	window.deleteEpisode = async function (epId) {
+		if (!confirm("⚠️ هل أنت متأكد من حذف هذه الحلقة نهائياً بكل سيرفراتها؟")) return;
+		try {
+			const response = await fetch(`/api/episodes/${epId}/delete`, { method: 'POST' });
+			const result = await response.json();
+			if (result.status === "success") {
+				alert("✅ تم حذف الحلقة بنجاح");
+				const mediaId = document.getElementById('media_id').value;
+				window.editMedia(mediaId); // تحديث القائمة لإخفاء الحلقة المحذوفة
+			} else {
+				alert("❌ خطأ: " + result.error);
+			}
+		} catch (e) {
+			alert("❌ فشل الاتصال بالسيرفر");
 		}
-	} catch (e) {
-		alert("❌ فشل الاتصال بالسيرفر");
+	};
+
+
+	// منطق تبديل الوضع الداكن/الفاتح
+	const themeToggle = document.getElementById('theme-toggle');
+	const body = document.body;
+
+	// التعديل الصحيح
+	themeToggle.addEventListener('click', () => {
+		const isDark = document.documentElement.classList.toggle('dark-mode');
+		localStorage.setItem('theme', isDark ? 'dark' : 'light');
+	});
+
+	// ولضمان التنفيذ عند تحميل الصفحة:
+	if (localStorage.getItem('theme') === 'dark') {
+		document.documentElement.classList.add('dark-mode');
 	}
-};
-
-
-// منطق تبديل الوضع الداكن/الفاتح
-const themeToggle = document.getElementById('theme-toggle');
-const body = document.body;
-
-// التعديل الصحيح
-themeToggle.addEventListener('click', () => {
-	const isDark = document.documentElement.classList.toggle('dark-mode');
-	localStorage.setItem('theme', isDark ? 'dark' : 'light');
-});
-
-// ولضمان التنفيذ عند تحميل الصفحة:
-if (localStorage.getItem('theme') === 'dark') {
-	document.documentElement.classList.add('dark-mode');
-}

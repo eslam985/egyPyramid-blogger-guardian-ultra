@@ -12,7 +12,7 @@ from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
-
+import socket
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
@@ -476,6 +476,28 @@ async def get_all_progress(user: str = Depends(authenticate)):
         print(f"❌ Error fetching progress: {e}")
         return []
 
+
+
+def check_telegram_connectivity():
+    targets = [
+        ("api.telegram.org", 443),
+        ("149.154.167.220", 443), # أحد سيرفرات تليجرام المباشرة
+    ]
+    
+    print("\n🔍 جاري فحص الاتصال بتليجرام من داخل السيرفر...")
+    for host, port in targets:
+        try:
+            # محاولة فتح اتصال بسيط جداً (TCP Handshake)
+            socket.create_connection((host, port), timeout=5)
+            print(f"✅ تم الاتصال بنجاح بـ {host}:{port}")
+        except socket.timeout:
+            print(f"❌ فشل: مهلة الاتصال انتهت (Timeout) لـ {host}. غالباً محجوب.")
+        except Exception as e:
+            print(f"❌ فشل: خطأ غير متوقع مع {host}: {e}")
+    print("-------------------------------------------\n")
+
+# استدعيها هنا
+check_telegram_connectivity()
 
 if __name__ == "__main__":
     # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
