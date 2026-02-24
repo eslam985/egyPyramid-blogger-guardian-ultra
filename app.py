@@ -51,7 +51,9 @@ app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # تعديل ربط الملفات الثابتة والقوالب
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount(
+    "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
+)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # 3. الإعدادات الأخرى
@@ -452,20 +454,23 @@ async def run_download_task(
 
 
 # 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
+# 2. مسار جلب التقدم (النسخة المنضبطة)
 @app.get("/api/download/progress")
 async def get_all_progress(user: str = Depends(authenticate)):
     try:
-        # جلب آخر 5 عمليات تحميل نشطة أو لم تكتمل بعد
+        # الحقيقة الصارمة: نريد فقط المهام التي "تتحرك" فعلياً
         res = (
             SupabaseService.client.table("episodes")
             .select("id, status_message, progress_percent, download_speed")
-            .neq("download_speed", "Done")
-            .order("updated_at", desc=True)
+            .neq("download_speed", "Done")  # استبعاد المنتهي
+            .lt("progress_percent", 100)  # استبعاد من وصل 100%
+            .order("id", desc=True)  # الترتيب حسب الأحدث
             .limit(5)
             .execute()
         )
         return res.data
     except Exception as e:
+        print(f"❌ Error fetching progress: {e}")
         return []
 
 

@@ -320,7 +320,14 @@ function updateDownloadProgress() {
 			const container = document.getElementById('progress-container');
 
 			// 1. تصفية المهام: استبعاد المهام المنتهية تماماً لتنظيف اللوحة
-			const activeTasks = data.filter(task => task.download_speed !== 'Done' && (task.progress_percent < 100 || task.status_message.includes('جاري')));
+			const activeTasks = data.filter(task => {
+				const isDone = task.download_speed === 'Done' || task.progress_percent >= 100;
+				const isPending = task.status_message && task.status_message.includes('Pending');
+				const isProcessing = task.status_message && task.status_message.includes('جاري');
+
+				// اظهر المهمة فقط إذا لم تكن منتهية وكان لها حالة نشطة
+				return !isDone && (isProcessing || isPending);
+			});
 
 			if (!activeTasks || activeTasks.length === 0) {
 				container.style.display = 'none';
