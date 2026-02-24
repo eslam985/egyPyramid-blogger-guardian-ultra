@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 import socket
-import requests
+
 
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
