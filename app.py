@@ -12,6 +12,7 @@ from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import requests
+
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 
@@ -285,6 +286,7 @@ def convert_vk_to_embed(url):
         return url
     try:
         import re
+        import html  # مكتبة أساسية لتنظيف رموز HTML
 
         match_ids = re.search(r"video(-?\d+)_(\d+)", url)
         if not match_ids:
@@ -294,16 +296,24 @@ def convert_vk_to_embed(url):
         fixed_id = match_ids.group(2)
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
         }
+
         response = requests.get(url, headers=headers, timeout=10)
-        hash_match = re.search(r"hash=([a-z0-9]+)", response.text)
+        # تنظيف محتوى الصفحة من رموز مثل &amp; قبل البحث عن الهاش
+        clean_content = html.unescape(response.text)
+
+        # البحث عن الهاش بنمط أكثر دقة
+        hash_match = re.search(r'hash[":=]+([a-z0-9]+)', clean_content)
 
         if hash_match:
             final_hash = hash_match.group(1)
-            return f"https://vk.com/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
+            # نستخدم vkvideo.ru ونضع الهاش والـ & بشكل نظيف
+            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
         else:
-            return f"https://vk.com/video_ext.php?oid={fixed_oid}&id={fixed_id}"
+            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}"
+
     except Exception as e:
         print(f"⚠️ VK Hash Error: {e}")
         return url
