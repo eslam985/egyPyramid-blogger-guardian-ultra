@@ -128,15 +128,19 @@ class ProgressStream:
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     print(f"📤 رفع لتليجرام: {display_name}")
-    # نضع مسار الجلسة في /tmp/ لضمان وجود صلاحية كتابة في Hugging Face
-    session_path = "/tmp/egy_pyramid_session"
+    # --- التعديل داخل دالة upload_to_telegram_only ---
+
+    # نستخدم getenv لجلب القيم التي حقنتها في خلية الـ Secrets
+    api_id_val = int(os.getenv("TELEGRAM_API_ID", API_ID))
+    api_hash_val = os.getenv("TELEGRAM_API_HASH", API_HASH)
+    bot_token_val = os.getenv("TELEGRAM_BOT_TOKEN", BOT_TOKEN)
 
     async with Client(
-        session_path,
-        api_id=int(API_ID),
-        api_hash=API_HASH,
-        bot_token=BOT_TOKEN,
-        in_memory=True,  # اختياري: إذا كنت لا تريد حفظ ملف جلسة أبداً
+        "/tmp/egy_pyramid_bot",  # اسم جلسة مختلف لتجنب التعارض
+        api_id=api_id_val,
+        api_hash=api_hash_val,
+        bot_token=bot_token_val,
+        in_memory=True,  # مهم جداً في كاجل لمنع طلب تسجيل الدخول يدوياً
     ) as app:
         for i, dest in enumerate(DESTINATIONS, 1):
             # تمرير episode_id للـ tracker
