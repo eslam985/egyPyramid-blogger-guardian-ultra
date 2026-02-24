@@ -288,9 +288,9 @@ window.triggerPublisher = function () {
 
 
 
+// البحث عن هذا الجزء وتعديله
 document.getElementById('downloadForm').addEventListener('submit', function (e) {
 	e.preventDefault();
-
 	const formData = new FormData(this);
 
 	fetch('/api/download/run', {
@@ -299,9 +299,16 @@ document.getElementById('downloadForm').addEventListener('submit', function (e) 
 	})
 		.then(response => response.json())
 		.then(data => {
-			alert(data.message); // سيقول لك "بدأت العملية في الخلفية"
+			// --- التعديل هنا ---
 			document.getElementById('downloadTaskModal').style.display = 'none';
 			this.reset();
+
+			// إظهار الشريط فوراً برسالة تمهيدية قبل أول تحديث من السيرفر
+			const container = document.getElementById('progress-container');
+			container.style.display = 'block';
+			document.getElementById('progress-text').innerText = "🚀 جاري بدء المحرك...";
+			document.getElementById('main-progress-bar').style.width = '5%';
+			// ------------------
 		})
 		.catch(error => {
 			console.error('Error:', error);
@@ -313,34 +320,28 @@ function updateDownloadProgress() {
 		.then(response => response.json())
 		.then(data => {
 			const container = document.getElementById('progress-container');
-			if (data.length === 0) {
-				container.style.display = 'none'; // إخفاء الحاوية لو مفيش تحميل
+			const progressBar = document.getElementById('main-progress-bar');
+			const progressText = document.getElementById('progress-text');
+			const progressSpeed = document.getElementById('progress-speed');
+
+			if (!data || data.length === 0) {
+				container.style.display = 'none';
 				return;
 			}
 
-			container.style.display = 'block';
-			let htmlContent = '<h5>⏳ جاري المعالجة الحية</h5>';
+			// نأخذ بيانات أول عملية تحميل نشطة (الأحدث)
+			const task = data[0];
 
-			data.forEach(item => {
-				htmlContent += `
-                    <div class="progress-item mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <small class="text-white">${item.status_message}</small>
-                            <small class="text-warning">${item.download_speed}</small>
-                        </div>
-                        <div class="progress" style="height: 10px; background: #333;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
-                                 role="progressbar" 
-                                 style="width: ${item.progress_percent}%">
-                            </div>
-                        </div>
-                        <div class="text-end">
-                            <small class="text-info">${item.progress_percent}%</small>
-                        </div>
-                    </div>
-                `;
-			});
-			container.innerHTML = htmlContent;
+			container.style.display = 'block';
+
+			// تحديث العرض (Width) والنسبة المئوية
+			const percent = task.progress_percent || 0;
+			progressBar.style.width = percent + '%';
+			progressBar.innerText = percent + '%';
+
+			// تحديث النصوص
+			progressText.innerText = `⏳ ${task.status_message || 'جاري المعالجة...'}`;
+			progressSpeed.innerText = `🚀 السرعة الحالية: ${task.download_speed || '--'}`;
 		})
 		.catch(err => console.error('Error fetching progress:', err));
 }
