@@ -6,6 +6,7 @@ from internetarchive import upload as archive_upload
 from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية بدلاً من notebook
 import requests
 import time
+
 # أضف هذه الأسطر تحت import requests
 from supabase import create_client, Client as SupabaseClient
 
@@ -13,13 +14,17 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-API_ID = os.getenv("TELEGRAM_API_ID")
-API_HASH = os.getenv("TELEGRAM_API_HASH")
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ARCHIVE_ACCESS_KEY = os.getenv("ARCHIVE_ACCESS_KEY")
 ARCHIVE_SECRET_KEY = os.getenv("ARCHIVE_SECRET_KEY")
-# تحويل السلسلة النصية القادمة من السكرت إلى قائمة (List)
-DESTINATIONS = os.getenv("TELEGRAM_CHAT_ID", "").split(",")
+
+# الحقيقة الصارمة: يجب مطابقة أسماء الـ Secrets بدقة
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+# جلب الوجهات وتجنب خطأ القائمة الفارغة
+dest_raw = os.getenv("DESTINATIONS") or os.getenv("TELEGRAM_CHAT_ID") or ""
+DESTINATIONS = [d.strip() for d in dest_raw.split(",") if d.strip()]
 
 
 class PyrogramProgress:
@@ -32,8 +37,13 @@ class PyrogramProgress:
 
     def update(self, current, total):
         if not self.pbar:
-            self.pbar = tqdm(total=total, desc=f"📤 {self.dest_info} {self.name}", unit="B", unit_scale=True)
-        
+            self.pbar = tqdm(
+                total=total,
+                desc=f"📤 {self.dest_info} {self.name}",
+                unit="B",
+                unit_scale=True,
+            )
+
         self.pbar.update(current - self.pbar.n)
 
         # الحقيقة الصارمة: تحديث واحد فقط كل ثانيتين يكفي جداً
@@ -41,11 +51,13 @@ class PyrogramProgress:
         if self.episode_id and (now - self.last_update_time > 2):
             percent = int((current / total) * 100)
             try:
-                supabase.table("episodes").update({
-                    "status_message": f"📤 رفع تليجرام {self.dest_info}",
-                    "progress_percent": percent,
-                    "download_speed": "Telegram"
-                }).eq("id", self.episode_id).execute()
+                supabase.table("episodes").update(
+                    {
+                        "status_message": f"📤 رفع تليجرام {self.dest_info}",
+                        "progress_percent": percent,
+                        "download_speed": "Telegram",
+                    }
+                ).eq("id", self.episode_id).execute()
                 self.last_update_time = now
             except:
                 pass
@@ -78,7 +90,6 @@ class ProgressStream:
         chunk = self.fd.read(size)
         if chunk:
             self.pbar.update(len(chunk))
-
 
             # تحديث كل ثانيتين لضمان استقرار الاتصال وسلاسة الواجهة
             if self.episode_id and (time.time() - self.last_update_time > 2):
@@ -117,8 +128,15 @@ class ProgressStream:
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     print(f"📤 رفع لتليجرام: {display_name}")
+    # نضع مسار الجلسة في /tmp/ لضمان وجود صلاحية كتابة في Hugging Face
+    session_path = "/tmp/egy_pyramid_session"
+
     async with Client(
-        "egy", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN
+        session_path,
+        api_id=int(API_ID),
+        api_hash=API_HASH,
+        bot_token=BOT_TOKEN,
+        in_memory=True,  # اختياري: إذا كنت لا تريد حفظ ملف جلسة أبداً
     ) as app:
         for i, dest in enumerate(DESTINATIONS, 1):
             # تمرير episode_id للـ tracker

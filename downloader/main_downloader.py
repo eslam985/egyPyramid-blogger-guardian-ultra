@@ -400,36 +400,58 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
             except Exception as e:
                 print(f"❌ خطأ أرشيف: {e}")
 
-            # 4. الرفع لتليجرام (بالاسم النظيف)
-            if file_size_gb > 1.9:
-                # كود التقسيم
-                duration_cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{vid_path}"'
-                total_seconds = float(subprocess.check_output(duration_cmd, shell=True))
-                half_time = total_seconds / 2
-                part1, part2 = f"{vid_path}_part1.mp4", f"{vid_path}_part2.mp4"
-                subprocess.run(
-                    f'ffmpeg -i "{vid_path}" -t {half_time} -c copy "{part1}" -ss {half_time} -c copy "{part2}"',
-                    shell=True,
-                    check=True,
-                )
-                await upload_to_telegram_only(
-                    part1, f"{episode_label} - ج1", episode_id=e_id
-                )
-                await upload_to_telegram_only(
-                    part2, f"{episode_label} - ج2", episode_id=e_id
-                )
-                os.remove(part1)
-                os.remove(part2)
-            else:
-                # الحقيقة الصارمة: يجب تصفير العداد ليعرف المتصفح أننا بدأنا مرحلة جديدة (تليجرام)
+            # 4. الرفع لتليجرام (بالاسم النظيف) مع حماية كاملة
+            try:
                 if e_id:
-                    supabase.table("episodes").update({
-                        "status_message": "📤 جاري الرفع إلى تليجرام...",
-                        "progress_percent": 0 
-                    }).eq("id", e_id).execute()
-                
-                await upload_to_telegram_only(vid_path, episode_label, episode_id=e_id)
-                # وفي حالة التقسيم (الجزء الأول والثاني) مرر نفس الـ e_id أيضاً
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "📤 جاري الرفع إلى تليجرام...",
+                            "progress_percent": 0,
+                        }
+                    ).eq("id", e_id).execute()
+
+                if file_size_gb > 1.9:
+                    print(f"✂️ الملف كبير ({file_size_gb:.2f}GB)، جاري التقسيم...")
+                    duration_cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{vid_path}"'
+                    total_seconds = float(
+                        subprocess.check_output(duration_cmd, shell=True)
+                    )
+                    half_time = total_seconds / 2
+                    part1, part2 = f"{vid_path}_part1.mp4", f"{vid_path}_part2.mp4"
+
+                    subprocess.run(
+                        f'ffmpeg -i "{vid_path}" -t {half_time} -c copy "{part1}" -ss {half_time} -c copy "{part2}"',
+                        shell=True,
+                        check=True,
+                    )
+
+                    await upload_to_telegram_only(
+                        part1, f"{episode_label} - ج1", episode_id=e_id
+                    )
+                    await upload_to_telegram_only(
+                        part2, f"{episode_label} - ج2", episode_id=e_id
+                    )
+
+                    if os.path.exists(part1):
+                        os.remove(part1)
+                    if os.path.exists(part2):
+                        os.remove(part2)
+                else:
+                    # رفع الملف ككتلة واحدة إذا كان أصغر من 1.9 جيجا
+                    await upload_to_telegram_only(
+                        vid_path, episode_label, episode_id=e_id
+                    )
+
+            except Exception as e:
+                print(f"❌ فشل رفع تليجرام: {e}")
+                if e_id:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "❌ فشل في مرحلة تليجرام",
+                            "download_speed": "Error",
+                        }
+                    ).eq("id", e_id).execute()
+                continue  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
 
             # 5. الرفع لـ Voe وتحديث الشيت
             # --- 5. الرفع لـ Voe وتحديث الشيت ---
@@ -441,11 +463,13 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
 
             # --- تحديث حالة الرفع لـ Voe ---
             if e_id:
-                supabase.table("episodes").update({
-                    "status_message": "🚀 جاري الرفع لسيرفر المشاهدة (Voe)...",
-                    "progress_percent": 90, # نثبتها على 90% لأنها مرحلة سريعة وغالباً لا تعطي نسبة
-                    "download_speed": "Uploading..."
-                }).eq("id", e_id).execute()
+                supabase.table("episodes").update(
+                    {
+                        "status_message": "🚀 جاري الرفع لسيرفر المشاهدة (Voe)...",
+                        "progress_percent": 90,  # نثبتها على 90% لأنها مرحلة سريعة وغالباً لا تعطي نسبة
+                        "download_speed": "Uploading...",
+                    }
+                ).eq("id", e_id).execute()
 
             file_id = upload_to_voe_api(vid_path, identifier)
 
@@ -475,11 +499,13 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
             # 6. الرفع لـ VK
             print(f"🚀 جاري نقل النسخة لـ VK...")
             if e_id:
-                supabase.table("episodes").update({
-                    "status_message": "🎬 جاري الرفع والمعالجة على VK...",
-                    "progress_percent": 95, 
-                    "download_speed": "Finalizing..."
-                }).eq("id", e_id).execute()
+                supabase.table("episodes").update(
+                    {
+                        "status_message": "🎬 جاري الرفع والمعالجة على VK...",
+                        "progress_percent": 95,
+                        "download_speed": "Finalizing...",
+                    }
+                ).eq("id", e_id).execute()
             vk_url = "Failed"
             try:
                 vk_result = upload_to_vk_local(episode_label, vid_path)
