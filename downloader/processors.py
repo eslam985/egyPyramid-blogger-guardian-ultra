@@ -342,7 +342,6 @@ def upload_to_vk_local(title, file_path):
         params = {
             "name": title,
             "group_id": VK_GROUP_ID,
-            "album_id": VK_ALBUM_ID,
             "access_token": VK_ACCESS_TOKEN,
             "v": "5.131",
         }

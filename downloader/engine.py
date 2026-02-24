@@ -136,11 +136,12 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     bot_token_val = os.getenv("TELEGRAM_BOT_TOKEN", BOT_TOKEN)
 
     async with Client(
-        "/tmp/egy_pyramid_bot",  # اسم جلسة مختلف لتجنب التعارض
+        "/tmp/egy_pyramid_bot",
         api_id=api_id_val,
         api_hash=api_hash_val,
         bot_token=bot_token_val,
-        in_memory=True,  # مهم جداً في كاجل لمنع طلب تسجيل الدخول يدوياً
+        in_memory=True,
+        workers=32,  # هذا هو المحرك التوربيني
     ) as app:
         for i, dest in enumerate(DESTINATIONS, 1):
             # تمرير episode_id للـ tracker
