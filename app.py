@@ -10,15 +10,12 @@ import uvicorn
 from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
-
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
 import socket
 import requests
-
 # أضف هذا السطر مع الاستدعاءات في الأعلى
 from downloader.main_downloader import start_download_process
-
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
@@ -481,6 +478,7 @@ async def get_all_progress(user: str = Depends(authenticate)):
         return []
 
 
+
 def advanced_tg_diagnostic():
     token = "توكن_بوت_تليجرام_الخاص_بك"  # ضع توكن البوت هنا للتجربة الحقيقية
     # بدلاً من الطباعة العادية، استخدم هذا الشكل لكل السطور:
@@ -535,13 +533,9 @@ def advanced_tg_diagnostic():
 
     print("-" * 40)
 
+# استدعيها هنا
+advanced_tg_diagnostic()
 
 if __name__ == "__main__":
-    # 1. استدعاء الفحص أولاً ليطبع النتائج في اللوج فوراً
-    try:
-        advanced_tg_diagnostic()
-    except Exception as e:
-        print(f"⚠️ فشل بدء الرادار: {e}")
-
-    # 2. بدء التطبيق
+    # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
     uvicorn.run("app:app", host="0.0.0.0", port=7860, reload=True)
