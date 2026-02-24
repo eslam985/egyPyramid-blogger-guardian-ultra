@@ -105,6 +105,7 @@ def save_to_supabase(
 
 async def pyramid_ultimate_beast(url, name, meta_data=None):
     # أضف هذا السطر في بداية الدالة
+
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     await ensure_dependencies()
     timestamp = int(time.time())
@@ -367,6 +368,15 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
             print(f"📦 أرشفة النسخة الكاملة: {episode_label}")
             archive_url = "Failed_Archive_Upload"  # Initialize with a failure state
             try:
+                # تحديث الحالة للمتصفح: بدء الرفع للأرشيف
+                if e_id:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "☁️ جاري الرفع للأرشيف (نسخة احتياطية)",
+                            "progress_percent": 0,  # تصفير العداد للبدء في حساب الرفع
+                        }
+                    ).eq("id", e_id).execute()
+
                 pbar_archive = tqdm(
                     total=os.path.getsize(vid_path),
                     desc=f"☁️ أرشيف (كامل)",
@@ -411,7 +421,13 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                 os.remove(part1)
                 os.remove(part2)
             else:
-                # استبدل استدعاء upload_to_telegram_only بـ:
+                # الحقيقة الصارمة: يجب تصفير العداد ليعرف المتصفح أننا بدأنا مرحلة جديدة (تليجرام)
+                if e_id:
+                    supabase.table("episodes").update({
+                        "status_message": "📤 جاري الرفع إلى تليجرام...",
+                        "progress_percent": 0 
+                    }).eq("id", e_id).execute()
+                
                 await upload_to_telegram_only(vid_path, episode_label, episode_id=e_id)
                 # وفي حالة التقسيم (الجزء الأول والثاني) مرر نفس الـ e_id أيضاً
 
@@ -423,7 +439,14 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
             )
             archive_url = f"https://archive.org/details/{identifier}"
 
-            # التعديل هنا: استدعاء الدالة السليمة بالبارامترات الصحيحة
+            # --- تحديث حالة الرفع لـ Voe ---
+            if e_id:
+                supabase.table("episodes").update({
+                    "status_message": "🚀 جاري الرفع لسيرفر المشاهدة (Voe)...",
+                    "progress_percent": 90, # نثبتها على 90% لأنها مرحلة سريعة وغالباً لا تعطي نسبة
+                    "download_speed": "Uploading..."
+                }).eq("id", e_id).execute()
+
             file_id = upload_to_voe_api(vid_path, identifier)
 
             voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
@@ -449,7 +472,14 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                 print(f"⚠️ فشل تحديث ساب باز الأولي: {e}")
 
             # 6. الرفع لـ VK (المرحلة الثانية - محلياً لضمان الاستقرار)
+            # 6. الرفع لـ VK
             print(f"🚀 جاري نقل النسخة لـ VK...")
+            if e_id:
+                supabase.table("episodes").update({
+                    "status_message": "🎬 جاري الرفع والمعالجة على VK...",
+                    "progress_percent": 95, 
+                    "download_speed": "Finalizing..."
+                }).eq("id", e_id).execute()
             vk_url = "Failed"
             try:
                 vk_result = upload_to_vk_local(episode_label, vid_path)
