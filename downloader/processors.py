@@ -413,48 +413,71 @@ def upload_to_voe_api(file_path, identifier):
 
 
 async def upload_to_doodstream(api_key, identifier, file_name):
-    """الرفع لـ DoodStream من رابط الأرشيف"""
+    """الرفع لـ DoodStream مع تجربة نطاقات متعددة وفحص صبور"""
     print(f"📡 DoodStream: إرسال أمر سحب من الأرشيف...")
-    try:
-        clean_file_name = urllib.parse.quote(file_name)
-        remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        headers = {"User-Agent": "Mozilla/5.0"}
-        async with httpx.AsyncClient(
-            timeout=30.0, headers=headers, follow_redirects=True
-        ) as client:
-            # 💡 التعديل: استخدمنا doodstream.com بدلاً من doodapi.com لتجنب خطأ 301
-            add_url = (
-                f"https://doodstream.com/api/upload/url?key={api_key}&url={remote_url}"
-            )
-            res = await client.get(add_url)
+    # قائمة النطاقات البديلة للـ API
+    api_domains = [
+        "d_api.com",
+        "doodapi.com",
+        "doodapi.co",
+        "dood.to",
+        "dood.stream",
+        "myvidplay.com",
+        "doodstream.com",
+    ]
+    clean_file_name = urllib.parse.quote(file_name)
+    remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-            if res.status_code != 200:
-                print(f"⚠️ DoodStream Error {res.status_code}")
-                return None
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-            data = res.json()
-            if data.get("msg") == "OK":
-                print("⏳ DoodStream: تم قبول الأمر، جاري الانتظار...")
-                # فحص الحالة
-                for _ in range(10):
-                    await asyncio.sleep(30)
-                    list_url = f"https://d_api.com/api/urlupload/list?key={api_key}"
+    async with httpx.AsyncClient(
+        timeout=30.0, headers=headers, follow_redirects=True
+    ) as client:
+        # محاولة إرسال الأمر باستخدام النطاقات المتاحة
+        data = None
+        for domain in api_domains:
+            try:
+                add_url = (
+                    f"https://{domain}/api/upload/url?key={api_key}&url={remote_url}"
+                )
+                res = await client.get(add_url)
+                data = res.json()
+                if data.get("msg") == "OK":
+                    print(f"✅ DoodStream: تم قبول الأمر عبر {domain}")
+                    break
+            except Exception:
+                continue
+
+        if not data or data.get("msg") != "OK":
+            return None
+
+        # مرحلة الفحص (Polling) - زودنا المحاولات لـ 20 محاولة
+        short_name = file_name.split(".")[0][:10]
+        for _ in range(20):
+            await asyncio.sleep(25)
+            for domain in api_domains:
+                try:
+                    list_url = f"https://{domain}/api/urlupload/list?key={api_key}"
                     l_res = await client.get(list_url)
                     l_data = l_res.json()
                     if l_data.get("result"):
                         for item in l_data["result"]:
-                            if str(item.get("status")) == "2":  # 2 يعني مكتمل
-
-                                # بدلاً من أي رابط آخر، استخدم الدومين الذي أكدت أنه يعمل معك كـ Embed
+                            # الحالة 2 تعني اكتمال الرفع والتحويل
+                            if (
+                                short_name in item.get("title", "")
+                                and str(item.get("status")) == "2"
+                            ):
+                                print(f"✅ DoodStream Success!")
                                 return f"https://myvidplay.com/e/{item['file_code']}"
-    except Exception as e:
-        print(f"❌ DoodStream: {e}")
+                    break  # اخرج من لفة النطاقات لو الـ API رد (حتى لو لسه الفيديو مخلصش)
+                except:
+                    continue
     return None
 
 
 async def upload_to_streamtape(login, key, identifier, file_name):
-    """الرفع لـ Streamtape من رابط الأرشيف مع فحص الحالة بدقة"""
+    """الرفع لـ Streamtape مع انتظار أطول للتحويل"""
     print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
@@ -467,26 +490,22 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
             if data.get("status") == 200:
                 remote_id = data["result"]["id"]
-                print(f"⏳ Streamtape: المهمة قيد التنفيذ (ID: {remote_id})")
-
-                for _ in range(20):  # زيادة وقت الانتظار قليلاً
+                # زيادة المحاولات لـ 25 محاولة (حوالي 12 دقيقة انتطار كحد أقصى)
+                for _ in range(25):
                     await asyncio.sleep(30)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                     s_res = await client.get(status_url)
                     s_data = s_res.json()
 
-                    # الوصول للبيانات داخل الـ ID المحدد
                     remote_info = s_data.get("result", {}).get(remote_id, {})
                     status = remote_info.get("status")
 
                     if status == "finished":
-                        # استخراج الـ extid الصحيح
                         extid = remote_info.get("extid")
                         if extid:
                             print(f"✅ Streamtape Success!")
                             return f"https://streamtape.com/e/{extid}"
                     elif status == "error":
-                        print(f"❌ Streamtape Remote Error.")
                         return None
     except Exception as e:
         print(f"❌ Streamtape: {e}")
