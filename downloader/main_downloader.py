@@ -115,7 +115,8 @@ def save_to_supabase(
         if link_entries:
             supabase.table("links").insert(link_entries).execute()
 
-        print(f"🚀 [Supabase]: تم مزامنة البيانات بنجاح لـ {display_title}")
+        # ابحث عن السطر القديم واستبدله بهذا في ملف المحرك
+        print(f"🚀 [Supabase]: تم مزامنة البيانات بنجاح | الرمز الفريد: {identifier} | العنوان: {display_title}")
         return e_id  # أضف هذا السطر لكي نحصل على الرقم التعريفي
     except Exception as e:
         print(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
