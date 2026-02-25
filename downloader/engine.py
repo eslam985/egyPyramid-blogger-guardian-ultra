@@ -1,20 +1,22 @@
 import os
 import shutil
 import subprocess
-from pyrogram import Client
-from internetarchive import upload as archive_upload
-from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية بدلاً من notebook
 import requests
 import time
 import asyncio
+import tqdm as tqdm_base  # استيراد المكتبة الأصلية باسم مختلف
 from functools import partial
-
-from functools import partial
-
-tqdm = partial(tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80)
-# أضف هذه الأسطر تحت import requests
+from pyrogram import Client
+from internetarchive import upload as archive_upload
 from supabase import create_client, Client as SupabaseClient
 
+# تهيئة tqdm المخصصة (حل مشكلة القرف والسطور المكررة)
+# تم حذف force_cols واستبدالها بـ ncols لضمان التوافق
+tqdm = partial(
+    tqdm_base.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+)
+
+# إعدادات سوبابيز
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
