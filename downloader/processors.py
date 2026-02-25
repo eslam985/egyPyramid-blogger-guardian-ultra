@@ -413,96 +413,69 @@ def upload_to_voe_api(file_path, identifier):
 
 
 async def upload_to_doodstream(api_key, identifier, file_name):
-    """الرفع لـ DoodStream من رابط الأرشيف مع فحص الحالة"""
+    """الرفع لـ DoodStream من رابط الأرشيف"""
     print(f"📡 DoodStream: إرسال أمر سحب من الأرشيف...")
     try:
-        # ترميز الرابط بشكل احترافي لتجنب رفض السيرفر (صفحات HTML 400/404)
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        # إضافة User-Agent لضمان عدم حظر الطلب
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
-            # 1. إرسال طلب السحب
-            add_url = (
-                f"https://doodapi.com/api/upload/url?key={api_key}&url={remote_url}"
-            )
+        headers = {"User-Agent": "Mozilla/5.0"}
+        async with httpx.AsyncClient(
+            timeout=30.0, headers=headers, follow_redirects=True
+        ) as client:
+            # 💡 التعديل: استخدمنا d_api.com بدلاً من doodapi.com لتجنب خطأ 301
+            add_url = f"https://d_api.com/api/upload/url?key={api_key}&url={remote_url}"
             res = await client.get(add_url)
 
-            try:
-                data = res.json()
-            except:
-                print(
-                    f"⚠️ DoodStream رد ببيانات غير صالحة. كود الاستجابة: {res.status_code}"
-                )
+            if res.status_code != 200:
+                print(f"⚠️ DoodStream Error {res.status_code}")
                 return None
 
+            data = res.json()
             if data.get("msg") == "OK":
-                print("⏳ DoodStream: تم قبول الأمر، جاري تتبع المهمة...")
+                print("⏳ DoodStream: تم قبول الأمر، جاري الانتظار...")
+                # فحص الحالة
+                for _ in range(10):
+                    await asyncio.sleep(30)
+                    list_url = f"https://d_api.com/api/urlupload/list?key={api_key}"
+                    l_res = await client.get(list_url)
+                    l_data = l_res.json()
+                    if l_data.get("result"):
+                        for item in l_data["result"]:
+                            if str(item.get("status")) == "2":  # 2 يعني مكتمل
 
-                # أخذ أول 10 حروف من الاسم النظيف للمقارنة (لأن السيرفرات تختصر الأسماء)
-                short_name = file_name.split(".")[0][:10]
-
-                for _ in range(15):  # محاولة الفحص لمدة 5 دقائق تقريباً
-                    await asyncio.sleep(20)
-                    list_url = f"https://doodapi.com/api/urlupload/list?key={api_key}"
-                    list_res = await client.get(list_url)
-                    list_data = list_res.json()
-
-                    if list_data.get("msg") == "OK" and list_data.get("result"):
-                        for item in list_data["result"]:
-                            # DoodStream Status: "1" = Downloading, "2" = Finished, "3" = Error
-                            title = item.get("title", "")
-                            if short_name in title and str(item.get("status")) == "2":
-                                print(f"✅ DoodStream Success!")
-                                return f"https://doodstream.com/e/{item['file_code']}"
+                                # بدلاً من أي رابط آخر، استخدم الدومين الذي أكدت أنه يعمل معك كـ Embed
+                                return f"https://myvidplay.com/e/{item['file_code']}"
     except Exception as e:
-        print(f"⚠️ DoodStream Error: {e}")
+        print(f"❌ DoodStream: {e}")
     return None
 
 
 async def upload_to_streamtape(login, key, identifier, file_name):
-    """الرفع لـ Streamtape من رابط الأرشيف مع فحص الحالة"""
+    """الرفع لـ Streamtape من رابط الأرشيف"""
     print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1. إضافة المهمة
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             add_url = f"https://api.streamtape.com/remotedl/add?login={login}&key={key}&url={remote_url}"
             res = await client.get(add_url)
             data = res.json()
 
             if data.get("status") == 200:
                 remote_id = data["result"]["id"]
-                print(
-                    f"⏳ Streamtape: تم قبول الأمر (ID: {remote_id})، جاري تتبع المهمة..."
-                )
-
-                # حلقة الفحص
-                for _ in range(15):
-                    await asyncio.sleep(20)
+                for _ in range(10):
+                    await asyncio.sleep(30)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
-                    status_res = await client.get(status_url)
-                    status_data = status_res.json()
+                    s_res = await client.get(status_url)
+                    s_data = s_res.json()
+                    item = s_data["result"].get(remote_id, {})
+                    if item.get("status") == "finished":
+                        return f"https://streamtape.com/e/{item.get('extid')}"
 
-                    if status_data.get("status") == 200:
-                        # جلب تفاصيل المهمة الحالية
-                        item_info = status_data["result"].get(remote_id, {})
-                        item_status = item_info.get("status")
-
-                        # التعديل الحاسم: التأكد أن الحالة أصبحت "finished" قبل استخراج الرابط
-                        if item_status == "finished":
-                            extid = item_info.get("extid")
-                            if extid:
-                                print(f"✅ Streamtape Success!")
-                                return f"https://streamtape.com/e/{extid}"
-                        elif item_status == "error":
-                            print(f"❌ Streamtape: السيرفر فشل في سحب الملف.")
-                            return None
     except Exception as e:
-        print(f"⚠️ Streamtape Error: {e}")
+        print(f"❌ Streamtape: {e}")
     return None
 
 
