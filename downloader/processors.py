@@ -8,14 +8,16 @@ import json
 import time
 from .engine import ProgressStream
 import httpx  # أو استخدم requests
-import tqdm
+from tqdm.notebook import tqdm as tqdm_base
 
 # إجبار tqdm على الثبات في سطر واحد
 from functools import partial
 
-tqdm.tqdm = partial(
-    tqdm.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+tqdm_custom = partial(
+    tqdm_base.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
 )
+
+
 # سحب المفاتيح من متغيرات البيئة (التي وضعتها في Secrets)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
@@ -286,7 +288,7 @@ def upload_to_voe_api(file_path, identifier):
         # تعريف شريط واحد فقط بتنسيق كامل ونظيف
         # ... قبل الحلقة ...
         check_count = 0
-        pbar_voe = tqdm(total=100, desc="⏳ Voe Polling")
+        pbar_voe = tqdm_custom(total=100, desc="⏳ Voe Polling")
 
         while time.time() - start_time < 800:
             try:
@@ -362,7 +364,7 @@ def upload_to_vk_local(title, file_path):
             owner_id = res_save["response"]["owner_id"]
 
             file_size = os.path.getsize(file_path)
-            pbar_vk = tqdm(
+            pbar_vk = tqdm_custom(
                 total=file_size,
                 desc=f"📡 VK Upload: {title}",
                 unit="B",
@@ -445,13 +447,17 @@ async def upload_to_doodstream(file_path, api_key):
                 return None
 
             # 2. الرفع الفعلي للملف
+            # 2. الرفع الفعلي للملف (مطابق لتوثيق DoodStream)
             with open(file_path, "rb") as f:
+                # التوثيق يطلب حقل اسمه api_key وحقل اسمه file
+                form_data = {"api_key": api_key}
                 files = {"file": f}
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
+
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+                # الرفع يتم إلى upload_url مباشرة بدون إضافة ?key في الرابط
                 response = await client.post(
-                    f"{upload_url}?key={api_key}", files=files, headers=headers
+                    upload_url, data=form_data, files=files, headers=headers
                 )
 
                 if response.status_code != 200:
@@ -484,21 +490,21 @@ async def upload_to_streamtape(file_path, login, key):
             if res.status_code != 200:
                 return None
 
-            try:
-                data = res.json()
-            except Exception:
-                print(f"❌ Streamtape API Error: {res.text}")
-                return None
-            # حماية: فحص وجود النتيجة قبل القراءة
-            if res.text.strip() == "OK":
-                print(
-                    "⚠️ Streamtape رد بـ OK (السيرفر مشغول)، جاري المحاولة مرة أخرى..."
-                )
-                await asyncio.sleep(2)
+            # التحقق من الرد قبل محاولة تحويله لـ JSON
+            content = res.text.strip()
+            if content == "OK":
+                print("⚠️ Streamtape مشغول حالياً (رد بـ OK)، جاري الانتظار 5 ثوانٍ...")
+                await asyncio.sleep(5)
                 res = await client.get(
                     f"https://api.streamtape.com/upload/server?login={login}&key={key}"
                 )
+                content = res.text.strip()
+
+            try:
                 data = res.json()
+            except Exception:
+                print(f"❌ فشل تحليل رد Streamtape: {content}")
+                return None
 
             if data.get("status") != 200 or not data.get("result"):
                 print(f"❌ Streamtape لم يعطِ رابط رفع: {data.get('msg')}")

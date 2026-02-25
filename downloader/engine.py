@@ -9,7 +9,9 @@ from functools import partial
 from pyrogram import Client
 from internetarchive import upload as archive_upload
 from supabase import create_client, Client as SupabaseClient
-
+tqdm_custom = partial(
+    tqdm_base.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+)
 # تهيئة tqdm المخصصة (حل مشكلة القرف والسطور المكررة)
 # تم حذف force_cols واستبدالها بـ ncols لضمان التوافق
 tqdm = partial(
@@ -47,7 +49,7 @@ class PyrogramProgress:
 
     def update(self, current, total):
         if not self.pbar:
-            self.pbar = tqdm(
+            self.pbar = tqdm_custom(
                 total=total,
                 desc=f"📤 {self.dest_info} {self.name}",
                 unit="B",
