@@ -6,31 +6,27 @@ import shutil
 import subprocess
 import nest_asyncio
 from urllib.parse import unquote
-from tqdm.auto import tqdm  # تأكد من أنك تستخدم auto في
 
-# تنظيف استيراد سوبابيز
+# 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
+# هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
+from .processors import tqdm, tqdm_custom, get_clean_media_data, get_movie_data
+from .processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop
+
+# 2. استيراد المحرك
+from .engine import *
+
+# 3. تنظيف استيراد سوبابيز
 try:
     from supabase import create_client, Client as SupabaseClient
 except ImportError:
-    print("❌ خطأ: مكتبة supabase غير مثبتة. نفذ: pip install supabase")
+    print("❌ خطأ: مكتبة supabase غير مثبتة.")
 
-# حل مشكلة الأسماء غير المعرفة (Explicit Imports)
-from .processors import *
-from .engine import *
-from .processors import get_clean_media_data, get_movie_data
-
-# استيراد دوال الرفع من المسار الصحيح
-from downloader.processors import (
-    upload_to_doodstream,
-    upload_to_streamtape,
-    upload_to_mixdrop,
-)
-
-# تفعيل nest_asyncio لحل مشاكل تداخل الـ loops في بيئات مثل Kaggle/Colab
+# تفعيل nest_asyncio
 nest_asyncio.apply()
-os.environ["TQDM_MININTERVAL"] = (
-    "2.0"  # يمنع التحديثات السريعة جداً التي تسبب تكرار الأسطر في التقرير
-)
+
+# تثبيت بيئة tqdm عالمياً داخل هذا الملف أيضاً
+os.environ["TQDM_MININTERVAL"] = "2.0"
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)

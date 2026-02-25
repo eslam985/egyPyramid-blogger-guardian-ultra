@@ -1,21 +1,28 @@
-import requests
-import asyncio
-import google.generativeai as genai
-from deep_translator import GoogleTranslator
 import os
 import re
 import json
 import time
-from .engine import ProgressStream
-import httpx  # أو استخدم requests
-from tqdm.notebook import tqdm as tqdm_base
-
-# إجبار tqdm على الثبات في سطر واحد
+import asyncio
+import httpx
+import requests
+import google.generativeai as genai
+from deep_translator import GoogleTranslator
 from functools import partial
+from .engine import ProgressStream
 
+# 1. استيراد القاعدة الأساسية أولاً
+try:
+    from tqdm.auto import tqdm as tqdm_base
+except ImportError:
+    import tqdm as tqdm_base
+
+# 2. التعريف (خارج بلوك الـ try/except) لضمان توفره في كل الحالات
 tqdm_custom = partial(
-    tqdm_base.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+    tqdm_base, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
 )
+
+# 3. توحيد الاسم عالمياً لخدمة أي مكتبات خارجية ولإصلاح أخطاء Ruff
+tqdm = tqdm_custom
 
 
 # سحب المفاتيح من متغيرات البيئة (التي وضعتها في Secrets)
