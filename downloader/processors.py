@@ -7,7 +7,7 @@ import json
 import time
 from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية بدلاً من notebook
 from .engine import ProgressStream
-
+import httpx # أو استخدم requests
 
 # سحب المفاتيح من متغيرات البيئة (التي وضعتها في Secrets)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -388,6 +388,106 @@ def upload_to_vk_local(title, file_path):
                 return None
     except Exception as e:
         print(f"⚠️ فشل VK المحلي: {e}")
+        return None
+
+
+
+
+async def upload_to_doodstream(file_path, api_key):
+    print(f"🚀 جاري الرفع إلى DoodStream...")
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            # 1. الحصول على سيرفر الرفع المتاح
+            server_res = await client.get(f"https://doodapi.com/api/upload/server?key={api_key}")
+            upload_url = server_res.json().get('result')
+            
+            if not upload_url:
+                print("❌ فشل الحصول على سيرفر رفع من DoodStream")
+                return None
+
+            # 2. الرفع الفعلي للملف
+            with open(file_path, 'rb') as f:
+                files = {'file': f}
+                # نرسل الطلب مع المفتاح مرة أخرى في الـ POST
+                response = await client.post(f"{upload_url}?key={api_key}", files=files)
+                
+                result = response.json()
+                if result.get('msg') == 'OK':
+                    file_code = result['result'][0]['file_code']
+                    # 3. تكوين رابط الـ Iframe المباشر
+                    iframe_url = f"https://doodstream.com/e/{file_code}"
+                    print(f"✅ تم الرفع لـ DoodStream: {iframe_url}")
+                    return iframe_url
+                else:
+                    print(f"❌ خطأ أثناء الرفع: {result.get('msg')}")
+                    return None
+    except Exception as e:
+        print(f"⚠️ خطأ في DoodStream: {e}")
+        return None
+
+
+
+async def upload_to_streamtape(file_path, login, key):
+    print(f"🎬 جاري الرفع إلى Streamtape...")
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            # 1. طلب رابط الرفع المتاح
+            res = await client.get(f"https://api.streamtape.com/upload/server?login={login}&key={key}")
+            data = res.json()
+            if data['status'] != 200:
+                print(f"❌ فشل الحصول على سيرفر Streamtape: {data.get('msg')}")
+                return None
+                
+            upload_url = data['result']['url']
+            
+            # 2. الرفع الفعلي للملف
+            with open(file_path, 'rb') as f:
+                files = {'file': f}
+                response = await client.post(upload_url, files=files)
+                result = response.json()
+                
+                if result['status'] == 200:
+                    file_code = result['result']['id']
+                    # رابط الإيفريم (Embed)
+                    stream_url = f"https://streamtape.com/e/{file_code}"
+                    print(f"✅ تم الرفع لـ Streamtape: {stream_url}")
+                    return stream_url
+                else:
+                    print(f"❌ خطأ Streamtape أثناء الرفع: {result.get('msg')}")
+                    return None
+    except Exception as e:
+        print(f"⚠️ خطأ تقني في Streamtape: {e}")
+        return None
+
+
+async def upload_to_mixdrop(file_path, email, key):
+    print(f"💧 جاري الرفع إلى MixDrop...")
+    try:
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            # البيانات المطلوبة حسب التوثيق
+            data = {
+                'email': email,
+                'key': key
+            }
+            # إرسال الملف فعلياً
+            with open(file_path, 'rb') as f:
+                files = {'file': f}
+                response = await client.post("https://ul.mixdrop.ag/api", data=data, files=files)
+                
+                res_json = response.json()
+                if res_json.get('success'):
+                    # الرابط المطلوب للمشاهدة هو embedurl
+                    embed_url = res_json['result']['embedurl']
+                    # تأكد أن الرابط يبدأ بـ https
+                    if not embed_url.startswith("https:"):
+                        embed_url = "https:" + embed_url
+                    print(f"✅ تم الرفع لـ MixDrop: {embed_url}")
+                    return embed_url
+                else:
+                    print(f"❌ فشل MixDrop: {res_json}")
+                    return None
+    except Exception as e:
+        print(f"⚠️ خطأ تقني في MixDrop: {e}")
         return None
 
 

@@ -15,6 +15,7 @@ from .engine import *
 import nest_asyncio
 import asyncio
 
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -536,8 +537,112 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                     vk_url = vk_result
             except Exception as e:
                 print(f"⚠️ فشل VK: {e}")
+            # --- 7. الرفع لـ DoodStream ---
+            print(f"🚀 جاري الرفع لـ DoodStream...")
+            try:
+                if e_id:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "🎥 جاري الرفع لـ DoodStream...",
+                            "progress_percent": 98,
+                        }
+                    ).eq("id", e_id).execute()
 
-            # تحديث الشيت بالبيانات الكاملة (Voe + VK)
+                from downloader.processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop
+
+                dood_api_key = "553856lyhogniqkwh0q9m5"
+
+                dood_url = await upload_to_doodstream(vid_path, dood_api_key)
+
+                if dood_url:
+                    from services.supabase_db import SupabaseService
+
+                    SupabaseService.client.table("links").upsert(
+                        {
+                            "episode_id": e_id,
+                            "server_name": "doodstream",
+                            "url": dood_url,
+                        },
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ تم حفظ رابط DoodStream")
+            except Exception as e:
+                print(f"⚠️ فشل DoodStream: {e}")
+                # --- 8. الرفع لـ Streamtape (الإضافة النهائية) ---
+            print(f"🚀 جاري الرفع لـ Streamtape...")
+            try:
+                if e_id:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "📽️ جاري الرفع لـ Streamtape...",
+                            "progress_percent": 99,
+                        }
+                    ).eq("id", e_id).execute()
+
+                from downloader.processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop
+
+                st_login = "b4141c9ac5586a160818"
+                st_key = "8OmZOAWa2eHora2"
+
+                st_url = await upload_to_streamtape(vid_path, st_login, st_key)
+
+                if st_url:
+                    from services.supabase_db import SupabaseService
+
+                    SupabaseService.client.table("links").upsert(
+                        {
+                            "episode_id": e_id,
+                            "server_name": "streamtape",
+                            "url": st_url,
+                        },
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ تم حفظ رابط Streamtape")
+            except Exception as e:
+                print(f"⚠️ فشل Streamtape: {e}")
+
+            # --- 8. الرفع لـ Streamtape ---
+            # (كود ستريم تيب الموجود عندك هنا)
+
+            # --- 9. الرفع لـ MixDrop (ضع الكود الجديد هنا) ---
+            try:
+                if e_id:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "💧 جاري الرفع لـ MixDrop...",
+                            "progress_percent": 99,
+                        }
+                    ).eq("id", e_id).execute()
+
+                mix_url = await upload_to_mixdrop(
+                    vid_path, "ee17172@gmail.com", "3KO11MEVXQZJiWy"
+                )
+                if mix_url:
+                    from services.supabase_db import SupabaseService
+
+                    SupabaseService.client.table("links").upsert(
+                        {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ تم حفظ رابط MixDrop")
+            except Exception as e:
+                print(f"⚠️ فشل MixDrop: {e}")
+
+            # --- التحديث النهائي الشامل لجدول الحلقات ---
+            try:
+                save_to_supabase(
+                    voe_watch,
+                    voe_down,
+                    vk_url,  # ... بقية المتغيرات
+                )
+            except Exception as e:
+                print(f"❌ فشل التحديث النهائي: {e}")
+
+            # --- حذف الملف (Cleanup) ---
+            if os.path.exists(vid_path):
+                os.remove(vid_path)
+
+            # --- التحديث النهائي الشامل لجدول الحلقات (خارج الـ try الخاص بـ دود ستريم) ---
             try:
                 save_to_supabase(
                     voe_watch,
@@ -554,16 +659,13 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                     current_meta,
                 )
             except Exception as e:
-                print(f"❌ فشل تحديث الشيت: {e}")
+                print(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
 
-            # حذف الملف بعد التأكد من انتهاء كل العمليات
             # حذف الملف بعد التأكد من انتهاء كل العمليات
             if os.path.exists(vid_path):
                 try:
                     os.remove(vid_path)
-                    print(
-                        f"🗑️ تم تنظيف الملف المحلي بنجاح: {os.path.basename(vid_path)}"
-                    )
+                    print(f"🗑️ تم تنظيف الملف المحلي: {os.path.basename(vid_path)}")
                 except Exception as e:
                     print(f"⚠️ لم يتم مسح الملف المؤقت: {e}")
 
