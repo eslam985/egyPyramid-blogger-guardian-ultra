@@ -7,6 +7,7 @@ from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية ب
 import requests
 import time
 import asyncio
+
 # أضف هذه الأسطر تحت import requests
 from supabase import create_client, Client as SupabaseClient
 
@@ -128,22 +129,22 @@ class ProgressStream:
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     print(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
-    
+
     api_id_val = int(os.getenv("TELEGRAM_API_ID"))
     api_hash_val = os.getenv("TELEGRAM_API_HASH")
     # ملاحظة: سنستخدم session_name ثابت، إذا كانت أول مرة سيطلب الكود الكود من تليجرام
-    
+
     async with Client(
-        "egy_pyramid_user", # نستخدم session بدلاً من bot_token لعمل forward
+        "egy_pyramid_user",  # نستخدم session بدلاً من bot_token لعمل forward
         api_id=api_id_val,
         api_hash=api_hash_val,
-        in_memory=False # يفضل False لحفظ الجلسة فلا يطلب الكود كل مرة
+        in_memory=False,  # يفضل False لحفظ الجلسة فلا يطلب الكود كل مرة
     ) as app:
-        
+
         # 1. الرفع للمخزن (أول وجهة في القائمة)
         dest = DESTINATIONS[0].strip()
         tracker = PyrogramProgress(display_name, 1, 1, episode_id)
-        
+
         try:
             sent_video = await app.send_video(
                 chat_id=int(dest),
@@ -152,36 +153,45 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                 caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
                 progress=lambda c, t: tracker.update(c, t),
             )
-            
+
             if sent_video:
                 print(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
                 # 2. عمل Forward لبوت الاستخراج
                 await sent_video.forward("@EgyPyramid_stream_bot")
-                
+
                 # 3. انتظار الرد (تكتيك الصياد)
-                await asyncio.sleep(5) # وقت كافٍ للبوت ليرد
-                
-                async for message in app.get_chat_history("@EgyPyramid_stream_bot", limit=1):
+                await asyncio.sleep(5)  # وقت كافٍ للبوت ليرد
+
+                async for message in app.get_chat_history(
+                    "@EgyPyramid_stream_bot", limit=1
+                ):
                     if message.text and "http" in message.text:
                         # استخراج الرابط باستخدام regex بسيط
                         import re
-                        links = re.findall(r'(https?://[^\s]+)', message.text)
+
+                        links = re.findall(r"(https?://[^\s]+)", message.text)
                         # --- التعديل ليتوافق مع جدول links ---
                         if links:
                             direct_link = links[0]
                             print(f"✅ تم صيد الرابط المباشر: {direct_link}")
-                            
+
                             if episode_id:
                                 from services.supabase_db import SupabaseService
+
                                 # نقوم بإضافة الرابط لجدول links وربطه بـ episode_id
                                 # استبدل .insert بـ .upsert في دالتك لضمان التوافق مع القيد الجديد
-                                SupabaseService.client.table("links").upsert({
-                                    "episode_id": episode_id,
-                                    "server_name": "telegram_direct",
-                                    "url": direct_link
-                                }, on_conflict="episode_id, server_name").execute()
-                                print(f"🔗 تم ربط رابط التليجرام بالحلقة {episode_id} في جدول links")
-        
+                                SupabaseService.client.table("links").upsert(
+                                    {
+                                        "episode_id": episode_id,
+                                        "server_name": "telegram_direct",
+                                        "url": direct_link,
+                                    },
+                                    on_conflict="episode_id, server_name",
+                                ).execute()
+                                print(
+                                    f"🔗 تم ربط رابط التليجرام بالحلقة {episode_id} في جدول links"
+                                )
+
         except Exception as e:
             print(f"❌ فشل في عملية التليجرام: {e}")
         finally:

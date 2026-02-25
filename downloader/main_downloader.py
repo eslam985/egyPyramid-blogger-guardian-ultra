@@ -548,7 +548,11 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
 
-                from downloader.processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop
+                from downloader.processors import (
+                    upload_to_doodstream,
+                    upload_to_streamtape,
+                    upload_to_mixdrop,
+                )
 
                 dood_api_key = "553856lyhogniqkwh0q9m5"
 
@@ -579,7 +583,11 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
 
-                from downloader.processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop
+                from downloader.processors import (
+                    upload_to_doodstream,
+                    upload_to_streamtape,
+                    upload_to_mixdrop,
+                )
 
                 st_login = "b4141c9ac5586a160818"
                 st_key = "8OmZOAWa2eHora2"
