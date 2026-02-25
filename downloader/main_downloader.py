@@ -10,7 +10,7 @@ from urllib.parse import unquote
 # 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
 # هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
 from .processors import tqdm, tqdm_custom, get_clean_media_data, get_movie_data
-from .processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop
+from .processors import upload_to_doodstream, upload_to_streamtape, upload_to_mixdrop, upload_to_voe_api
 
 # 2. استيراد المحرك
 from .engine import *
