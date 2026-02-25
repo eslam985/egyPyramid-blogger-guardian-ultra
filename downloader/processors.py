@@ -9,9 +9,13 @@ import time
 from .engine import ProgressStream
 import httpx  # أو استخدم requests
 import tqdm
+
 # إجبار tqdm على الثبات في سطر واحد
 from functools import partial
-tqdm.tqdm = partial(tqdm.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", force_cols=80)
+
+tqdm.tqdm = partial(
+    tqdm.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+)
 # سحب المفاتيح من متغيرات البيئة (التي وضعتها في Secrets)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
@@ -423,11 +427,11 @@ async def upload_to_doodstream(file_path, api_key):
                     )
 
                     if server_res.status_code == 200 and server_res.text.strip():
-                        await asyncio.sleep(1) # تأخير ثانية لضمان استقرار السيرفر
+                        await asyncio.sleep(1)  # تأخير ثانية لضمان استقرار السيرفر
                         try:
                             data = server_res.json()
                         except:
-                            continue # لو الرد مش JSON جرب النطاق اللي بعده
+                            continue  # لو الرد مش JSON جرب النطاق اللي بعده
                         if data.get("result"):
                             upload_url = data.get("result")
                             print(f"✅ تم الاتصال بنجاح عبر: {domain}")
@@ -435,7 +439,6 @@ async def upload_to_doodstream(file_path, api_key):
                 except Exception as e:
                     print(f"⚠️ النطاق {domain} غير مستجيب، يجرب التالي...")
                     continue
-
 
             if not upload_url:
                 print(f"❌ فشل الحصول على سيرفر رفع من جميع النطاقات.")
@@ -476,7 +479,7 @@ async def upload_to_streamtape(file_path, login, key):
             res = await client.get(
                 f"https://api.streamtape.com/upload/server?login={login}&key={key}"
             )
-            await asyncio.sleep(1) # انتظار بسيط
+            await asyncio.sleep(1)  # انتظار بسيط
 
             if res.status_code != 200:
                 return None
@@ -488,9 +491,13 @@ async def upload_to_streamtape(file_path, login, key):
                 return None
             # حماية: فحص وجود النتيجة قبل القراءة
             if res.text.strip() == "OK":
-                print("⚠️ Streamtape رد بـ OK (السيرفر مشغول)، جاري المحاولة مرة أخرى...")
+                print(
+                    "⚠️ Streamtape رد بـ OK (السيرفر مشغول)، جاري المحاولة مرة أخرى..."
+                )
                 await asyncio.sleep(2)
-                res = await client.get(f"https://api.streamtape.com/upload/server?login={login}&key={key}")
+                res = await client.get(
+                    f"https://api.streamtape.com/upload/server?login={login}&key={key}"
+                )
                 data = res.json()
 
             if data.get("status") != 200 or not data.get("result"):

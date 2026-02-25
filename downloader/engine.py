@@ -11,7 +11,6 @@ from functools import partial
 
 from functools import partial
 
-# حذفنا force_cols واستبدلناها بـ ncols لتثبيت العرض برقم محدد
 tqdm = partial(tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80)
 # أضف هذه الأسطر تحت import requests
 from supabase import create_client, Client as SupabaseClient
@@ -52,8 +51,6 @@ class PyrogramProgress:
                 unit="B",
                 unit_scale=True,
                 mininterval=2.0,  # التعديل هنا: تحديث كل ثانيتين
-                ascii=" #",  # رموز بسيطة لكولاب
-                force_cols=80,  # ثبات العرض
             )
 
         self.pbar.update(current - self.pbar.n)

@@ -28,7 +28,9 @@ from downloader.processors import (
 
 # تفعيل nest_asyncio لحل مشاكل تداخل الـ loops في بيئات مثل Kaggle/Colab
 nest_asyncio.apply()
-os.environ["TQDM_MININTERVAL"] = "2.0" # يمنع التحديثات السريعة جداً التي تسبب تكرار الأسطر في التقرير
+os.environ["TQDM_MININTERVAL"] = (
+    "2.0"  # يمنع التحديثات السريعة جداً التي تسبب تكرار الأسطر في التقرير
+)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -436,7 +438,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     mininterval=3.0,  # تحديث كل 3 ثوانٍ فقط (مثالي للسرعات البطيئة في كولاب)
                     maxinterval=10.0,
                     ascii=" #",  # استخدام رموز بسيطة لا تربك المتصفح
-                    force_cols=80,  # تثبيت عرض الشريط لمنع القفزات العرضية
                 )
                 # استبدل سطر إنشاء ProgressStream بـ:
                 stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
