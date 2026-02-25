@@ -4,13 +4,21 @@ import subprocess
 import requests
 import time
 import asyncio
-import tqdm as tqdm_base  # استيراد المكتبة الأصلية باسم مختلف
+
+try:
+    from tqdm import tqdm as tqdm_base
+except ImportError:
+    import tqdm as tqdm_base
+
+from functools import partial
 from functools import partial
 from pyrogram import Client
 from internetarchive import upload as archive_upload
 from supabase import create_client, Client as SupabaseClient
+
+# هنا نمرر الكلاس مباشرة لأنه تم استيراده بالفعل في السطر السابق
 tqdm_custom = partial(
-    tqdm_base.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+    tqdm_base, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
 )
 # تهيئة tqdm المخصصة (حل مشكلة القرف والسطور المكررة)
 # تم حذف force_cols واستبدالها بـ ncols لضمان التوافق
