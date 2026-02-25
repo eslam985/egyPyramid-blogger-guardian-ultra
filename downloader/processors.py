@@ -471,14 +471,21 @@ async def upload_to_doodstream(file_path, api_key):
                     return None
 
                 result = response.json()
-                if result.get("msg") == "OK":
-                    file_code = result["result"][0]["file_code"]
-                    iframe_url = f"https://doodstream.com/e/{file_code}"
-                    print(f"✅ تم الرفع لـ DoodStream: {iframe_url}")
-                    return iframe_url
-                else:
-                    print(f"❌ خطأ DoodStream: {result.get('msg')}")
-                    return None
+                if result.get("msg") == "OK" and result.get("result"):
+                    res_data = result["result"]
+                    # فحص هل النتيجة قائمة أم قاموس لمنع الانهيار
+                    if isinstance(res_data, list) and len(res_data) > 0:
+                        file_code = res_data[0].get("file_code")
+                    else:
+                        file_code = res_data.get("file_code")
+
+                    if file_code:
+                        iframe_url = f"https://doodstream.com/e/{file_code}"
+                        print(f"✅ تم الرفع لـ DoodStream: {iframe_url}")
+                        return iframe_url
+
+                print(f"❌ خطأ DoodStream: {result.get('msg')}")
+                return None
     except Exception as e:
         print(f"⚠️ عطل في DoodStream: {e}")
         return None
@@ -492,7 +499,7 @@ async def upload_to_streamtape(file_path, login, key):
             res = await client.get(
                 f"https://api.streamtape.com/upload/server?login={login}&key={key}"
             )
-            await asyncio.sleep(1)  # انتظار بسيط
+            await asyncio.sleep(3)  # انتظار بسيط
 
             if res.status_code != 200:
                 return None
@@ -501,7 +508,7 @@ async def upload_to_streamtape(file_path, login, key):
             content = res.text.strip()
             if content == "OK":
                 print("⚠️ Streamtape مشغول حالياً (رد بـ OK)، جاري الانتظار 5 ثوانٍ...")
-                await asyncio.sleep(5)
+                await asyncio.sleep(8)
                 res = await client.get(
                     f"https://api.streamtape.com/upload/server?login={login}&key={key}"
                 )
