@@ -73,38 +73,50 @@ def save_to_supabase(
         }
 
         # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
-        existing_media = (
-            supabase.table("medias")
-            .select("id")
-            .eq("title", c_title)
-            .eq("year", str(meta_year))
-            .execute()
-        )
+        # --- بداية الجزء المحصن ضد أخطاء 502 ---
+        m_id = None
+        e_id = None
+        for attempt in range(3):
+            try:
+                # 1. البحث عن أو إنشاء الميديا (Media)
+                existing_media = (
+                    supabase.table("medias")
+                    .select("id")
+                    .eq("title", c_title)
+                    .eq("year", str(meta_year))
+                    .execute()
+                )
 
-        if existing_media.data:
-            # المسلسل موجود، خذ الـ ID فقط ولا تعدل القصة أو البوستر
-            m_id = existing_media.data[0]["id"]
-        else:
-            # المسلسل غير موجود، قم بإنشائه لأول مرة بالبيانات المتاحة
-            media_res = supabase.table("medias").insert(media_payload).execute()
-            m_id = media_res.data[0]["id"]
+                if existing_media.data:
+                    m_id = existing_media.data[0]["id"]
+                else:
+                    media_res = supabase.table("medias").insert(media_payload).execute()
+                    m_id = media_res.data[0]["id"]
 
-        # بناء بيانات الحلقة
-        ep_payload = {
-            "media_id": m_id,
-            "episode_number": actual_ep_no,
-            "identifier": identifier,
-            "is_synced": False,
-        }
+                # 2. إنشاء أو تحديث الحلقة (Episode)
+                ep_payload = {
+                    "media_id": m_id,
+                    "episode_number": actual_ep_no,
+                    "identifier": identifier,
+                    "is_synced": False,
+                }
+                ep_res = (
+                    supabase.table("episodes")
+                    .upsert(ep_payload, on_conflict="media_id, episode_number")
+                    .execute()
+                )
+                e_id = ep_res.data[0]["id"]
 
-        # التعديل هنا: نستخدم 'media_id, episode_number' لمنع التكرار
-        # بدلاً من الـ identifier المتقلب
-        ep_res = (
-            supabase.table("episodes")
-            .upsert(ep_payload, on_conflict="media_id, episode_number")
-            .execute()
-        )
-        e_id = ep_res.data[0]["id"]
+                break  # إذا وصلنا هنا بنجاح، نخرج من حلقة المحاولات
+            except Exception as e:
+                if attempt < 2:
+                    print(
+                        f"⚠️ سوبابيز متعثر في مرحلة التعريف (502)، محاولة {attempt+1}..."
+                    )
+                    time.sleep(3)
+                else:
+                    raise e  # لو فشل تماماً بعد 3 مرات يرمي الخطأ للـ Except الكبيرة
+        # --- نهاية الجزء المحصن ---
 
         # 1. بناء القائمة أولاً
         link_entries = []
@@ -126,10 +138,24 @@ def save_to_supabase(
             )
 
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط (تنفيذ الـ upsert لكل رابط في القائمة)
+        # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط مع آلية إعادة المحاولة (Retry)
         for entry in link_entries:
-            supabase.table("links").upsert(
-                entry, on_conflict="episode_id, server_name"
-            ).execute()
+            for attempt in range(3):  # حاول 3 مرات كحد أقصى
+                try:
+                    supabase.table("links").upsert(
+                        entry, on_conflict="episode_id, server_name"
+                    ).execute()
+                    break  # نجح الأمر، اخرج من حلقة المحاولات لهذا الرابط
+                except Exception as link_err:
+                    if attempt < 2:
+                        print(
+                            f"⚠️ سوبابيز مشغول (502/Timeout)، محاولة رقم {attempt+1} خلال 3 ثوانٍ..."
+                        )
+                        time.sleep(3)
+                    else:
+                        print(
+                            f"❌ فشل تسجيل رابط {entry['server_name']} بعد 3 محاولات: {link_err}"
+                        )
 
         # ابحث عن السطر القديم واستبدله بهذا في ملف المحرك
         print(
