@@ -9,7 +9,10 @@ import time
 import asyncio
 from functools import partial
 
-tqdm = partial(tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", force_cols=80)
+from functools import partial
+
+# حذفنا force_cols واستبدلناها بـ ncols لتثبيت العرض برقم محدد
+tqdm = partial(tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80)
 # أضف هذه الأسطر تحت import requests
 from supabase import create_client, Client as SupabaseClient
 
