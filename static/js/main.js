@@ -289,29 +289,49 @@ window.triggerPublisher = function () {
 
 
 // البحث عن هذا الجزء وتعديله
-document.getElementById('downloadForm').addEventListener('submit', function (e) {
+document.getElementById('downloadForm').addEventListener('submit', async function (e) {
 	e.preventDefault();
-	const formData = new FormData(this);
 
-	fetch('/api/download/run', {
-		method: 'POST',
-		body: formData
-	})
-		.then(response => response.json())
-		// استبدل الجزء داخل الـ then في مستمع الحدث submit بهذا:
-		.then(data => {
-			document.getElementById('downloadTaskModal').style.display = 'none';
-			this.reset();
+	// 1. استخراج البيانات من الفورم
+	const taskUrl = document.getElementById('taskUrl').value;
+	const taskName = document.getElementById('taskName').value;
+	const submitBtn = this.querySelector('button');
 
-			// إظهار الحاوية فوراً
-			const container = document.getElementById('progress-container');
-			container.style.display = 'block';
-			// ملاحظة: لا داعي لتحديث النص هنا يدوياً لأن setInterval ستمسحه وتضع البيانات الحقيقية فوراً
-		})
-		.catch(error => {
-			console.error('Error:', error);
-			alert('حدث خطأ أثناء بدء المهمة');
-		});
+	try {
+		// تعطيل الزرار لمنع التكرار
+		submitBtn.disabled = true;
+		submitBtn.innerText = '🚀 جاري إرسال الأمر للوحش...';
+
+		// 2. حقن البيانات مباشرة في سوبابيز (الجدول الجديد)
+		const { data, error } = await supabase
+			.from('download_tasks')
+			.insert([
+				{
+					source_url: taskUrl,
+					task_name: taskName,
+					status: 'idle',
+					status_message: 'Waiting for Beast...'
+				}
+			]);
+
+		if (error) throw error;
+
+		// 3. النجاح: إخفاء المودال وإظهار حاوية التقدم
+		document.getElementById('downloadTaskModal').style.display = 'none';
+		this.reset();
+
+		const container = document.getElementById('progress-container');
+		if (container) container.style.display = 'block';
+
+		console.log('✅ تم إرسال المهمة بنجاح لجداول المهام');
+
+	} catch (error) {
+		console.error('❌ فشل الإرسال:', error);
+		alert('حدث خطأ أثناء الاتصال بسوبابيز: ' + error.message);
+	} finally {
+		submitBtn.disabled = false;
+		submitBtn.innerText = 'ابدأ السحب والمعالجة';
+	}
 });
 
 
