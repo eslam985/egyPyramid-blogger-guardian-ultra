@@ -1,3 +1,7 @@
+const SUPABASE_URL = "https://syprdvmgktmlrbdqwjif.supabase.co";
+const SUPABASE_KEY = "sb_publishable_W09k2FI0QhaRv5UQKmoabA_Z_rmAkQ3";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // 1. التأكد من تعريف الدوال في النطاق العالمي (Global Scope)
 window.openModal = function (modalId) {
 	const modal = document.getElementById(modalId);
@@ -292,6 +296,8 @@ window.triggerPublisher = function () {
 document.getElementById('downloadForm').addEventListener('submit', async function (e) {
 	e.preventDefault();
 
+
+
 	// 1. استخراج البيانات من الفورم
 	const taskUrl = document.getElementById('taskUrl').value;
 	const taskName = document.getElementById('taskName').value;
@@ -303,7 +309,7 @@ document.getElementById('downloadForm').addEventListener('submit', async functio
 		submitBtn.innerText = '🚀 جاري إرسال الأمر للوحش...';
 
 		// 2. حقن البيانات مباشرة في سوبابيز (الجدول الجديد)
-		const { data, error } = await supabase
+		const { data, error } = await supabaseClient
 			.from('download_tasks')
 			.insert([
 				{
@@ -335,65 +341,48 @@ document.getElementById('downloadForm').addEventListener('submit', async functio
 });
 
 
-function updateDownloadProgress() {
+async function updateDownloadProgress() {
 	const container = document.getElementById('progress-container');
-	// إذا لم يجد الحاوية في الصفحة، لا يكمل الكود (يخرج بصمت)
 	if (!container) return;
 
-	fetch('/api/download/progress')
-		.then(response => {
-			// إذا كان السيرفر يعطي خطأ (ليس 200)، لا تحاول معالجة JSON
-			if (!response.ok) throw new Error("Server Error");
-			return response.json();
-		})
-		.then(data => {
-			// التأكد أن البيانات مصفوفة وليست فارغة أو null
-			if (!data || !Array.isArray(data)) {
-				container.style.display = 'none';
-				return;
+	try {
+		// الحقيقة الصارمة: نسحب البيانات من سوبابيز مباشرة وليس من API
+		const { data: activeTasks, error } = await supabaseClient
+			.from('download_tasks')
+			.select('*')
+			.order('created_at', { ascending: false });
+
+		if (error) throw error;
+
+		if (!activeTasks || activeTasks.length === 0) {
+			container.style.display = 'none';
+			return;
+		}
+
+		container.style.display = 'block';
+
+		// 2. بناء العنوان مع العدد الحقيقي للمهام النشطة
+		let htmlContent = `<h5 style="color: #28a745; margin-bottom: 12px; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 8px;">⏳ معالجة نشطة (${activeTasks.length})</h5>`;
+
+		activeTasks.forEach(task => {
+			const percent = task.progress_percent || 0;
+			// تغيير لون الشريط بناءً على المرحلة
+			// استبدل تحديد barClass بهذا المنطق المتطور:
+			let barClass = "bg-success";
+			let textClass = "text-white";
+
+			if (task.status_message.includes("تليجرام")) barClass = "bg-info";
+			if (task.status_message.includes("VK")) barClass = "bg-primary";
+			if (task.status_message.includes("انتظار")) barClass = "bg-secondary progress-bar-striped";
+			// إذا وجد خطأ، اقلب الألوان للأحمر فوراً
+			if (task.status_message.includes("❌") || task.status_message.includes("خطأ") || task.download_speed === 'Error') {
+				barClass = "bg-danger";
+				textClass = "text-danger fw-black";
 			}
 
-			const activeTasks = data.filter(task => {
-				if (!task || !task.status_message) return false;
+			if (task.download_speed === 'Done') barClass = "bg-warning";
 
-				// الحقيقة الصارمة: المهمة نشطة إذا كانت الحالة ليست 'idle' وسرعة التحميل ليست 'Done'
-				const isPending = task.status_message.includes("انتظار") || task.status_message.includes("Kaggle");
-				const isProcessing = task.download_speed !== 'Done' && task.progress_percent < 100;
-				const hasError = task.status_message.includes("❌") || task.status_message.includes("خطأ");
-
-				return isPending || isProcessing || hasError;
-			});
-			// ... بقية الكود كما هو عندك ...
-			if (!activeTasks || activeTasks.length === 0) {
-				container.style.display = 'none';
-				container.innerHTML = ''; // تنظيف المحتوى تماماً
-				return;
-			}
-
-			container.style.display = 'block';
-
-			// 2. بناء العنوان مع العدد الحقيقي للمهام النشطة
-			let htmlContent = `<h5 style="color: #28a745; margin-bottom: 12px; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 8px;">⏳ معالجة نشطة (${activeTasks.length})</h5>`;
-
-			activeTasks.forEach(task => {
-				const percent = task.progress_percent || 0;
-				// تغيير لون الشريط بناءً على المرحلة
-				// استبدل تحديد barClass بهذا المنطق المتطور:
-				let barClass = "bg-success";
-				let textClass = "text-white";
-
-				if (task.status_message.includes("تليجرام")) barClass = "bg-info";
-				if (task.status_message.includes("VK")) barClass = "bg-primary";
-				if (task.status_message.includes("انتظار")) barClass = "bg-secondary progress-bar-striped";
-				// إذا وجد خطأ، اقلب الألوان للأحمر فوراً
-				if (task.status_message.includes("❌") || task.status_message.includes("خطأ") || task.download_speed === 'Error') {
-					barClass = "bg-danger";
-					textClass = "text-danger fw-black";
-				}
-
-				if (task.download_speed === 'Done') barClass = "bg-warning";
-
-				htmlContent += `
+			htmlContent += `
                     <div class="progress-item mb-2" style="border-bottom: 1px solid #222; padding-bottom: 8px;">
                         <div class="d-flex justify-content-between mb-1" style="font-size: 11px;">
 							<small class="${textClass} fw-bold">${task.status_message}</small>
@@ -411,15 +400,13 @@ function updateDownloadProgress() {
                         </div>
                     </div>
                 `;
-			});
-			if (!container) return;
-			container.innerHTML = htmlContent;
-		})
-		.catch(err => {
-			// الحقيقة الصارمة: لا تفعل شيئاً، فقط انتظر الدورة القادمة (5 ثوانٍ)
 		});
+		if (!container) return;
+		container.innerHTML = htmlContent;
+	} catch (err) {
+		console.error("خطأ في جلب التحديثات:", err);
+	}
 }
-
 // تشغيل الدالة كل 2 ثانية
 setInterval(updateDownloadProgress, 3000);
 window.deleteLink = async function (linkId) {
