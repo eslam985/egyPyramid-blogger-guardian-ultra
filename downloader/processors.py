@@ -400,17 +400,35 @@ async def upload_to_doodstream(file_path, api_key):
     try:
         async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
             # 1. الحصول على سيرفر الرفع المتاح
-            server_res = await client.get(
-                f"https://doodapi.com/api/upload/server?key={api_key}" # جرب d0000d.com أو mdisk.me لو استمر الـ 301
-            )
+            # 1. قائمة النطاقات الاحتياطية (سيجربها الوحش بالترتيب)
+            dood_domains = [
+                "doodstream.com",
+                "doodapi.com",
+                "d0000d.com",
+                "dood.to",
+                "mdisk.me",
+                "dood.so",
+            ]
+            upload_url = None
 
-            # حماية: التأكد من أن السيرفر رد ببيانات صحيحة
-            if server_res.status_code != 200:
-                print(f"❌ DoodStream API Down: {server_res.status_code}")
-                return None
+            for domain in dood_domains:
+                try:
+                    print(f"📡 محاولة الاتصال بـ DoodStream عبر: {domain}")
+                    server_res = await client.get(
+                        f"https://{domain}/api/upload/server?key={api_key}",
+                        timeout=10.0,
+                    )
 
-            data = server_res.json()
-            upload_url = data.get("result")
+                    if server_res.status_code == 200 and server_res.text.strip():
+                        data = server_res.json()
+                        if data.get("result"):
+                            upload_url = data.get("result")
+                            print(f"✅ تم الاتصال بنجاح عبر: {domain}")
+                            break  # اخرج من الحلقة لأننا وجدنا سيرفر يعمل
+                except Exception as e:
+                    print(f"⚠️ النطاق {domain} غير مستجيب، يجرب التالي...")
+                    continue
+
 
             if not upload_url:
                 print(f"❌ فشل الحصول على سيرفر رفع: {data.get('msg')}")
@@ -419,7 +437,12 @@ async def upload_to_doodstream(file_path, api_key):
             # 2. الرفع الفعلي للملف
             with open(file_path, "rb") as f:
                 files = {"file": f}
-                response = await client.post(f"{upload_url}?key={api_key}", files=files)
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                }
+                response = await client.post(
+                    f"{upload_url}?key={api_key}", files=files, headers=headers
+                )
 
                 if response.status_code != 200:
                     return None
@@ -450,9 +473,17 @@ async def upload_to_streamtape(file_path, login, key):
             if res.status_code != 200:
                 return None
 
-            data = res.json()
+            try:
+                data = res.json()
+            except Exception:
+                print(f"❌ Streamtape API Error: {res.text}")
+                return None
             # حماية: فحص وجود النتيجة قبل القراءة
-            if not data.get("result") or "url" not in data["result"]:
+            if (
+                data.get("status") != 200
+                or not data.get("result")
+                or not data["result"].get("url")
+            ):
                 print(f"❌ Streamtape لم يعطِ رابط رفع: {data.get('msg')}")
                 return None
 
