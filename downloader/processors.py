@@ -423,8 +423,10 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         async with httpx.AsyncClient(
             timeout=30.0, headers=headers, follow_redirects=True
         ) as client:
-            # 💡 التعديل: استخدمنا d_api.com بدلاً من doodapi.com لتجنب خطأ 301
-            add_url = f"https://d_api.com/api/upload/url?key={api_key}&url={remote_url}"
+            # 💡 التعديل: استخدمنا doodstream.com بدلاً من doodapi.com لتجنب خطأ 301
+            add_url = (
+                f"https://doodstream.com/api/upload/url?key={api_key}&url={remote_url}"
+            )
             res = await client.get(add_url)
 
             if res.status_code != 200:
@@ -452,7 +454,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
 
 
 async def upload_to_streamtape(login, key, identifier, file_name):
-    """الرفع لـ Streamtape من رابط الأرشيف"""
+    """الرفع لـ Streamtape من رابط الأرشيف مع فحص الحالة بدقة"""
     print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
@@ -465,15 +467,27 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
             if data.get("status") == 200:
                 remote_id = data["result"]["id"]
-                for _ in range(10):
+                print(f"⏳ Streamtape: المهمة قيد التنفيذ (ID: {remote_id})")
+
+                for _ in range(20):  # زيادة وقت الانتظار قليلاً
                     await asyncio.sleep(30)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                     s_res = await client.get(status_url)
                     s_data = s_res.json()
-                    item = s_data["result"].get(remote_id, {})
-                    if item.get("status") == "finished":
-                        return f"https://streamtape.com/e/{item.get('extid')}"
 
+                    # الوصول للبيانات داخل الـ ID المحدد
+                    remote_info = s_data.get("result", {}).get(remote_id, {})
+                    status = remote_info.get("status")
+
+                    if status == "finished":
+                        # استخراج الـ extid الصحيح
+                        extid = remote_info.get("extid")
+                        if extid:
+                            print(f"✅ Streamtape Success!")
+                            return f"https://streamtape.com/e/{extid}"
+                    elif status == "error":
+                        print(f"❌ Streamtape Remote Error.")
+                        return None
     except Exception as e:
         print(f"❌ Streamtape: {e}")
     return None
