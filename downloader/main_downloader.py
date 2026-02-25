@@ -116,14 +116,16 @@ def save_to_supabase(
             supabase.table("links").insert(link_entries).execute()
 
         # ابحث عن السطر القديم واستبدله بهذا في ملف المحرك
-        print(f"🚀 [Supabase]: تم مزامنة البيانات بنجاح | الرمز الفريد: {identifier} | العنوان: {display_title}")
+        print(
+            f"🚀 [Supabase]: تم مزامنة البيانات بنجاح | الرمز الفريد: {identifier} | العنوان: {display_title}"
+        )
         return e_id  # أضف هذا السطر لكي نحصل على الرقم التعريفي
     except Exception as e:
         print(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
         return None
 
 
-async def pyramid_ultimate_beast(url, name, meta_data=None):
+async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # 1. تثبيت المسار القابل للكتابة (الورشة)
     BASE_DIR = "/kaggle/working/project"
 
@@ -316,14 +318,16 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                         speed_match.group(1) if speed_match else "Downloading..."
                     )
 
-                    supabase.table("episodes").update(
-                        {
-                            "progress_percent": int(current_percent),
-                            "status_message": "📥 جاري تحميل الفيديو من المصدر",
-                            "download_speed": speed_str,
-                        }
-                    ).eq("id", e_id).execute()
-                    last_db_update = time.time()
+                    # التحديث يذهب لجدول المهام ليظهر في الداشبورد فوراً
+                    if task_id:
+                        supabase.table("download_tasks").update(
+                            {
+                                "progress_percent": int(current_percent),
+                                "status_message": f"📥 جاري التحميل: {int(current_percent)}%",
+                                "download_speed": speed_str,
+                                "status": "processing",
+                            }
+                        ).eq("id", task_id).execute()
 
     process.wait()
     if process.returncode != 0:
