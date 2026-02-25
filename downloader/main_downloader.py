@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import nest_asyncio
 from urllib.parse import unquote
+from tqdm.auto import tqdm  # تأكد من أنك تستخدم auto في
 
 # تنظيف استيراد سوبابيز
 try:
@@ -27,7 +28,7 @@ from downloader.processors import (
 
 # تفعيل nest_asyncio لحل مشاكل تداخل الـ loops في بيئات مثل Kaggle/Colab
 nest_asyncio.apply()
-
+os.environ["TQDM_MININTERVAL"] = "2.0" # يمنع التحديثات السريعة جداً التي تسبب تكرار الأسطر في التقرير
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -307,7 +308,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
-    pbar_dl = tqdm(total=100, desc=f"📥 جاري التحميل: {display_title[:20]}", unit="%")
+    pbar_dl = tqdm(
+        total=100,
+        desc=f"📥 جاري التحميل: {display_title[:20]}",
+        unit="%",
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        mininterval=1.0,  # لن يطبع أي سطر جديد إلا بعد مرور ثانية كاملة مهما كانت السرعة
+    )
 
     last_db_update = 0
     last_percent = 0  # أضف هذا السطر هنا
@@ -315,8 +322,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         match = re.search(r"(\d+(?:\.\d+)?)%", line)
         if match:
             current_percent = float(match.group(1))
-            if current_percent > last_percent:
-                pbar_dl.update(current_percent - last_percent)
+            # لا تقم بالتحديث إلا إذا زادت النسبة بمقدار 1% على الأقل أو مر وقت كافٍ
+            if current_percent - last_percent >= 1.0:
+                pbar_dl.n = current_percent  # ضبط القيمة مباشرة بدل الـ update التراكمي
+                pbar_dl.refresh()
                 last_percent = current_percent
 
                 # تحديث ساب باز كل 3 ثوانٍ بالسرعة والنسبة
@@ -424,6 +433,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     desc=f"☁️ أرشيف (كامل)",
                     unit="B",
                     unit_scale=True,
+                    mininterval=3.0,  # تحديث كل 3 ثوانٍ فقط (مثالي للسرعات البطيئة في كولاب)
+                    maxinterval=10.0,
+                    ascii=" #",  # استخدام رموز بسيطة لا تربك المتصفح
+                    force_cols=80,  # تثبيت عرض الشريط لمنع القفزات العرضية
                 )
                 # استبدل سطر إنشاء ProgressStream بـ:
                 stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)

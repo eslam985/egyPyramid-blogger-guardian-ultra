@@ -1,14 +1,17 @@
 import requests
+import asyncio
 import google.generativeai as genai
 from deep_translator import GoogleTranslator
 import os
 import re
 import json
 import time
-from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية بدلاً من notebook
 from .engine import ProgressStream
 import httpx  # أو استخدم requests
-
+import tqdm
+# إجبار tqdm على الثبات في سطر واحد
+from functools import partial
+tqdm.tqdm = partial(tqdm.tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", force_cols=80)
 # سحب المفاتيح من متغيرات البيئة (التي وضعتها في Secrets)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
@@ -420,7 +423,11 @@ async def upload_to_doodstream(file_path, api_key):
                     )
 
                     if server_res.status_code == 200 and server_res.text.strip():
-                        data = server_res.json()
+                        await asyncio.sleep(1) # تأخير ثانية لضمان استقرار السيرفر
+                        try:
+                            data = server_res.json()
+                        except:
+                            continue # لو الرد مش JSON جرب النطاق اللي بعده
                         if data.get("result"):
                             upload_url = data.get("result")
                             print(f"✅ تم الاتصال بنجاح عبر: {domain}")
@@ -431,7 +438,7 @@ async def upload_to_doodstream(file_path, api_key):
 
 
             if not upload_url:
-                print(f"❌ فشل الحصول على سيرفر رفع: {data.get('msg')}")
+                print(f"❌ فشل الحصول على سيرفر رفع من جميع النطاقات.")
                 return None
 
             # 2. الرفع الفعلي للملف
@@ -469,6 +476,7 @@ async def upload_to_streamtape(file_path, login, key):
             res = await client.get(
                 f"https://api.streamtape.com/upload/server?login={login}&key={key}"
             )
+            await asyncio.sleep(1) # انتظار بسيط
 
             if res.status_code != 200:
                 return None
@@ -479,11 +487,13 @@ async def upload_to_streamtape(file_path, login, key):
                 print(f"❌ Streamtape API Error: {res.text}")
                 return None
             # حماية: فحص وجود النتيجة قبل القراءة
-            if (
-                data.get("status") != 200
-                or not data.get("result")
-                or not data["result"].get("url")
-            ):
+            if res.text.strip() == "OK":
+                print("⚠️ Streamtape رد بـ OK (السيرفر مشغول)، جاري المحاولة مرة أخرى...")
+                await asyncio.sleep(2)
+                res = await client.get(f"https://api.streamtape.com/upload/server?login={login}&key={key}")
+                data = res.json()
+
+            if data.get("status") != 200 or not data.get("result"):
                 print(f"❌ Streamtape لم يعطِ رابط رفع: {data.get('msg')}")
                 return None
 

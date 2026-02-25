@@ -7,7 +7,9 @@ from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية ب
 import requests
 import time
 import asyncio
+from functools import partial
 
+tqdm = partial(tqdm, dynamic_ncols=False, mininterval=2.0, ascii=" #", force_cols=80)
 # أضف هذه الأسطر تحت import requests
 from supabase import create_client, Client as SupabaseClient
 
@@ -18,9 +20,12 @@ supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 ARCHIVE_ACCESS_KEY = os.getenv("ARCHIVE_ACCESS_KEY")
 ARCHIVE_SECRET_KEY = os.getenv("ARCHIVE_SECRET_KEY")
 
-# الحقيقة الصارمة: يجب مطابقة أسماء الـ Secrets بدقة
-API_ID = os.getenv("API_ID")
-API_HASH = os.getenv("API_HASH")
+# ضعه في منطقة الـ Variables في الأعلى
+# جلب القيم كمناص نصية أولاً
+TELE_ID_RAW = os.getenv("TELEGRAM_API_ID")
+TELE_HASH_RAW = os.getenv("TELEGRAM_API_HASH")
+
+# سيتم التحويل والتحقق داخل دالة الرفع لضمان عدم توقف السكريبت بالكامل
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # جلب الوجهات وتجنب خطأ القائمة الفارغة
@@ -43,6 +48,9 @@ class PyrogramProgress:
                 desc=f"📤 {self.dest_info} {self.name}",
                 unit="B",
                 unit_scale=True,
+                mininterval=2.0,  # التعديل هنا: تحديث كل ثانيتين
+                ascii=" #",  # رموز بسيطة لكولاب
+                force_cols=80,  # ثبات العرض
             )
 
         self.pbar.update(current - self.pbar.n)
@@ -94,7 +102,9 @@ class ProgressStream:
 
             # تحديث كل ثانيتين لضمان استقرار الاتصال وسلاسة الواجهة
             if self.episode_id and (time.time() - self.last_update_time > 2):
-                percent = int((self.pbar.n / self.pbar.total) * 100)
+                # حماية من القسمة على صفر إذا لم يكتمل تحميل الـ pbar
+                total = self.pbar.total if self.pbar.total else 1
+                percent = int((self.pbar.n / total) * 100)
                 try:
                     supabase.table("episodes").update(
                         {
@@ -130,15 +140,23 @@ class ProgressStream:
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     print(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
 
-    api_id_val = int(os.getenv("TELEGRAM_API_ID"))
-    api_hash_val = os.getenv("TELEGRAM_API_HASH")
-    # ملاحظة: سنستخدم session_name ثابت، إذا كانت أول مرة سيطلب الكود الكود من تليجرام
+    # التحقق الذكي من وجود المفاتيح وصحتها
+    if not TELE_ID_RAW or not TELE_HASH_RAW:
+        print("❌ خطأ: مفاتيح Telegram (API_ID/HASH) غير موجودة في الـ Secrets.")
+        return None
+
+    try:
+        final_api_id = int(TELE_ID_RAW)
+        final_api_hash = TELE_HASH_RAW
+    except ValueError:
+        print("❌ خطأ: TELEGRAM_API_ID يجب أن يكون رقماً فقط.")
+        return None
 
     async with Client(
-        "egy_pyramid_user",  # نستخدم session بدلاً من bot_token لعمل forward
-        api_id=api_id_val,
-        api_hash=api_hash_val,
-        in_memory=False,  # يفضل False لحفظ الجلسة فلا يطلب الكود كل مرة
+        "egy_pyramid_user",
+        api_id=final_api_id,
+        api_hash=final_api_hash,
+        in_memory=False,
     ) as app:
 
         # 1. الرفع للمخزن (أول وجهة في القائمة)
@@ -176,11 +194,8 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                             print(f"✅ تم صيد الرابط المباشر: {direct_link}")
 
                             if episode_id:
-                                from services.supabase_db import SupabaseService
-
-                                # نقوم بإضافة الرابط لجدول links وربطه بـ episode_id
-                                # استبدل .insert بـ .upsert في دالتك لضمان التوافق مع القيد الجديد
-                                SupabaseService.client.table("links").upsert(
+                                # استخدام كائن supabase المعرف في أعلى الملف مباشرة
+                                supabase.table("links").upsert(
                                     {
                                         "episode_id": episode_id,
                                         "server_name": "telegram_direct",
