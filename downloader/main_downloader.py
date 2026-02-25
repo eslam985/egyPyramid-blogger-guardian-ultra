@@ -421,6 +421,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 else f"{display_title} - الحلقة {idx}"
             )
             identifier = f"egy_pyr_{timestamp}_e{idx}"
+            # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
+            dood_api_key = "553856lyhogniqkwh0q9m5"
+            st_login = "b4141c9ac5586a160818"
+            st_key = "8OmZOAWa2eHora2"
 
             # 3. الرفع للأرشيف (بالاسم النظيف)
             print(f"📦 أرشفة النسخة الكاملة: {episode_label}")
