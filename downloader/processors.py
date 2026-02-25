@@ -411,141 +411,69 @@ def upload_to_vk_local(title, file_path):
         return None
 
 
-async def upload_to_doodstream(file_path, api_key):
-    print(f"🚀 جاري الرفع إلى DoodStream...")
+async def upload_to_doodstream(api_key, remote_url):
+    print(f"📡 DoodStream: إرسال أمر سحب الرابط...")
     try:
-        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
-            # 1. الحصول على سيرفر الرفع المتاح
-            # 1. قائمة النطاقات الاحتياطية (سيجربها الوحش بالترتيب)
-            dood_domains = [
-                "doodstream.com",
-                "doodapi.com",
-                "d0000d.com",
-                "dood.to",
-                "mdisk.me",
-                "dood.so",
-            ]
-            upload_url = None
-
-            for domain in dood_domains:
-                try:
-                    print(f"📡 محاولة الاتصال بـ DoodStream عبر: {domain}")
-                    server_res = await client.get(
-                        f"https://{domain}/api/upload/server?key={api_key}",
-                        timeout=10.0,
-                    )
-
-                    if server_res.status_code == 200 and server_res.text.strip():
-                        await asyncio.sleep(1)  # تأخير ثانية لضمان استقرار السيرفر
-                        try:
-                            data = server_res.json()
-                        except:
-                            continue  # لو الرد مش JSON جرب النطاق اللي بعده
-                        if data.get("result"):
-                            upload_url = data.get("result")
-                            print(f"✅ تم الاتصال بنجاح عبر: {domain}")
-                            break  # اخرج من الحلقة لأننا وجدنا سيرفر يعمل
-                except Exception as e:
-                    print(f"⚠️ النطاق {domain} غير مستجيب، يجرب التالي...")
-                    continue
-
-            if not upload_url:
-                print(f"❌ فشل الحصول على سيرفر رفع من جميع النطاقات.")
-                return None
-
-            # 2. الرفع الفعلي للملف
-            # 2. الرفع الفعلي للملف (مطابق لتوثيق DoodStream)
-            with open(file_path, "rb") as f:
-                # التوثيق يطلب حقل اسمه api_key وحقل اسمه file
-                form_data = {"api_key": api_key}
-                files = {"file": f}
-
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-
-                # الرفع يتم إلى upload_url مباشرة بدون إضافة ?key في الرابط
-                response = await client.post(
-                    upload_url, data=form_data, files=files, headers=headers
-                )
-
-                if response.status_code != 200:
-                    return None
-
-                result = response.json()
-                if result.get("msg") == "OK" and result.get("result"):
-                    res_data = result["result"]
-                    # فحص هل النتيجة قائمة أم قاموس لمنع الانهيار
-                    if isinstance(res_data, list) and len(res_data) > 0:
-                        file_code = res_data[0].get("file_code")
-                    else:
-                        file_code = res_data.get("file_code")
-
-                    if file_code:
-                        iframe_url = f"https://doodstream.com/e/{file_code}"
-                        print(f"✅ تم الرفع لـ DoodStream: {iframe_url}")
-                        return iframe_url
-
-                print(f"❌ خطأ DoodStream: {result.get('msg')}")
-                return None
-    except Exception as e:
-        print(f"⚠️ عطل في DoodStream: {e}")
-        return None
-
-
-async def upload_to_streamtape(file_path, login, key):
-    print(f"🎬 جاري الرفع إلى Streamtape...")
-    try:
-        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
-            # 1. طلب رابط الرفع المتاح
-            res = await client.get(
-                f"https://api.streamtape.com/upload/server?login={login}&key={key}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. إرسال طلب الرفع
+            add_url = (
+                f"https://doodapi.com/api/upload/url?key={api_key}&url={remote_url}"
             )
-            await asyncio.sleep(3)  # انتظار بسيط
+            res = await client.get(add_url)
+            data = res.json()
 
-            if res.status_code != 200:
-                return None
+            if data.get("msg") == "OK":
+                # الدود يرسل المعرف في result
+                # ملاحظة: أحياناً الدود يعطي الرابط فوراً في بعض الحسابات، سنفحص ذلك:
+                file_code = data.get("result")
+                if file_code and isinstance(file_code, str):
+                    return f"https://doodstream.com/e/{file_code}"
 
-            # التحقق من الرد قبل محاولة تحويله لـ JSON
-            content = res.text.strip()
-            if content == "OK":
-                print("⚠️ Streamtape مشغول حالياً (رد بـ OK)، جاري الانتظار 5 ثوانٍ...")
-                await asyncio.sleep(8)
-                res = await client.get(
-                    f"https://api.streamtape.com/upload/server?login={login}&key={key}"
-                )
-                content = res.text.strip()
+                print("⏳ DoodStream: الرابط قيد المعالجة، ننتظر 10 ثوانٍ...")
+                await asyncio.sleep(10)
 
-            try:
-                data = res.json()
-            except Exception:
-                print(f"❌ فشل تحليل رد Streamtape: {content}")
-                return None
+                # 2. الاستعلام عن حالة آخر عمليات الرفع
+                list_url = f"https://doodapi.com/api/urlupload/list?key={api_key}"
+                list_res = await client.get(list_url)
+                list_data = list_res.json()
 
-            if data.get("status") != 200 or not data.get("result"):
-                print(f"❌ Streamtape لم يعطِ رابط رفع: {data.get('msg')}")
-                return None
-
-            upload_url = data["result"]["url"]
-
-            # 2. الرفع الفعلي للملف
-            with open(file_path, "rb") as f:
-                files = {"file": f}
-                response = await client.post(upload_url, files=files)
-
-                if response.status_code != 200:
-                    return None
-
-                result = response.json()
-                if result.get("status") == 200:
-                    file_code = result["result"]["id"]
-                    stream_url = f"https://streamtape.com/e/{file_code}"
-                    print(f"✅ تم الرفع لـ Streamtape: {stream_url}")
-                    return stream_url
-                else:
-                    print(f"❌ خطأ Streamtape أثناء الرفع")
-                    return None
+                if list_data.get("msg") == "OK" and list_data.get("result"):
+                    # جلب أول ملف تم اكتماله في القائمة
+                    last_file = list_data["result"][0]
+                    if last_file.get("file_code"):
+                        return f"https://doodstream.com/e/{last_file['file_code']}"
     except Exception as e:
-        print(f"⚠️ عطل تقني في Streamtape: {e}")
-        return None
+        print(f"⚠️ DoodStream Remote Error: {e}")
+    return None
+
+
+async def upload_to_streamtape(login, key, remote_url):
+    print(f"📡 Streamtape: إرسال أمر سحب الرابط...")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            add_url = f"https://api.streamtape.com/remotedl/add?login={login}&key={key}&url={remote_url}"
+            res = await client.get(add_url)
+            data = res.json()
+
+            if data.get("status") == 200:
+                remote_id = data["result"]["id"]
+
+                # ننتظر قليلاً ليقوم السيرفر ببدء السحب
+                await asyncio.sleep(5)
+
+                # الاستعلام عن الرابط النهائي باستخدام الـ ID
+                status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
+                status_res = await client.get(status_url)
+                status_data = status_res.json()
+
+                if status_data.get("status") == 200:
+                    # إذا كان السحب اكتمل أو بدأ، سيعطينا الـ fileid
+                    file_id = status_data["result"][remote_id].get("fileid")
+                    if file_id:
+                        return f"https://streamtape.com/e/{file_id}"
+    except Exception as e:
+        print(f"⚠️ Streamtape Remote Error: {e}")
+    return None
 
 
 async def upload_to_mixdrop(file_path, email, key):
