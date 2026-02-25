@@ -14,7 +14,11 @@ from .processors import *
 from .engine import *
 import nest_asyncio
 import asyncio
-
+from downloader.processors import (
+    upload_to_doodstream,
+    upload_to_streamtape,
+    upload_to_mixdrop,
+)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -548,12 +552,6 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
 
-                from downloader.processors import (
-                    upload_to_doodstream,
-                    upload_to_streamtape,
-                    upload_to_mixdrop,
-                )
-
                 dood_api_key = "553856lyhogniqkwh0q9m5"
 
                 dood_url = await upload_to_doodstream(vid_path, dood_api_key)
@@ -583,12 +581,6 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
 
-                from downloader.processors import (
-                    upload_to_doodstream,
-                    upload_to_streamtape,
-                    upload_to_mixdrop,
-                )
-
                 st_login = "b4141c9ac5586a160818"
                 st_key = "8OmZOAWa2eHora2"
 
@@ -608,9 +600,6 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                     print(f"✅ تم حفظ رابط Streamtape")
             except Exception as e:
                 print(f"⚠️ فشل Streamtape: {e}")
-
-            # --- 8. الرفع لـ Streamtape ---
-            # (كود ستريم تيب الموجود عندك هنا)
 
             # --- 9. الرفع لـ MixDrop (ضع الكود الجديد هنا) ---
             try:
@@ -635,20 +624,6 @@ async def pyramid_ultimate_beast(url, name, meta_data=None):
                     print(f"✅ تم حفظ رابط MixDrop")
             except Exception as e:
                 print(f"⚠️ فشل MixDrop: {e}")
-
-            # --- التحديث النهائي الشامل لجدول الحلقات ---
-            try:
-                save_to_supabase(
-                    voe_watch,
-                    voe_down,
-                    vk_url,  # ... بقية المتغيرات
-                )
-            except Exception as e:
-                print(f"❌ فشل التحديث النهائي: {e}")
-
-            # --- حذف الملف (Cleanup) ---
-            if os.path.exists(vid_path):
-                os.remove(vid_path)
 
             # --- التحديث النهائي الشامل لجدول الحلقات (خارج الـ try الخاص بـ دود ستريم) ---
             try:

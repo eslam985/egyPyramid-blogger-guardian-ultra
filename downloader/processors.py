@@ -7,7 +7,7 @@ import json
 import time
 from tqdm import tqdm  # سنغيرها لاحقاً لـ tqdm العادية بدلاً من notebook
 from .engine import ProgressStream
-import httpx # أو استخدم requests
+import httpx  # أو استخدم requests
 
 # سحب المفاتيح من متغيرات البيئة (التي وضعتها في Secrets)
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -381,10 +381,14 @@ def upload_to_vk_local(title, file_path):
             if response.status_code == 200:
                 # الحقيقة الصارمة: بمجرد وصول الحالة 200، الفيديو أصبح لدى VK
                 # لا نحتاج لفك تشفير الـ JSON طالما نملك الـ IDs مسبقاً
-                print(f"✅ VK Upload Success: https://vk.com/video{owner_id}_{video_id}")
+                print(
+                    f"✅ VK Upload Success: https://vk.com/video{owner_id}_{video_id}"
+                )
                 return f"https://vk.com/video{owner_id}_{video_id}"
             else:
-                print(f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}")
+                print(
+                    f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}"
+                )
                 return None
     except Exception as e:
         print(f"⚠️ فشل VK المحلي: {e}")
@@ -399,30 +403,38 @@ async def upload_to_doodstream(file_path, api_key):
             server_res = await client.get(
                 f"https://doodapi.com/api/upload/server?key={api_key}"
             )
-            upload_url = server_res.json().get("result")
+
+            # حماية: التأكد من أن السيرفر رد ببيانات صحيحة
+            if server_res.status_code != 200:
+                print(f"❌ DoodStream API Down: {server_res.status_code}")
+                return None
+
+            data = server_res.json()
+            upload_url = data.get("result")
 
             if not upload_url:
-                print("❌ فشل الحصول على سيرفر رفع من DoodStream")
+                print(f"❌ فشل الحصول على سيرفر رفع: {data.get('msg')}")
                 return None
 
             # 2. الرفع الفعلي للملف
             with open(file_path, "rb") as f:
                 files = {"file": f}
-                # نرسل الطلب مع المفتاح مرة أخرى في الـ POST
                 response = await client.post(f"{upload_url}?key={api_key}", files=files)
+
+                if response.status_code != 200:
+                    return None
 
                 result = response.json()
                 if result.get("msg") == "OK":
                     file_code = result["result"][0]["file_code"]
-                    # 3. تكوين رابط الـ Iframe المباشر
                     iframe_url = f"https://doodstream.com/e/{file_code}"
                     print(f"✅ تم الرفع لـ DoodStream: {iframe_url}")
                     return iframe_url
                 else:
-                    print(f"❌ خطأ أثناء الرفع: {result.get('msg')}")
+                    print(f"❌ خطأ DoodStream: {result.get('msg')}")
                     return None
     except Exception as e:
-        print(f"⚠️ خطأ في DoodStream: {e}")
+        print(f"⚠️ عطل في DoodStream: {e}")
         return None
 
 
@@ -434,9 +446,14 @@ async def upload_to_streamtape(file_path, login, key):
             res = await client.get(
                 f"https://api.streamtape.com/upload/server?login={login}&key={key}"
             )
+
+            if res.status_code != 200:
+                return None
+
             data = res.json()
-            if data["status"] != 200:
-                print(f"❌ فشل الحصول على سيرفر Streamtape: {data.get('msg')}")
+            # حماية: فحص وجود النتيجة قبل القراءة
+            if not data.get("result") or "url" not in data["result"]:
+                print(f"❌ Streamtape لم يعطِ رابط رفع: {data.get('msg')}")
                 return None
 
             upload_url = data["result"]["url"]
@@ -445,19 +462,21 @@ async def upload_to_streamtape(file_path, login, key):
             with open(file_path, "rb") as f:
                 files = {"file": f}
                 response = await client.post(upload_url, files=files)
-                result = response.json()
 
-                if result["status"] == 200:
+                if response.status_code != 200:
+                    return None
+
+                result = response.json()
+                if result.get("status") == 200:
                     file_code = result["result"]["id"]
-                    # رابط الإيفريم (Embed)
                     stream_url = f"https://streamtape.com/e/{file_code}"
                     print(f"✅ تم الرفع لـ Streamtape: {stream_url}")
                     return stream_url
                 else:
-                    print(f"❌ خطأ Streamtape أثناء الرفع: {result.get('msg')}")
+                    print(f"❌ خطأ Streamtape أثناء الرفع")
                     return None
     except Exception as e:
-        print(f"⚠️ خطأ تقني في Streamtape: {e}")
+        print(f"⚠️ عطل تقني في Streamtape: {e}")
         return None
 
 
@@ -489,7 +508,6 @@ async def upload_to_mixdrop(file_path, email, key):
     except Exception as e:
         print(f"⚠️ خطأ تقني في MixDrop: {e}")
         return None
-
 
 
 # ابحث عن الدالة وغير السطر الخاص بالـ re.sub
