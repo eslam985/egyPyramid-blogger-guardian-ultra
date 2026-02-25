@@ -2,23 +2,31 @@ import os
 import time
 import asyncio
 import re
-from supabase import create_client, Client as SupabaseClient
-from urllib.parse import unquote
-
-# أضف هذه الاستيرادات في الأعلى فوراً
 import shutil
 import subprocess
+import nest_asyncio
+from urllib.parse import unquote
 
-# احذف الأسطر الأربعة الخاصة بالـ imports لـ processors و engine واستبدلها بهذين السطرين فقط:
+# تنظيف استيراد سوبابيز
+try:
+    from supabase import create_client, Client as SupabaseClient
+except ImportError:
+    print("❌ خطأ: مكتبة supabase غير مثبتة. نفذ: pip install supabase")
+
+# حل مشكلة الأسماء غير المعرفة (Explicit Imports)
 from .processors import *
 from .engine import *
-import nest_asyncio
-import asyncio
+from .processors import get_clean_media_data, get_movie_data
+
+# استيراد دوال الرفع من المسار الصحيح
 from downloader.processors import (
     upload_to_doodstream,
     upload_to_streamtape,
     upload_to_mixdrop,
 )
+
+# تفعيل nest_asyncio لحل مشاكل تداخل الـ loops في بيئات مثل Kaggle/Colab
+nest_asyncio.apply()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -91,8 +99,7 @@ def save_to_supabase(
         )
         e_id = ep_res.data[0]["id"]
 
-        supabase.table("links").delete().eq("episode_id", e_id).execute()
-
+        # 1. بناء القائمة أولاً
         link_entries = []
         if current_voe and current_voe != "Failed":
             link_entries.append(
@@ -111,9 +118,11 @@ def save_to_supabase(
                 {"episode_id": e_id, "server_name": "download", "url": current_down}
             )
 
-        # في نهاية بلوك الـ try داخل دالة save_to_supabase
-        if link_entries:
-            supabase.table("links").insert(link_entries).execute()
+        # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط (تنفيذ الـ upsert لكل رابط في القائمة)
+        for entry in link_entries:
+            supabase.table("links").upsert(
+                entry, on_conflict="episode_id, server_name"
+            ).execute()
 
         # ابحث عن السطر القديم واستبدله بهذا في ملف المحرك
         print(
@@ -562,9 +571,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 dood_url = await upload_to_doodstream(vid_path, dood_api_key)
 
                 if dood_url:
-                    from services.supabase_db import SupabaseService
-
-                    SupabaseService.client.table("links").upsert(
+                    supabase.table("links").upsert(
                         {
                             "episode_id": e_id,
                             "server_name": "doodstream",
@@ -592,9 +599,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 st_url = await upload_to_streamtape(vid_path, st_login, st_key)
 
                 if st_url:
-                    from services.supabase_db import SupabaseService
-
-                    SupabaseService.client.table("links").upsert(
+                    supabase.table("links").upsert(
                         {
                             "episode_id": e_id,
                             "server_name": "streamtape",
@@ -620,9 +625,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     vid_path, "ee17172@gmail.com", "3KO11MEVXQZJiWy"
                 )
                 if mix_url:
-                    from services.supabase_db import SupabaseService
-
-                    SupabaseService.client.table("links").upsert(
+                    supabase.table("links").upsert(
                         {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
                         on_conflict="episode_id, server_name",
                     ).execute()

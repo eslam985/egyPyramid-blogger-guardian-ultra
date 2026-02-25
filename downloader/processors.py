@@ -398,10 +398,10 @@ def upload_to_vk_local(title, file_path):
 async def upload_to_doodstream(file_path, api_key):
     print(f"🚀 جاري الرفع إلى DoodStream...")
     try:
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
             # 1. الحصول على سيرفر الرفع المتاح
             server_res = await client.get(
-                f"https://doodapi.com/api/upload/server?key={api_key}"
+                f"https://doodapi.com/api/upload/server?key={api_key}" # جرب d0000d.com أو mdisk.me لو استمر الـ 301
             )
 
             # حماية: التأكد من أن السيرفر رد ببيانات صحيحة
@@ -441,7 +441,7 @@ async def upload_to_doodstream(file_path, api_key):
 async def upload_to_streamtape(file_path, login, key):
     print(f"🎬 جاري الرفع إلى Streamtape...")
     try:
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
             # 1. طلب رابط الرفع المتاح
             res = await client.get(
                 f"https://api.streamtape.com/upload/server?login={login}&key={key}"
@@ -483,7 +483,7 @@ async def upload_to_streamtape(file_path, login, key):
 async def upload_to_mixdrop(file_path, email, key):
     print(f"💧 جاري الرفع إلى MixDrop...")
     try:
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
             # البيانات المطلوبة حسب التوثيق
             data = {"email": email, "key": key}
             # إرسال الملف فعلياً
