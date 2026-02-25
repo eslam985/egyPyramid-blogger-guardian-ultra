@@ -274,6 +274,70 @@ def upload_poster_to_cloudinary(image_url):
         return image_url  # في حال الفشل يرجع الرابط الأصلي
 
 
+def upload_to_vk_local(title, file_path):
+    try:
+        if not os.path.exists(file_path):
+            print(f"⚠️ ملف VK غير موجود: {file_path}")
+            return None
+
+        # 1. حجز المكان
+        api_url = "https://api.vk.com/method/video.save"
+        params = {
+            "name": title,
+            "group_id": VK_GROUP_ID,
+            "access_token": VK_ACCESS_TOKEN,
+            "v": "5.131",
+        }
+        res_save = requests.get(api_url, params=params).json()
+
+        print(f"DEBUG: VK Save API Response: {res_save}")
+
+        if "response" in res_save:
+            upload_url = res_save["response"]["upload_url"]
+            video_id = res_save["response"]["video_id"]
+            owner_id = res_save["response"]["owner_id"]
+
+            file_size = os.path.getsize(file_path)
+            pbar_vk = tqdm_custom(
+                total=file_size,
+                desc=f"📡 VK Upload: {title}",
+                unit="B",
+                unit_scale=True,
+            )
+            stream = ProgressStream(file_path, pbar_vk)
+
+            # 2. الرفع المباشر مع تحديد نوع الملف
+            # Using 'files' parameter for multipart-encoded file upload
+            print(
+                f"📡 جاري ضخ بايتات الفيديو لـ VK (المسار المحلي) - URL: {upload_url}..."
+            )
+            # requests will set the correct Content-Type for multipart/form-data automatically
+            files = {"video_file": (os.path.basename(file_path), stream, "video/mp4")}
+            response = requests.post(upload_url, files=files, timeout=None)
+
+            pbar_vk.close()
+            stream.close()
+
+            print(f"DEBUG: VK File Upload Response Status: {response.status_code}")
+            print(f"DEBUG: VK File Upload Response Text: {response.text}")
+
+            if response.status_code == 200:
+                # الحقيقة الصارمة: بمجرد وصول الحالة 200، الفيديو أصبح لدى VK
+                # لا نحتاج لفك تشفير الـ JSON طالما نملك الـ IDs مسبقاً
+                print(
+                    f"✅ VK Upload Success: https://vk.com/video{owner_id}_{video_id}"
+                )
+                return f"https://vk.com/video{owner_id}_{video_id}"
+            else:
+                print(
+                    f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}"
+                )
+                return None
+    except Exception as e:
+        print(f"⚠️ فشل VK المحلي: {e}")
+        return None
+
+
 def upload_to_voe_api(file_path, identifier):
     try:
         file_name = os.path.basename(file_path).replace(" ", "%20")
@@ -347,110 +411,59 @@ def upload_to_voe_api(file_path, identifier):
         return None
 
 
-def upload_to_vk_local(title, file_path):
+async def upload_to_doodstream(api_key, identifier, file_name):
+    """الرفع لـ DoodStream من رابط الأرشيف مع فحص الحالة"""
+    print(f"📡 DoodStream: إرسال أمر سحب من الأرشيف...")
     try:
-        if not os.path.exists(file_path):
-            print(f"⚠️ ملف VK غير موجود: {file_path}")
-            return None
-
-        # 1. حجز المكان
-        api_url = "https://api.vk.com/method/video.save"
-        params = {
-            "name": title,
-            "group_id": VK_GROUP_ID,
-            "access_token": VK_ACCESS_TOKEN,
-            "v": "5.131",
-        }
-        res_save = requests.get(api_url, params=params).json()
-
-        print(f"DEBUG: VK Save API Response: {res_save}")
-
-        if "response" in res_save:
-            upload_url = res_save["response"]["upload_url"]
-            video_id = res_save["response"]["video_id"]
-            owner_id = res_save["response"]["owner_id"]
-
-            file_size = os.path.getsize(file_path)
-            pbar_vk = tqdm_custom(
-                total=file_size,
-                desc=f"📡 VK Upload: {title}",
-                unit="B",
-                unit_scale=True,
-            )
-            stream = ProgressStream(file_path, pbar_vk)
-
-            # 2. الرفع المباشر مع تحديد نوع الملف
-            # Using 'files' parameter for multipart-encoded file upload
-            print(
-                f"📡 جاري ضخ بايتات الفيديو لـ VK (المسار المحلي) - URL: {upload_url}..."
-            )
-            # requests will set the correct Content-Type for multipart/form-data automatically
-            files = {"video_file": (os.path.basename(file_path), stream, "video/mp4")}
-            response = requests.post(upload_url, files=files, timeout=None)
-
-            pbar_vk.close()
-            stream.close()
-
-            print(f"DEBUG: VK File Upload Response Status: {response.status_code}")
-            print(f"DEBUG: VK File Upload Response Text: {response.text}")
-
-            if response.status_code == 200:
-                # الحقيقة الصارمة: بمجرد وصول الحالة 200، الفيديو أصبح لدى VK
-                # لا نحتاج لفك تشفير الـ JSON طالما نملك الـ IDs مسبقاً
-                print(
-                    f"✅ VK Upload Success: https://vk.com/video{owner_id}_{video_id}"
-                )
-                return f"https://vk.com/video{owner_id}_{video_id}"
-            else:
-                print(
-                    f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}"
-                )
-                return None
-    except Exception as e:
-        print(f"⚠️ فشل VK المحلي: {e}")
-        return None
-
-
-async def upload_to_doodstream(api_key, remote_url):
-    print(f"📡 DoodStream: إرسال أمر سحب الرابط...")
-    try:
+        remote_url = (
+            f"https://archive.org/download/{identifier}/{file_name.replace(' ', '%20')}"
+        )
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1. إرسال طلب الرفع
+            # 1. إرسال طلب السحب
             add_url = (
                 f"https://doodapi.com/api/upload/url?key={api_key}&url={remote_url}"
             )
             res = await client.get(add_url)
-            data = res.json()
+
+            # حماية من خطأ JSON (الذي واجهته)
+            try:
+                data = res.json()
+            except:
+                print(f"⚠️ DoodStream رد ببيانات غير صالحة، جاري المحاولة برابط بديل...")
+                return None
 
             if data.get("msg") == "OK":
-                # الدود يرسل المعرف في result
-                # ملاحظة: أحياناً الدود يعطي الرابط فوراً في بعض الحسابات، سنفحص ذلك:
-                file_code = data.get("result")
-                if file_code and isinstance(file_code, str):
-                    return f"https://doodstream.com/e/{file_code}"
+                print("⏳ DoodStream: تم قبول الأمر، جاري تتبع المهمة...")
 
-                print("⏳ DoodStream: الرابط قيد المعالجة، ننتظر 10 ثوانٍ...")
-                await asyncio.sleep(10)
+                # هنا ندخل في حلقة فحص (مثل Voe)
+                for _ in range(15):  # محاولة الفحص لمدة 5 دقائق تقريباً
+                    await asyncio.sleep(20)
+                    list_url = f"https://doodapi.com/api/urlupload/list?key={api_key}"
+                    list_res = await client.get(list_url)
+                    list_data = list_res.json()
 
-                # 2. الاستعلام عن حالة آخر عمليات الرفع
-                list_url = f"https://doodapi.com/api/urlupload/list?key={api_key}"
-                list_res = await client.get(list_url)
-                list_data = list_res.json()
-
-                if list_data.get("msg") == "OK" and list_data.get("result"):
-                    # جلب أول ملف تم اكتماله في القائمة
-                    last_file = list_data["result"][0]
-                    if last_file.get("file_code"):
-                        return f"https://doodstream.com/e/{last_file['file_code']}"
+                    if list_data.get("msg") == "OK" and list_data.get("result"):
+                        for item in list_data["result"]:
+                            # التحقق أن اسم الملف هو نفس الاسم الذي نرفعه حالياً
+                            if item.get("file_code") and (
+                                file_name in item.get("title", "")
+                            ):
+                                print(f"✅ DoodStream Success!")
+                                return f"https://doodstream.com/e/{item['file_code']}"
     except Exception as e:
-        print(f"⚠️ DoodStream Remote Error: {e}")
+        print(f"⚠️ DoodStream Error: {e}")
     return None
 
 
-async def upload_to_streamtape(login, key, remote_url):
-    print(f"📡 Streamtape: إرسال أمر سحب الرابط...")
+async def upload_to_streamtape(login, key, identifier, file_name):
+    """الرفع لـ Streamtape من رابط الأرشيف مع فحص الحالة"""
+    print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
+        remote_url = (
+            f"https://archive.org/download/{identifier}/{file_name.replace(' ', '%20')}"
+        )
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. إضافة المهمة
             add_url = f"https://api.streamtape.com/remotedl/add?login={login}&key={key}&url={remote_url}"
             res = await client.get(add_url)
             data = res.json()
@@ -458,21 +471,20 @@ async def upload_to_streamtape(login, key, remote_url):
             if data.get("status") == 200:
                 remote_id = data["result"]["id"]
 
-                # ننتظر قليلاً ليقوم السيرفر ببدء السحب
-                await asyncio.sleep(5)
+                # حلقة الفحص
+                for _ in range(15):
+                    await asyncio.sleep(20)
+                    status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
+                    status_res = await client.get(status_url)
+                    status_data = status_res.json()
 
-                # الاستعلام عن الرابط النهائي باستخدام الـ ID
-                status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
-                status_res = await client.get(status_url)
-                status_data = status_res.json()
-
-                if status_data.get("status") == 200:
-                    # إذا كان السحب اكتمل أو بدأ، سيعطينا الـ fileid
-                    file_id = status_data["result"][remote_id].get("fileid")
-                    if file_id:
-                        return f"https://streamtape.com/e/{file_id}"
+                    if status_data.get("status") == 200:
+                        file_id = status_data["result"][remote_id].get("fileid")
+                        if file_id:
+                            print(f"✅ Streamtape Success!")
+                            return f"https://streamtape.com/e/{file_id}"
     except Exception as e:
-        print(f"⚠️ Streamtape Remote Error: {e}")
+        print(f"⚠️ Streamtape Error: {e}")
     return None
 
 

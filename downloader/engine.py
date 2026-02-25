@@ -214,47 +214,6 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                                 print(
                                     f"🔗 تم ربط رابط التليجرام بالحلقة {episode_id} في جدول links"
                                 )
-                                # --- الخطة الجديدة: الرفع برابط (Remote Upload) ---
-                            # نستورد الدوال هنا لتجنب التداخل (Circular Import)
-                            from downloader.processors import (
-                                upload_to_doodstream,
-                                upload_to_streamtape,
-                            )
-
-                            print(
-                                f"🚀 البدء في الرفع برابط للسيرفرات (Remote Upload)..."
-                            )
-
-                            # 1. الرفع لـ DoodStream
-                            dood_api_key = "553856lyhogniqkwh0q9m5"
-                            dood_url = await upload_to_doodstream(
-                                dood_api_key, direct_link
-                            )
-                            if dood_url and episode_id:
-                                supabase.table("links").upsert(
-                                    {
-                                        "episode_id": episode_id,
-                                        "server_name": "doodstream",
-                                        "url": dood_url,
-                                    },
-                                    on_conflict="episode_id, server_name",
-                                ).execute()
-
-                            # 2. الرفع لـ Streamtape
-                            st_login = "b4141c9ac5586a160818"
-                            st_key = "8OmZOAWa2eHora2"
-                            st_url = await upload_to_streamtape(
-                                st_login, st_key, direct_link
-                            )
-                            if st_url and episode_id:
-                                supabase.table("links").upsert(
-                                    {
-                                        "episode_id": episode_id,
-                                        "server_name": "streamtape",
-                                        "url": st_url,
-                                    },
-                                    on_conflict="episode_id, server_name",
-                                ).execute()
 
         except Exception as e:
             print(f"❌ فشل في عملية التليجرام: {e}")

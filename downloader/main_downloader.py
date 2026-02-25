@@ -414,6 +414,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         for idx, vid_path in enumerate(videos, 1):
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
+            file_name = os.path.basename(vid_path)
             episode_label = (
                 f"{display_title}"
                 if len(videos) == 1
@@ -536,7 +537,44 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
             voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
 
-            # --- التحديث الأول: احفظ رابط Voe فوراً ---
+            # --- 7. الرفع لـ DoodStream و Streamtape (عبر الأرشيف) ---
+            if identifier:
+                # الرفع لـ DoodStream
+                try:
+                    d_url = await upload_to_doodstream(
+                        dood_api_key, identifier, file_name
+                    )
+                    if d_url:
+                        supabase.table("links").upsert(
+                            {
+                                "episode_id": e_id,
+                                "server_name": "doodstream",
+                                "url": d_url,
+                            },
+                            on_conflict="episode_id, server_name",
+                        ).execute()
+                        print(f"✅ تم حفظ رابط DoodStream")
+                except Exception as e:
+                    print(f"⚠️ فشل مهمة DoodStream Remote: {e}")
+
+                # الرفع لـ Streamtape (منفصل ومستقل تماماً)
+                try:
+                    s_url = await upload_to_streamtape(
+                        st_login, st_key, identifier, file_name
+                    )
+                    if s_url:
+                        supabase.table("links").upsert(
+                            {
+                                "episode_id": e_id,
+                                "server_name": "streamtape",
+                                "url": s_url,
+                            },
+                            on_conflict="episode_id, server_name",
+                        ).execute()
+                        print(f"✅ تم حفظ رابط Streamtape")
+                except Exception as e:
+                    print(f"⚠️ فشل مهمة Streamtape Remote: {e}")
+
             try:
                 save_to_supabase(
                     voe_watch,
@@ -573,61 +611,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     vk_url = vk_result
             except Exception as e:
                 print(f"⚠️ فشل VK: {e}")
-            # --- 7. الرفع لـ DoodStream ---
-            print(f"🚀 جاري الرفع لـ DoodStream...")
-            try:
-                if e_id:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "🎥 جاري الرفع لـ DoodStream...",
-                            "progress_percent": 98,
-                        }
-                    ).eq("id", e_id).execute()
-
-                dood_api_key = "553856lyhogniqkwh0q9m5"
-
-                dood_url = await upload_to_doodstream(vid_path, dood_api_key)
-
-                if dood_url:
-                    supabase.table("links").upsert(
-                        {
-                            "episode_id": e_id,
-                            "server_name": "doodstream",
-                            "url": dood_url,
-                        },
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    print(f"✅ تم حفظ رابط DoodStream")
-            except Exception as e:
-                print(f"⚠️ فشل DoodStream: {e}")
-                # --- 8. الرفع لـ Streamtape (الإضافة النهائية) ---
-            print(f"🚀 جاري الرفع لـ Streamtape...")
-            try:
-                if e_id:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "📽️ جاري الرفع لـ Streamtape...",
-                            "progress_percent": 99,
-                        }
-                    ).eq("id", e_id).execute()
-
-                st_login = "b4141c9ac5586a160818"
-                st_key = "8OmZOAWa2eHora2"
-
-                st_url = await upload_to_streamtape(vid_path, st_login, st_key)
-
-                if st_url:
-                    supabase.table("links").upsert(
-                        {
-                            "episode_id": e_id,
-                            "server_name": "streamtape",
-                            "url": st_url,
-                        },
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    print(f"✅ تم حفظ رابط Streamtape")
-            except Exception as e:
-                print(f"⚠️ فشل Streamtape: {e}")
 
             # --- 9. الرفع لـ MixDrop (ضع الكود الجديد هنا) ---
             try:
