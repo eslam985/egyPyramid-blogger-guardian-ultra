@@ -13,13 +13,13 @@ from internetarchive import upload as archive_upload
 from .processors import (
     tqdm,
     get_clean_media_data,
-    upload_poster_to_cloudinary,
     get_movie_data,
     upload_to_doodstream,
     upload_to_streamtape,
     upload_to_mixdrop,
     upload_to_voe_api,
-    upload_to_vk_local,  # <--- تأكد من إضافة VK هنا
+    upload_to_vk_local,
+    upload_to_lulustream,
 )
 
 # 2. استيراد المحرك
@@ -44,7 +44,7 @@ supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 ARCHIVE_ACCESS_KEY = "ufnS9MloPsaLYXSl"
 ARCHIVE_SECRET_KEY = "euu3u0Lm0bcMFyYB"
-
+lu_key = "244676va68ovreoinx1k42"
 
 def save_to_supabase(
     current_voe,
@@ -550,42 +550,46 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).eq("id", e_id).execute()
                 continue  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
 
-            # --- 5. الرفع المتوازي للثلاثي (Voe + DoodStream + Streamtape) عبر الأرشيف ---
+            # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
             if identifier:
-                print(f"🚀 البدء في الرفع المتوازي للثلاثي (Voe + Dood + Tape)...")
+                # تحديث التسمية لتشمل Lulu
+                print(
+                    f"🚀 البدء في الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu)..."
+                )
 
-                # تحديث حالة سوبابيز مرة واحدة للكل
                 if e_id:
                     supabase.table("episodes").update(
                         {
-                            "status_message": "🚀 جاري الرفع المتوازي لسيرفرات المشاهدة...",
+                            "status_message": "🚀 جاري الرفع المتوازي لـ 4 سيرفرات مشاهدة...",
                             "progress_percent": 90,
                             "download_speed": "Parallel Uploading...",
                         }
                     ).eq("id", e_id).execute()
 
-                # 1. تحضير المهام (بدون استدعاء خارجي لـ Voe)
-                # 1. تحضير المهام مع فواصل زمنية (تجنب Rate Limit الأرشيف)
+                # 1. تحضير المهام مع فواصل زمنية (تجنب زحمة الطلبات)
                 task_voe = upload_to_voe_api(vid_path, identifier)
 
-                await asyncio.sleep(10)  # فجوة 10 ثوانٍ
+                await asyncio.sleep(8)  # تقليل الفجوة قليلاً لتوفير الوقت
                 task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
 
-                await asyncio.sleep(10)  # فجوة 10 ثوانٍ أخرى
+                await asyncio.sleep(8)
                 task_tape = upload_to_streamtape(
                     st_login, st_key, identifier, file_name
                 )
 
-                # 2. إطلاق الصواريخ الثلاثة معاً (هنا يبدأ التوفير الحقيقي للوقت)
-                file_id, d_url, s_url = await asyncio.gather(
-                    task_voe, task_dood, task_tape
+                await asyncio.sleep(8)
+                # إضافة مهمة LuluStream (تأكد من وجود متغيرات lu_key و lu_login)
+                task_lulu = upload_to_lulustream(lu_key, identifier, file_name)
+
+                # 2. إطلاق الصواريخ الأربعة معاً
+                file_id, d_url, s_url, lu_url = await asyncio.gather(
+                    task_voe, task_dood, task_tape, task_lulu
                 )
 
                 # --- 6. معالجة النتائج وحفظها ---
 
                 # نتائج Voe
                 voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
-                voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
                 if file_id:
                     print(f"✅ Voe Saved! ID: {file_id}")
 
@@ -604,6 +608,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         on_conflict="episode_id, server_name",
                     ).execute()
                     print(f"✅ Streamtape Saved!")
+
+                # نتائج LuluStream (إضافة الحفظ لسوبابيز)
+                if lu_url:
+                    supabase.table("links").upsert(
+                        {
+                            "episode_id": e_id,
+                            "server_name": "lulustream",
+                            "url": lu_url,
+                        },
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ LuluStream Saved!")
 
             try:
                 save_to_supabase(

@@ -324,17 +324,35 @@ def upload_to_vk_local(title, file_path):
             print(f"DEBUG: VK File Upload Response Text: {response.text}")
 
             if response.status_code == 200:
-                # الحقيقة الصارمة: بمجرد وصول الحالة 200، الفيديو أصبح لدى VK
-                # لا نحتاج لفك تشفير الـ JSON طالما نملك الـ IDs مسبقاً
-                print(
-                    f"✅ VK Upload Success: https://vk.com/video{owner_id}_{video_id}"
-                )
-                return f"https://vk.com/video{owner_id}_{video_id}"
-            else:
-                print(
-                    f"❌ VK Upload: HTTP Error {response.status_code}. Response: {response.text}"
-                )
-                return None
+                print(f"✅ VK Upload Success. Fetching Secure Embed Link...")
+
+                # ننتظر 3 ثوانٍ لضمان أن السيرفر قام بتسجيل الفيديو في قاعدة بياناته
+                time.sleep(3)
+
+                # استدعاء ميثود video.get للحصول على رابط الـ player (الإيفريم)
+                get_api_url = "https://api.vk.com/method/video.get"
+                get_params = {
+                    "videos": f"{owner_id}_{video_id}",
+                    "access_token": VK_ACCESS_TOKEN,
+                    "v": "5.131",
+                }
+
+                try:
+                    res_get = requests.get(get_api_url, params=get_params).json()
+                    if "response" in res_get and res_get["response"]["items"]:
+                        video_data = res_get["response"]["items"][0]
+                        # هذا هو الرابط الذي طلبه الدوكومنتيشن (video_ext.php)
+                        embed_url = video_data.get("player")
+
+                        if embed_url:
+                            print(f"✅ VK Embed Captured: {embed_url}")
+                            return embed_url
+                except Exception as e:
+                    print(f"⚠️ فشل استخراج رابط الإيفريم، العودة للرابط العادي: {e}")
+
+                # رابط احتياطي في حال فشل استخراج الـ Embed
+                fallback_url = f"https://vk.com/video{owner_id}_{video_id}"
+                return fallback_url
     except Exception as e:
         print(f"⚠️ فشل VK المحلي: {e}")
         return None
@@ -580,6 +598,54 @@ async def upload_to_streamtape(login, key, identifier, file_name):
     except Exception as e:
         print(f"❌ Streamtape Global Error: {e}")
 
+    return None
+
+
+async def upload_to_lulustream(key, identifier, file_name):
+    """الرفع لـ LuluStream عبر السحب من الأرشيف"""
+    print(f"📡 LuluStream: إرسال أمر سحب من الأرشيف...")
+    try:
+        clean_file_name = urllib.parse.quote(file_name)
+        remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. إرسال أمر السحب (Upload by URL)
+            # حسب الدوكومنتيشن: https://lulustream.com/api/upload/url?key={key}&url={url}
+            add_url = (
+                f"https://lulustream.com/api/upload/url?key={key}&url={remote_url}"
+            )
+            res = await client.get(add_url)
+            data = res.json()
+
+            if data.get("status") == 200:
+                # دالة التنظيف لضمان التطابق
+                def clean_it(text):
+                    return "".join(e for e in text.lower() if e.isalnum())
+
+                target = clean_it(file_name.split(".")[0])
+
+                # 2. عملية الـ Polling للفحص
+                for i in range(1, 41):
+                    await asyncio.sleep(20)
+                    print(f"🔄 LuluStream Polling Attempt {i}/40...")
+
+                    try:
+                        # حسب الدوكومنتيشن: https://lulustream.com/api/file/list?key={key}
+                        list_url = f"https://lulustream.com/api/file/list?key={key}"
+                        l_res = await client.get(list_url)
+                        # النتيجة تكون داخل result -> files
+                        files = l_res.json().get("result", {}).get("files", [])
+
+                        for f in files:
+                            # لولو ستريم يستخدم 'title' في قائمة الملفات وليس 'name'
+                            if target in clean_it(f.get("title", "")):
+                                print(f"✅ LuluStream Success!")
+                                # الرابط النهائي يكون: https://lulustream.com/e/file_code
+                                return f"https://lulustream.com/e/{f.get('file_code')}"
+                    except Exception as e:
+                        pass
+    except Exception as e:
+        print(f"❌ LuluStream Error: {e}")
     return None
 
 
