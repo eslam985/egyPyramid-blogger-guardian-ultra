@@ -602,36 +602,46 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
 
 async def upload_to_lulustream(key, identifier, file_name):
-    """الرفع لـ LuluStream عبر السحب من الأرشيف بناءً على الدوكومنتيشن الصحيح"""
+    """الرفع لـ LuluStream - النسخة النهائية المعتمدة بعد اختبار كولاب"""
     print(f"📡 LuluStream: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1. إرسال أمر السحب والحصول على الـ filecode فوراً
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+
+        async with httpx.AsyncClient(
+            timeout=30.0, headers=headers, follow_redirects=True
+        ) as client:
             encoded_url = urllib.parse.quote(remote_url, safe="")
+
+            # النطاق المعتمد بناءً على التجربة الناجحة
             add_url = (
-                f"https://lulustream.com/api/upload/url?key={key}&url={encoded_url}"
+                f"https://api.lulustream.com/api/upload/url?key={key}&url={encoded_url}"
             )
 
             res = await client.get(add_url)
+
+            if res.status_code != 200:
+                print(
+                    f"⚠️ LuluStream API Primary Failed ({res.status_code}), Trying Secondary..."
+                )
+                add_url = (
+                    f"https://lulustream.com/api/upload/url?key={key}&url={encoded_url}"
+                )
+                res = await client.get(add_url)
+
             data = res.json()
 
-            # الدوكومنتيشن يقول أن الاستجابة هي: {"status":200, "result":{"filecode":"..."}}
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
                 if file_code:
-                    print(f"✅ LuluStream Captured FileCode: {file_code}")
+                    print(f"✅ LuluStream Success! Code: {file_code}")
+                    return f"https://lulustream.com/e/{file_code}"
 
-                    # نبني الرابط فوراً كما هو مذكور في الدوكومنتيشن
-                    final_url = f"https://lulustream.com/e/{file_code}"
-
-                    # اختيارياً: ننتظر قليلاً لضمان بدء السيرفر في السحب قبل إنهاء المهمة
-                    await asyncio.sleep(5)
-                    return final_url
-
-            print(f"❌ LuluStream API Refused: {data.get('msg', 'Unknown Error')}")
+            print(f"❌ LuluStream Refused: {data.get('msg', 'Unknown Error')}")
 
     except Exception as e:
         print(f"❌ LuluStream Logic Error: {e}")
