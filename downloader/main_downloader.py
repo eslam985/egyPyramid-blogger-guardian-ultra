@@ -565,8 +565,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).eq("id", e_id).execute()
 
                 # 1. تحضير المهام (بدون استدعاء خارجي لـ Voe)
+                # 1. تحضير المهام مع فواصل زمنية (تجنب Rate Limit الأرشيف)
                 task_voe = upload_to_voe_api(vid_path, identifier)
+
+                await asyncio.sleep(10)  # فجوة 10 ثوانٍ
                 task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
+
+                await asyncio.sleep(10)  # فجوة 10 ثوانٍ أخرى
                 task_tape = upload_to_streamtape(
                     st_login, st_key, identifier, file_name
                 )

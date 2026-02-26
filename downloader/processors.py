@@ -460,9 +460,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         print(f"🔍 DoodStream Task ID: {f_code}")
 
         # محاولات الفحص (نزيد الوقت قليلاً لضمان عدم الحظر)
-        for i in range(1, 41):
+        for i in range(1, 61):
             await asyncio.sleep(15)  # 15 ثانية وقت مثالي للملفات الصغيرة
-            print(f"🔄 DoodStream Polling Attempt {i}/40...")
+            print(f"🔄 DoodStream Polling Attempt {i}/60...")
 
             for domain in api_domains:
                 try:
@@ -480,23 +480,20 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                             return f"https://myvidplay.com/e/{f_code}"
 
                     # إذا فشل Info، جرب الـ Status التقليدي
-                    check_url = f"https://{domain}/api/urlupload/status?key={api_key}&file_code={f_code}"
-                    c_res = await client.get(check_url)
-                    c_data = c_res.json()
+                    try:
+                        # استخدام Check بدلاً من Info لسرعة الرد
+                        check_url = f"https://{domain}/api/file/check?key={api_key}&file_code={f_code}"
+                        res = await client.get(check_url)
+                        check_data = res.json()
 
-                    results = c_data.get("result")
-                    if isinstance(results, list) and len(results) > 0:
-                        item = results[0]
-                        if str(item.get("status")) in ["2", "completed", "downloaded"]:
-                            return f"https://myvidplay.com/e/{f_code}"
-
-                        # انقل الشرط ليكون هنا (داخل الـ if) لضمان وجود المتغير item
-                        if str(item.get("status")) in ["3", "failed", "error"]:
-                            print(
-                                f"⚠️ DoodStream Failed internally. Waiting for self-correction..."
-                            )
-                        # هنا يمكننا إعادة إرسال طلب الرفع الأول add_url مرة أخرى
-                        # ولكن الأضمن حالياً هو زيادة وقت الانتظار لأن السيرفر غالباً ما يصحح نفسه
+                        if check_data.get("status") == 200:
+                            # التوثيق يقول النتيجة قائمة والوضع Active
+                            results = check_data.get("result", [])
+                            if results and results[0].get("status") == "Active":
+                                print(f"✅ DoodStream Success (File is Active)!")
+                                return f"https://myvidplay.com/e/{f_code}"
+                    except:
+                        continue
 
                 except Exception as e:
                     # لا تطبع كل الأخطاء لعدم ملء اللوجات، فقط لو كان الخطأ غريباً
@@ -539,9 +536,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                 remote_id = data["result"]["id"]
                 # 25 محاولة بمعدل كل 30 ثانية (انتظار 12.5 دقيقة كحد أقصى)
                 # 25 محاولة بمعدل كل 15 ثانية (مراقبة لصيقة للملفات الصغيرة)
-                for i in range(1, 26):
-                    await asyncio.sleep(15)
-                    print(f"🔄 Streamtape Polling Attempt {i}/25...")
+                for i in range(1, 51):
+                    await asyncio.sleep(20)
+                    print(f"🔄 Streamtape Polling Attempt {i}/50...")
 
                     # 1. الفحص عبر حالة الـ Remote (المهمة الجارية)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
