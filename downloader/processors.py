@@ -521,7 +521,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
 
 
 async def upload_to_streamtape(login, key, identifier, file_name):
-    """الرفع لـ Streamtape مع انتظار أطول للتحويل"""
+    """الرفع لـ Streamtape مع قنص الرابط بالاسم"""
     print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
@@ -532,60 +532,54 @@ async def upload_to_streamtape(login, key, identifier, file_name):
             res = await client.get(add_url)
             data = res.json()
 
+            # التأكد من قبول السيرفر للأمر
             if data.get("status") == 200:
-                # 25 محاولة بمعدل كل 20 ثانية (انتظار 12.5 دقيقة كحد أقصى)
-                # 25 محاولة بمعدل كل 20 ثانية (نفس طويل للبحث)
+
+                # تعريف دالة التنظيف داخل السياق لمرة واحدة
+                def clean_it(text):
+                    return "".join(e for e in text.lower() if e.isalnum())
+
+                target = clean_it(file_name.split(".")[0])
+
+                # حلقة الفحص (واحدة فقط ومستقيمة)
                 for i in range(1, 51):
-                    await asyncio.sleep(20)
+                    await asyncio.sleep(15)
                     print(f"🔄 Streamtape Polling Attempt {i}/50...")
 
-                    # الاستراتيجية الأولى: قنص الرابط من قائمة المعالجة الحالية (Running Converts)
-                    # دي بتجيب الرابط حتى لو الملف لسه بيترفع أو بيتعالج
+                    # 1. فحص القائمة الجارية (Running Converts)
                     try:
                         conv_url = f"https://api.streamtape.com/file/runningconverts?login={login}&key={key}"
                         c_res = await client.get(conv_url)
-                        c_data = c_res.json()
-                        running_files = c_data.get("result", [])
+                        running_files = c_res.json().get("result", [])
 
-                        clean_search = file_name.lower().replace(" ", "").split(".")[0]
                         for rf in running_files:
-                            if clean_search in rf.get("name", "").lower().replace(
-                                "_", ""
-                            ).replace(" ", ""):
+                            if target in clean_it(rf.get("name", "")):
                                 if rf.get("linkid"):
                                     print(
-                                        f"🎯 Streamtape Sniper Success (Found in Running Converts)!"
+                                        f"🎯 Streamtape Sniper Success (Found in Running)!"
                                     )
                                     return (
                                         f"https://streamtape.com/e/{rf.get('linkid')}"
                                     )
-                    except:
-                        pass
+                    except Exception:
+                        pass  # في حال فشل طلب الـ API ننتظر الدورة القادمة
 
-                    # الاستراتيجية الثانية: البحث في المجلد (لربما انتهى واختفى من القائمة)
+                    # 2. فحص المجلد (List Folder)
                     try:
                         list_url = f"https://api.streamtape.com/file/listfolder?login={login}&key={key}"
                         l_res = await client.get(list_url)
-                        l_data = l_res.json()
-                        files = l_data.get("result", {}).get("files", [])
+                        files = l_res.json().get("result", {}).get("files", [])
 
                         for f in files:
-                            remote_clean = (
-                                f.get("name", "")
-                                .lower()
-                                .replace("_", "")
-                                .replace(" ", "")
-                            )
-                            if clean_search in remote_clean:
+                            if target in clean_it(f.get("name", "")):
                                 print(f"✅ Streamtape Success (Found in Folder List)!")
                                 return f"https://streamtape.com/e/{f.get('linkid')}"
-                    except:
+                    except Exception:
                         pass
+
     except Exception as e:
-        print(f"❌ Streamtape Error Type: {type(e).__name__}")
-        print(f"❌ Streamtape Error Details: {e}")
-        # السطر القادم سيطبع لك رقم السطر الذي تسبب في المشكلة بالضبط
-        # traceback.print_exc()
+        print(f"❌ Streamtape Global Error: {e}")
+
     return None
 
 
