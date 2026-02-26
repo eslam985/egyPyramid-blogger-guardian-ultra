@@ -461,22 +461,30 @@ async def upload_to_doodstream(api_key, identifier, file_name):
             await asyncio.sleep(25)
             for domain in api_domains:
                 try:
-                    # نستخدم file_code في الرابط وفقاً للتوثيق
+                    # الطريقة 1: الفحص في قائمة الـ Remote (المهمات الجارية)
                     check_url = f"https://{domain}/api/urlupload/status?key={api_key}&file_code={f_code}"
                     c_res = await client.get(check_url)
                     c_data = c_res.json()
-
-                    # التوثيق يقول أن result هنا مصفوفة []
                     results = c_data.get("result", [])
+
                     if results:
                         item = results[0]
-                        # التوثيق يذكر حالات نصية مثل "working" أو "completed" أو "downloaded"
-                        # ولكن في الواقع DoodStream يستخدم أرقاماً أحياناً، لذا سنفحص الاثنين للامان
                         status = str(item.get("status")).lower()
-
                         if status in ["2", "completed", "downloaded"]:
-                            print(f"✅ DoodStream Success!")
                             return f"https://myvidplay.com/e/{item.get('file_code')}"
+                    else:
+                        # الطريقة 2 (الحل): المهمة اختفت؟ نبحث عنها في "آخر الملفات المرفوعة" بالاسم
+                        list_url = (
+                            f"https://{domain}/api/file/list?key={api_key}&per_page=10"
+                        )
+                        l_res = await client.get(list_url)
+                        l_data = l_res.json()
+                        files = l_data.get("result", {}).get("files", [])
+                        for f in files:
+                            # نقارن الاسم (بدون امتداد) لضمان الدقة
+                            if file_name.split(".")[0] in f.get("title", ""):
+                                print(f"✅ DoodStream Found in File List!")
+                                return f"https://myvidplay.com/e/{f.get('file_code')}"
                     break
                 except:
                     continue
@@ -504,21 +512,22 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                     s_res = await client.get(status_url)
                     s_data = s_res.json()
 
-                    # الوصول للبيانات باستخدام الـ remote_id كمفتاح (Key) داخل الـ result
-                    remote_info = s_data.get("result", {}).get(remote_id, {})
+                    remote_info = s_data.get("result", {}).get(remote_id)
 
-                    # التحقق من extid (الديكومنتيشن يقول false إذا لم ينتهِ)
-                    extid = remote_info.get("extid")
-
-                    # الحقيقة الصارمة: بمجرد أن يصبح extid ليس false ولا None، الرابط جاهز
-                    if extid and extid is not False:
-                        print(f"✅ Streamtape Success! ExtID: {extid}")
-                        return f"https://streamtape.com/e/{extid}"
-
-                    # فحص حالة الخطأ
-                    if remote_info.get("status") in ["error", "failed"]:
-                        print(f"❌ Streamtape: فشل الرفع من المصدر")
-                        return None
+                    if remote_info:
+                        extid = remote_info.get("extid")
+                        if extid and extid is not False:
+                            return f"https://streamtape.com/e/{extid}"
+                    else:
+                        # الحل: المهمة اختفت؟ نبحث في قائمة الملفات
+                        list_url = f"https://api.streamtape.com/file/listfolder?login={login}&key={key}"
+                        l_res = await client.get(list_url)
+                        l_data = l_res.json()
+                        files = l_data.get("result", {}).get("files", [])
+                        for f in files:
+                            if file_name in f.get("name", ""):
+                                print(f"✅ Streamtape Found in Folder List!")
+                                return f"https://streamtape.com/e/{f.get('linkid')}"
     except Exception as e:
         print(f"❌ Streamtape: {e}")
     return None
