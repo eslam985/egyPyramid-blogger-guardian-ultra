@@ -10,6 +10,7 @@ from internetarchive import upload as archive_upload
 
 # 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
 # هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
+
 from .processors import (
     tqdm,
     get_clean_media_data,
@@ -45,6 +46,7 @@ supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 ARCHIVE_ACCESS_KEY = "ufnS9MloPsaLYXSl"
 ARCHIVE_SECRET_KEY = "euu3u0Lm0bcMFyYB"
 lu_key = "244676va68ovreoinx1k42"
+
 
 def save_to_supabase(
     current_voe,
@@ -590,6 +592,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
                 # نتائج Voe
                 voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
+                
+                voe_down = (
+                    f"https://voe.sx/{file_id}/download" if file_id else "Failed"
+                )  # أضف هذا السطر
                 if file_id:
                     print(f"✅ Voe Saved! ID: {file_id}")
 

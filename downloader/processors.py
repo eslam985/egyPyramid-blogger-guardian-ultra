@@ -611,8 +611,9 @@ async def upload_to_lulustream(key, identifier, file_name):
         async with httpx.AsyncClient(timeout=30.0) as client:
             # 1. إرسال أمر السحب (Upload by URL)
             # حسب الدوكومنتيشن: https://lulustream.com/api/upload/url?key={key}&url={url}
+            encoded_url = urllib.parse.quote(remote_url, safe="")
             add_url = (
-                f"https://lulustream.com/api/upload/url?key={key}&url={remote_url}"
+                f"https://lulustream.com/api/upload/url?key={key}&url={encoded_url}"
             )
             res = await client.get(add_url)
             data = res.json()
