@@ -6,13 +6,14 @@ import subprocess
 import nest_asyncio
 from urllib.parse import unquote
 import asyncio
+from internetarchive import upload as archive_upload
 
 # 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
 # هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
 from .processors import (
     tqdm,
-    tqdm_custom,
     get_clean_media_data,
+    upload_poster_to_cloudinary,
     get_movie_data,
     upload_to_doodstream,
     upload_to_streamtape,
@@ -23,6 +24,7 @@ from .processors import (
 
 # 2. استيراد المحرك
 from .engine import *
+from .engine import upload_to_telegram_only, ensure_dependencies, ProgressStream
 
 # 3. تنظيف استيراد سوبابيز
 try:
@@ -39,6 +41,9 @@ os.environ["TQDM_MININTERVAL"] = "2.0"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+ARCHIVE_ACCESS_KEY = "ufnS9MloPsaLYXSl"
+ARCHIVE_SECRET_KEY = "euu3u0Lm0bcMFyYB"
 
 
 def save_to_supabase(
@@ -545,43 +550,41 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).eq("id", e_id).execute()
                 continue  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
 
-            # 5. الرفع لـ Voe وتحديث الشيت
-            # --- 5. الرفع لـ Voe وتحديث الشيت ---
-            final_poster = upload_poster_to_cloudinary(raw_poster) if raw_poster else ""
-            poster_formula = (
-                f'=IMAGE("{final_poster}")' if final_poster else "No Poster"
-            )
-            archive_url = f"https://archive.org/details/{identifier}"
-
-            # --- تحديث حالة الرفع لـ Voe ---
-            if e_id:
-                supabase.table("episodes").update(
-                    {
-                        "status_message": "🚀 جاري الرفع لسيرفر المشاهدة (Voe)...",
-                        "progress_percent": 90,  # نثبتها على 90% لأنها مرحلة سريعة وغالباً لا تعطي نسبة
-                        "download_speed": "Uploading...",
-                    }
-                ).eq("id", e_id).execute()
-
-            file_id = upload_to_voe_api(vid_path, identifier)
-
-            voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
-            voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
-
-            # --- 7. الرفع لـ DoodStream و Streamtape (عبر الأرشيف) ---
-            # استبدل بلوك الرفع القديم بهذا المنطق المتوازي
+            # --- 5. الرفع المتوازي للثلاثي (Voe + DoodStream + Streamtape) عبر الأرشيف ---
             if identifier:
-                print(f"🚀 البدء في الرفع المتوازي لـ DoodStream و Streamtape...")
+                print(f"🚀 البدء في الرفع المتوازي للثلاثي (Voe + Dood + Tape)...")
 
-                # تشغيل المهام معاً في الخلفية
+                # تحديث حالة سوبابيز مرة واحدة للكل
+                if e_id:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": "🚀 جاري الرفع المتوازي لسيرفرات المشاهدة...",
+                            "progress_percent": 90,
+                            "download_speed": "Parallel Uploading...",
+                        }
+                    ).eq("id", e_id).execute()
+
+                # 1. تحضير المهام (بدون استدعاء خارجي لـ Voe)
+                task_voe = upload_to_voe_api(vid_path, identifier)
                 task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
                 task_tape = upload_to_streamtape(
                     st_login, st_key, identifier, file_name
                 )
 
-                # انتظار النتائج أيهما ينتهي أولاً أو معاً
-                d_url, s_url = await asyncio.gather(task_dood, task_tape)
+                # 2. إطلاق الصواريخ الثلاثة معاً (هنا يبدأ التوفير الحقيقي للوقت)
+                file_id, d_url, s_url = await asyncio.gather(
+                    task_voe, task_dood, task_tape
+                )
 
+                # --- 6. معالجة النتائج وحفظها ---
+
+                # نتائج Voe
+                voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
+                voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
+                if file_id:
+                    print(f"✅ Voe Saved! ID: {file_id}")
+
+                # نتائج DoodStream
                 if d_url:
                     supabase.table("links").upsert(
                         {"episode_id": e_id, "server_name": "doodstream", "url": d_url},
@@ -589,6 +592,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).execute()
                     print(f"✅ DoodStream Saved!")
 
+                # نتائج Streamtape
                 if s_url:
                     supabase.table("links").upsert(
                         {"episode_id": e_id, "server_name": "streamtape", "url": s_url},

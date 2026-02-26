@@ -10,6 +10,7 @@ import google.generativeai as genai
 from deep_translator import GoogleTranslator
 from functools import partial
 from .engine import ProgressStream
+import traceback
 
 # 1. استيراد القاعدة الأساسية أولاً
 try:
@@ -339,74 +340,76 @@ def upload_to_vk_local(title, file_path):
         return None
 
 
-def upload_to_voe_api(file_path, identifier):
+async def upload_to_voe_api(file_path, identifier):
     try:
-        file_name = os.path.basename(file_path).replace(" ", "%20")
-        remote_url = f"https://archive.org/download/{identifier}/{file_name}"
-        params = {"key": VOE_API_KEY, "url": remote_url}
+        async with httpx.AsyncClient(timeout=30.0) as client:  # أضف هذا السطر هنا
+            file_name = os.path.basename(file_path).replace(" ", "%20")
+            remote_url = f"https://archive.org/download/{identifier}/{file_name}"
+            params = {"key": VOE_API_KEY, "url": remote_url}
 
-        # 1. طلب الرفع
-        res = requests.get(
-            "https://voe.sx/api/upload/url", params=params, timeout=30
-        ).json()
-        if res.get("status") != 200:
-            return None
+            # 1. طلب الرفع
+            response = await client.get(
+                "https://voe.sx/api/upload/url", params=params, timeout=30
+            )
+            res = response.json()
+            if res.get("status") != 200:
+                return None
 
-        file_code = res.get("result", {}).get("file_code")
+            file_code = res.get("result", {}).get("file_code")
 
-        print(f"⏳ جاري متابعة حالة الرفع على Voe...")
-        start_time = time.time()
+            print(f"⏳ جاري متابعة حالة الرفع على Voe...")
+            start_time = time.time()
 
-        # تعريف شريط واحد فقط بتنسيق كامل ونظيف
-        # ... قبل الحلقة ...
-        check_count = 0
-        pbar_voe = tqdm_custom(total=100, desc="⏳ Voe Polling")
+            # تعريف شريط واحد فقط بتنسيق كامل ونظيف
+            # ... قبل الحلقة ...
+            check_count = 0
+            pbar_voe = tqdm_custom(total=100, desc="⏳ Voe Polling")
 
-        while time.time() - start_time < 800:
-            try:
-                status_res = requests.get(
-                    f"https://voe.sx/api/file/status?key={VOE_API_KEY}&file_code={file_code}",
-                    timeout=20,
-                ).json()
-                status = status_res.get("result", {}).get("status")
-
-                check_count += 1
-
-                if status == "finished":
-                    pbar_voe.update(100 - pbar_voe.n)
-                    pbar_voe.set_description("✅ Voe: Finished!")
-                    pbar_voe.close()
-                    return file_code
-
-                # المحاكاة الذكية: لو بيحمل حرك الشريط لغاية 40% ولو بيعالج حركه لغاية 80%
-                # المحاكاة الذكية: تعيين القيمة مباشرة بدلاً من update التراكمي في بعض الأحيان
-                if status == "downloading":
-                    pbar_voe.n = min(40, pbar_voe.n + 5)
-                elif status == "processing":
-                    pbar_voe.n = min(80, pbar_voe.n + 5)
-
-                pbar_voe.refresh()  # مهم جداً لرؤية الحركة فوراً
-
-                pbar_voe.set_description(
-                    f"⏳ Voe Status: {status if status else 'Queued'}"
-                )
-                pbar_voe.refresh()
-
-                # صمام الأمان: لو السيرفر استهبل أكتر من دقيقتين والملف اترفع فعلاً
-                if check_count >= 5:
-                    pbar_voe.set_description(
-                        "⚠️ Voe Slow Response - Proceeding to VK..."
+            while time.time() - start_time < 800:
+                try:
+                    status_response = await client.get(
+                        f"https://voe.sx/api/file/status?key={VOE_API_KEY}&file_code={file_code}"
                     )
-                    pbar_voe.close()
-                    return file_code
+                    status_res = status_response.json()
+                    status = status_res.get("result", {}).get("status")
 
-            except:
-                pass
+                    check_count += 1
 
-            time.sleep(25)
+                    if status == "finished":
+                        pbar_voe.update(100 - pbar_voe.n)
+                        pbar_voe.set_description("✅ Voe: Finished!")
+                        pbar_voe.close()
+                        return file_code
 
-        pbar_voe.close()
-        return file_code
+                    # المحاكاة الذكية: لو بيحمل حرك الشريط لغاية 40% ولو بيعالج حركه لغاية 80%
+                    # المحاكاة الذكية: تعيين القيمة مباشرة بدلاً من update التراكمي في بعض الأحيان
+                    if status == "downloading":
+                        pbar_voe.n = min(40, pbar_voe.n + 5)
+                    elif status == "processing":
+                        pbar_voe.n = min(80, pbar_voe.n + 5)
+
+                    pbar_voe.refresh()  # مهم جداً لرؤية الحركة فوراً
+
+                    pbar_voe.set_description(
+                        f"⏳ Voe Status: {status if status else 'Queued'}"
+                    )
+                    pbar_voe.refresh()
+
+                    # صمام الأمان: لو السيرفر استهبل أكتر من دقيقتين والملف اترفع فعلاً
+                    if check_count >= 5:
+                        pbar_voe.set_description(
+                            "⚠️ Voe Slow Response - Proceeding to VK..."
+                        )
+                        pbar_voe.close()
+                        return file_code
+
+                except:
+                    pass
+
+                await asyncio.sleep(25)
+
+            pbar_voe.close()
+            return file_code
     except Exception as e:
         print(f"⚠️ خطأ Voe API: {e}")
         return None
@@ -441,8 +444,8 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                 add_url = (
                     f"https://{domain}/api/upload/url?key={api_key}&url={remote_url}"
                 )
-                res = await client.get(add_url)
-                data = res.json()
+                response = await client.get(add_url)
+                data = response.json()
                 if data.get("msg") == "OK":
                     print(f"✅ DoodStream: تم قبول الأمر عبر {domain}")
                     break
@@ -454,46 +457,61 @@ async def upload_to_doodstream(api_key, identifier, file_name):
 
         # التعديل وفقاً للتوثيق: المفتاح هو filecode والنتيجة قاموس
         f_code = data.get("result", {}).get("filecode")
-        print(f"🔍 DoodStream Task Created: {f_code}")  # كشف الكود المستخرج
+        print(f"🔍 DoodStream Task ID: {f_code}")
 
-        for i in range(20):
-            await asyncio.sleep(5)
+        # محاولات الفحص (نزيد الوقت قليلاً لضمان عدم الحظر)
+        for i in range(1, 21):
+            await asyncio.sleep(15)  # 15 ثانية وقت مثالي للملفات الصغيرة
+            print(f"🔄 DoodStream Polling Attempt {i}/20...")
+
             for domain in api_domains:
                 try:
+                    # الطريقة الأضمن: اسأل عن "معلومات الملف" مباشرة بالـ f_code
+                    info_url = f"https://{domain}/api/file/info?key={api_key}&file_code={f_code}"
+                    res = await client.get(info_url)
+                    info_data = res.json()
+
+                    # إذا رد السيرفر بمعلومات الملف وكان الـ status 200 (أي الملف موجود)
+                    if info_data.get("status") == 200:
+                        result = info_data.get("result", [{}])[0]
+                        # التأكد أن الملف ليس "ممسوحاً" أو "قيد المعالجة الصعبة"
+                        if result.get("file_code") == f_code:
+                            print(f"✅ DoodStream Success (Found via File Info)!")
+                            return f"https://myvidplay.com/e/{f_code}"
+
+                    # إذا فشل Info، جرب الـ Status التقليدي
                     check_url = f"https://{domain}/api/urlupload/status?key={api_key}&file_code={f_code}"
-                    res = await client.get(check_url)
-                    c_data = res.json()
+                    c_res = await client.get(check_url)
+                    c_data = c_res.json()
 
-                    # طباعة الرد الخام لمعرفة لماذا يفشل المنطق
-                    # print(f"DEBUG DoodStream (Try {i}): {c_data}")
+                    results = c_data.get("result")
+                    if isinstance(results, list) and len(results) > 0:
+                        item = results[0]
+                        if str(item.get("status")) in ["2", "completed", "downloaded"]:
+                            return f"https://myvidplay.com/e/{f_code}"
 
-                    results = c_data.get("result", [])
-                    if results and results[0].get("status") in [
-                        "2",
-                        "completed",
-                        "downloaded",
-                    ]:
-                        return f"https://myvidplay.com/e/{results[0].get('file_code')}"
-
-                    # إذا لم يجد المهمة، يبحث بالاسم المنظف
-                    list_url = (
-                        f"https://{domain}/api/file/list?key={api_key}&per_page=10"
-                    )
-                    l_data = (await client.get(list_url)).json()
-                    files = l_data.get("result", {}).get("files", [])
-
-                    search_term = file_name.lower().replace(" ", "").split(".")[0]
-                    for f in files:
-                        remote_name = (
-                            f.get("title", "").lower().replace("_", "").replace(" ", "")
-                        )
-                        if search_term in remote_name:
-                            print(f"✅ DoodStream Found by Name Match!")
-                            return f"https://myvidplay.com/e/{f.get('file_code')}"
-                    break
                 except Exception as e:
-                    print(f"⚠️ DoodStream Polling Error: {e}")
+                    # لا تطبع كل الأخطاء لعدم ملء اللوجات، فقط لو كان الخطأ غريباً
                     continue
+
+            # فحص أخير بالاسم في كل محاولة "زوجية" لتقليل الضغط
+            if i % 2 == 0:
+                try:
+                    list_url = (
+                        f"https://doodapi.co/api/file/list?key={api_key}&per_page=5"
+                    )
+                    l_res = await client.get(list_url)
+                    files = l_res.json().get("result", {}).get("files", [])
+                    # داخل دالة دود ستريم (جزء البحث بالاسم)
+                    search_term = file_name.lower().split(".")[
+                        0
+                    ]  # نأخذ الاسم بدون الامتداد فقط
+                    for f in files:
+                        if search_term in f.get("title", "").lower():
+                            print(f"✅ DoodStream Found by Original Name Match!")
+                            return f"https://myvidplay.com/e/{f.get('file_code')}"
+                except:
+                    pass
         return None
 
 
@@ -512,8 +530,12 @@ async def upload_to_streamtape(login, key, identifier, file_name):
             if data.get("status") == 200:
                 remote_id = data["result"]["id"]
                 # 25 محاولة بمعدل كل 30 ثانية (انتظار 12.5 دقيقة كحد أقصى)
-                for _ in range(25):
-                    await asyncio.sleep(5)
+                # 25 محاولة بمعدل كل 15 ثانية (مراقبة لصيقة للملفات الصغيرة)
+                for i in range(1, 26):
+                    await asyncio.sleep(15)
+                    print(f"🔄 Streamtape Polling Attempt {i}/25...")
+
+                    # 1. الفحص عبر حالة الـ Remote (المهمة الجارية)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                     s_res = await client.get(status_url)
                     s_data = s_res.json()
@@ -523,19 +545,38 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                     if remote_info:
                         extid = remote_info.get("extid")
                         if extid and extid is not False:
+                            print(f"✅ Streamtape Success (Found via Remote Status)!")
                             return f"https://streamtape.com/e/{extid}"
-                    else:
-                        # الحل: المهمة اختفت؟ نبحث في قائمة الملفات
+
+                    # 2. خطة بديلة: الفحص عبر معلومات الملف مباشرة (File Info)
+                    # ملاحظة: أحياناً يكون الملف جاهزاً والـ Remote ID انتهى واختفى
+                    # نستخدم بحث بالاسم أو بالقائمة في المحاولات الزوجية لتجنب الحظر
+                    if i % 2 == 0:
                         list_url = f"https://api.streamtape.com/file/listfolder?login={login}&key={key}"
                         l_res = await client.get(list_url)
                         l_data = l_res.json()
                         files = l_data.get("result", {}).get("files", [])
+
+                        # تنظيف الاسم للمقارنة الدقيقة
+                        # داخل دالة ستريم تاب (جزء البحث بالاسم)
+                        # نحذف المسافات من اسم ملفنا للبحث
+                        clean_search = file_name.lower().replace(" ", "").split(".")[0]
                         for f in files:
-                            if file_name in f.get("name", ""):
-                                print(f"✅ Streamtape Found in Folder List!")
+                            # نحذف الشرطات والمسافات من اسم الملف في السيرفر للمقارنة
+                            remote_clean = (
+                                f.get("name", "")
+                                .lower()
+                                .replace("_", "")
+                                .replace(" ", "")
+                            )
+                            if clean_search in remote_clean:
+                                print(f"✅ Streamtape Found by Normalized Name Match!")
                                 return f"https://streamtape.com/e/{f.get('linkid')}"
     except Exception as e:
-        print(f"❌ Streamtape: {e}")
+        print(f"❌ Streamtape Error Type: {type(e).__name__}")
+        print(f"❌ Streamtape Error Details: {e}")
+        # السطر القادم سيطبع لك رقم السطر الذي تسبب في المشكلة بالضبط
+        # traceback.print_exc()
     return None
 
 
