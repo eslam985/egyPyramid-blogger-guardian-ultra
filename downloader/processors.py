@@ -602,51 +602,39 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
 
 async def upload_to_lulustream(key, identifier, file_name):
-    """الرفع لـ LuluStream عبر السحب من الأرشيف"""
+    """الرفع لـ LuluStream عبر السحب من الأرشيف بناءً على الدوكومنتيشن الصحيح"""
     print(f"📡 LuluStream: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1. إرسال أمر السحب (Upload by URL)
-            # حسب الدوكومنتيشن: https://lulustream.com/api/upload/url?key={key}&url={url}
+            # 1. إرسال أمر السحب والحصول على الـ filecode فوراً
             encoded_url = urllib.parse.quote(remote_url, safe="")
             add_url = (
                 f"https://lulustream.com/api/upload/url?key={key}&url={encoded_url}"
             )
+
             res = await client.get(add_url)
             data = res.json()
 
-            if data.get("status") == 200:
-                # دالة التنظيف لضمان التطابق
-                def clean_it(text):
-                    return "".join(e for e in text.lower() if e.isalnum())
+            # الدوكومنتيشن يقول أن الاستجابة هي: {"status":200, "result":{"filecode":"..."}}
+            if data.get("status") == 200 and "result" in data:
+                file_code = data["result"].get("filecode")
+                if file_code:
+                    print(f"✅ LuluStream Captured FileCode: {file_code}")
 
-                target = clean_it(file_name.split(".")[0])
+                    # نبني الرابط فوراً كما هو مذكور في الدوكومنتيشن
+                    final_url = f"https://lulustream.com/e/{file_code}"
 
-                # 2. عملية الـ Polling للفحص
-                for i in range(1, 41):
-                    await asyncio.sleep(20)
-                    print(f"🔄 LuluStream Polling Attempt {i}/40...")
+                    # اختيارياً: ننتظر قليلاً لضمان بدء السيرفر في السحب قبل إنهاء المهمة
+                    await asyncio.sleep(5)
+                    return final_url
 
-                    try:
-                        # حسب الدوكومنتيشن: https://lulustream.com/api/file/list?key={key}
-                        list_url = f"https://lulustream.com/api/file/list?key={key}"
-                        l_res = await client.get(list_url)
-                        # النتيجة تكون داخل result -> files
-                        files = l_res.json().get("result", {}).get("files", [])
+            print(f"❌ LuluStream API Refused: {data.get('msg', 'Unknown Error')}")
 
-                        for f in files:
-                            # لولو ستريم يستخدم 'title' في قائمة الملفات وليس 'name'
-                            if target in clean_it(f.get("title", "")):
-                                print(f"✅ LuluStream Success!")
-                                # الرابط النهائي يكون: https://lulustream.com/e/file_code
-                                return f"https://lulustream.com/e/{f.get('file_code')}"
-                    except Exception as e:
-                        pass
     except Exception as e:
-        print(f"❌ LuluStream Error: {e}")
+        print(f"❌ LuluStream Logic Error: {e}")
     return None
 
 

@@ -580,7 +580,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 )
 
                 await asyncio.sleep(8)
-                # إضافة مهمة LuluStream (تأكد من وجود متغيرات lu_key و lu_login)
                 task_lulu = upload_to_lulustream(lu_key, identifier, file_name)
 
                 # 2. إطلاق الصواريخ الأربعة معاً
