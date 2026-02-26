@@ -418,9 +418,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
 
     # قائمة النطاقات البديلة للـ API
     api_domains = [
+        "doodapi.co",
         "d_api.com",
         "doodapi.com",
-        "doodapi.co",
         "dood.to",
         "dood.stream",
         "myvidplay.com",
@@ -452,25 +452,32 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         if not data or data.get("msg") != "OK":
             return None
 
-        # مرحلة الفحص (Polling) - زودنا المحاولات لـ 20 محاولة
-        short_name = file_name.split(".")[0][:10]
+        # التعديل وفقاً للتوثيق: المفتاح هو filecode والنتيجة قاموس
+        f_code = data.get("result", {}).get("filecode")
+        if not f_code:
+            return None
+
         for _ in range(20):
             await asyncio.sleep(25)
             for domain in api_domains:
                 try:
-                    list_url = f"https://{domain}/api/urlupload/list?key={api_key}"
-                    l_res = await client.get(list_url)
-                    l_data = l_res.json()
-                    if l_data.get("result"):
-                        for item in l_data["result"]:
-                            # الحالة 2 تعني اكتمال الرفع والتحويل
-                            if (
-                                short_name in item.get("title", "")
-                                and str(item.get("status")) == "2"
-                            ):
-                                print(f"✅ DoodStream Success!")
-                                return f"https://myvidplay.com/e/{item['file_code']}"
-                    break  # اخرج من لفة النطاقات لو الـ API رد (حتى لو لسه الفيديو مخلصش)
+                    # نستخدم file_code في الرابط وفقاً للتوثيق
+                    check_url = f"https://{domain}/api/urlupload/status?key={api_key}&file_code={f_code}"
+                    c_res = await client.get(check_url)
+                    c_data = c_res.json()
+
+                    # التوثيق يقول أن result هنا مصفوفة []
+                    results = c_data.get("result", [])
+                    if results:
+                        item = results[0]
+                        # التوثيق يذكر حالات نصية مثل "working" أو "completed" أو "downloaded"
+                        # ولكن في الواقع DoodStream يستخدم أرقاماً أحياناً، لذا سنفحص الاثنين للامان
+                        status = str(item.get("status")).lower()
+
+                        if status in ["2", "completed", "downloaded"]:
+                            print(f"✅ DoodStream Success!")
+                            return f"https://myvidplay.com/e/{item.get('file_code')}"
+                    break
                 except:
                     continue
     return None
@@ -490,22 +497,27 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
             if data.get("status") == 200:
                 remote_id = data["result"]["id"]
-                # زيادة المحاولات لـ 25 محاولة (حوالي 12 دقيقة انتطار كحد أقصى)
+                # 25 محاولة بمعدل كل 30 ثانية (انتظار 12.5 دقيقة كحد أقصى)
                 for _ in range(25):
                     await asyncio.sleep(30)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                     s_res = await client.get(status_url)
                     s_data = s_res.json()
 
+                    # الوصول للبيانات باستخدام الـ remote_id كمفتاح (Key) داخل الـ result
                     remote_info = s_data.get("result", {}).get(remote_id, {})
-                    status = remote_info.get("status")
 
-                    if status == "finished":
-                        extid = remote_info.get("extid")
-                        if extid:
-                            print(f"✅ Streamtape Success!")
-                            return f"https://streamtape.com/e/{extid}"
-                    elif status == "error":
+                    # التحقق من extid (الديكومنتيشن يقول false إذا لم ينتهِ)
+                    extid = remote_info.get("extid")
+
+                    # الحقيقة الصارمة: بمجرد أن يصبح extid ليس false ولا None، الرابط جاهز
+                    if extid and extid is not False:
+                        print(f"✅ Streamtape Success! ExtID: {extid}")
+                        return f"https://streamtape.com/e/{extid}"
+
+                    # فحص حالة الخطأ
+                    if remote_info.get("status") in ["error", "failed"]:
+                        print(f"❌ Streamtape: فشل الرفع من المصدر")
                         return None
     except Exception as e:
         print(f"❌ Streamtape: {e}")
