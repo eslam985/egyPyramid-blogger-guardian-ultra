@@ -460,9 +460,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         print(f"🔍 DoodStream Task ID: {f_code}")
 
         # محاولات الفحص (نزيد الوقت قليلاً لضمان عدم الحظر)
-        for i in range(1, 21):
+        for i in range(1, 41):
             await asyncio.sleep(15)  # 15 ثانية وقت مثالي للملفات الصغيرة
-            print(f"🔄 DoodStream Polling Attempt {i}/20...")
+            print(f"🔄 DoodStream Polling Attempt {i}/40...")
 
             for domain in api_domains:
                 try:
@@ -489,6 +489,14 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                         item = results[0]
                         if str(item.get("status")) in ["2", "completed", "downloaded"]:
                             return f"https://myvidplay.com/e/{f_code}"
+
+                        # انقل الشرط ليكون هنا (داخل الـ if) لضمان وجود المتغير item
+                        if str(item.get("status")) in ["3", "failed", "error"]:
+                            print(
+                                f"⚠️ DoodStream Failed internally. Waiting for self-correction..."
+                            )
+                        # هنا يمكننا إعادة إرسال طلب الرفع الأول add_url مرة أخرى
+                        # ولكن الأضمن حالياً هو زيادة وقت الانتظار لأن السيرفر غالباً ما يصحح نفسه
 
                 except Exception as e:
                     # لا تطبع كل الأخطاء لعدم ملء اللوجات، فقط لو كان الخطأ غريباً
@@ -538,9 +546,15 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                     # 1. الفحص عبر حالة الـ Remote (المهمة الجارية)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                     s_res = await client.get(status_url)
-                    s_data = s_res.json()
-
-                    remote_info = s_data.get("result", {}).get(remote_id)
+                    try:
+                        s_data = s_res.json()
+                        # التأكد أن النتيجة موجودة وليست None قبل الطلب
+                        result_data = s_data.get("result")
+                        remote_info = (
+                            result_data.get(remote_id) if result_data else None
+                        )
+                    except Exception:
+                        remote_info = None  # إذا فشل الرد، اعتبر المعلومات غير موجودة وأكمل الحلقة
 
                     if remote_info:
                         extid = remote_info.get("extid")
