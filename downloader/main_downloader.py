@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import nest_asyncio
 from urllib.parse import unquote
+import asyncio
 
 # 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
 # هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
@@ -568,42 +569,32 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
 
             # --- 7. الرفع لـ DoodStream و Streamtape (عبر الأرشيف) ---
+            # استبدل بلوك الرفع القديم بهذا المنطق المتوازي
             if identifier:
-                # الرفع لـ DoodStream
-                try:
-                    d_url = await upload_to_doodstream(
-                        dood_api_key, identifier, file_name
-                    )
-                    if d_url:
-                        supabase.table("links").upsert(
-                            {
-                                "episode_id": e_id,
-                                "server_name": "doodstream",
-                                "url": d_url,
-                            },
-                            on_conflict="episode_id, server_name",
-                        ).execute()
-                        print(f"✅ تم حفظ رابط DoodStream")
-                except Exception as e:
-                    print(f"⚠️ فشل مهمة DoodStream Remote: {e}")
+                print(f"🚀 البدء في الرفع المتوازي لـ DoodStream و Streamtape...")
 
-                # الرفع لـ Streamtape (منفصل ومستقل تماماً)
-                try:
-                    s_url = await upload_to_streamtape(
-                        st_login, st_key, identifier, file_name
-                    )
-                    if s_url:
-                        supabase.table("links").upsert(
-                            {
-                                "episode_id": e_id,
-                                "server_name": "streamtape",
-                                "url": s_url,
-                            },
-                            on_conflict="episode_id, server_name",
-                        ).execute()
-                        print(f"✅ تم حفظ رابط Streamtape")
-                except Exception as e:
-                    print(f"⚠️ فشل مهمة Streamtape Remote: {e}")
+                # تشغيل المهام معاً في الخلفية
+                task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
+                task_tape = upload_to_streamtape(
+                    st_login, st_key, identifier, file_name
+                )
+
+                # انتظار النتائج أيهما ينتهي أولاً أو معاً
+                d_url, s_url = await asyncio.gather(task_dood, task_tape)
+
+                if d_url:
+                    supabase.table("links").upsert(
+                        {"episode_id": e_id, "server_name": "doodstream", "url": d_url},
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ DoodStream Saved!")
+
+                if s_url:
+                    supabase.table("links").upsert(
+                        {"episode_id": e_id, "server_name": "streamtape", "url": s_url},
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ Streamtape Saved!")
 
             try:
                 save_to_supabase(

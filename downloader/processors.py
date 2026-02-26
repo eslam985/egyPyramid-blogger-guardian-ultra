@@ -454,41 +454,47 @@ async def upload_to_doodstream(api_key, identifier, file_name):
 
         # التعديل وفقاً للتوثيق: المفتاح هو filecode والنتيجة قاموس
         f_code = data.get("result", {}).get("filecode")
-        if not f_code:
-            return None
+        print(f"🔍 DoodStream Task Created: {f_code}")  # كشف الكود المستخرج
 
-        for _ in range(20):
-            await asyncio.sleep(25)
+        for i in range(20):
+            await asyncio.sleep(5)
             for domain in api_domains:
                 try:
-                    # الطريقة 1: الفحص في قائمة الـ Remote (المهمات الجارية)
                     check_url = f"https://{domain}/api/urlupload/status?key={api_key}&file_code={f_code}"
-                    c_res = await client.get(check_url)
-                    c_data = c_res.json()
-                    results = c_data.get("result", [])
+                    res = await client.get(check_url)
+                    c_data = res.json()
 
-                    if results:
-                        item = results[0]
-                        status = str(item.get("status")).lower()
-                        if status in ["2", "completed", "downloaded"]:
-                            return f"https://myvidplay.com/e/{item.get('file_code')}"
-                    else:
-                        # الطريقة 2 (الحل): المهمة اختفت؟ نبحث عنها في "آخر الملفات المرفوعة" بالاسم
-                        list_url = (
-                            f"https://{domain}/api/file/list?key={api_key}&per_page=10"
+                    # طباعة الرد الخام لمعرفة لماذا يفشل المنطق
+                    # print(f"DEBUG DoodStream (Try {i}): {c_data}")
+
+                    results = c_data.get("result", [])
+                    if results and results[0].get("status") in [
+                        "2",
+                        "completed",
+                        "downloaded",
+                    ]:
+                        return f"https://myvidplay.com/e/{results[0].get('file_code')}"
+
+                    # إذا لم يجد المهمة، يبحث بالاسم المنظف
+                    list_url = (
+                        f"https://{domain}/api/file/list?key={api_key}&per_page=10"
+                    )
+                    l_data = (await client.get(list_url)).json()
+                    files = l_data.get("result", {}).get("files", [])
+
+                    search_term = file_name.lower().replace(" ", "").split(".")[0]
+                    for f in files:
+                        remote_name = (
+                            f.get("title", "").lower().replace("_", "").replace(" ", "")
                         )
-                        l_res = await client.get(list_url)
-                        l_data = l_res.json()
-                        files = l_data.get("result", {}).get("files", [])
-                        for f in files:
-                            # نقارن الاسم (بدون امتداد) لضمان الدقة
-                            if file_name.split(".")[0] in f.get("title", ""):
-                                print(f"✅ DoodStream Found in File List!")
-                                return f"https://myvidplay.com/e/{f.get('file_code')}"
+                        if search_term in remote_name:
+                            print(f"✅ DoodStream Found by Name Match!")
+                            return f"https://myvidplay.com/e/{f.get('file_code')}"
                     break
-                except:
+                except Exception as e:
+                    print(f"⚠️ DoodStream Polling Error: {e}")
                     continue
-    return None
+        return None
 
 
 async def upload_to_streamtape(login, key, identifier, file_name):
@@ -507,7 +513,7 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                 remote_id = data["result"]["id"]
                 # 25 محاولة بمعدل كل 30 ثانية (انتظار 12.5 دقيقة كحد أقصى)
                 for _ in range(25):
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(5)
                     status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                     s_res = await client.get(status_url)
                     s_data = s_res.json()
