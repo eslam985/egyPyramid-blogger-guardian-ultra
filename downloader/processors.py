@@ -533,47 +533,43 @@ async def upload_to_streamtape(login, key, identifier, file_name):
             data = res.json()
 
             if data.get("status") == 200:
-                remote_id = data["result"]["id"]
-                # 25 محاولة بمعدل كل 30 ثانية (انتظار 12.5 دقيقة كحد أقصى)
-                # 25 محاولة بمعدل كل 15 ثانية (مراقبة لصيقة للملفات الصغيرة)
+                # 25 محاولة بمعدل كل 20 ثانية (انتظار 12.5 دقيقة كحد أقصى)
+                # 25 محاولة بمعدل كل 20 ثانية (نفس طويل للبحث)
                 for i in range(1, 51):
                     await asyncio.sleep(20)
                     print(f"🔄 Streamtape Polling Attempt {i}/50...")
 
-                    # 1. الفحص عبر حالة الـ Remote (المهمة الجارية)
-                    status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
-                    s_res = await client.get(status_url)
+                    # الاستراتيجية الأولى: قنص الرابط من قائمة المعالجة الحالية (Running Converts)
+                    # دي بتجيب الرابط حتى لو الملف لسه بيترفع أو بيتعالج
                     try:
-                        s_data = s_res.json()
-                        # التأكد أن النتيجة موجودة وليست None قبل الطلب
-                        result_data = s_data.get("result")
-                        remote_info = (
-                            result_data.get(remote_id) if result_data else None
-                        )
-                    except Exception:
-                        remote_info = None  # إذا فشل الرد، اعتبر المعلومات غير موجودة وأكمل الحلقة
+                        conv_url = f"https://api.streamtape.com/file/runningconverts?login={login}&key={key}"
+                        c_res = await client.get(conv_url)
+                        c_data = c_res.json()
+                        running_files = c_data.get("result", [])
 
-                    if remote_info:
-                        extid = remote_info.get("extid")
-                        if extid and extid is not False:
-                            print(f"✅ Streamtape Success (Found via Remote Status)!")
-                            return f"https://streamtape.com/e/{extid}"
+                        clean_search = file_name.lower().replace(" ", "").split(".")[0]
+                        for rf in running_files:
+                            if clean_search in rf.get("name", "").lower().replace(
+                                "_", ""
+                            ).replace(" ", ""):
+                                if rf.get("linkid"):
+                                    print(
+                                        f"🎯 Streamtape Sniper Success (Found in Running Converts)!"
+                                    )
+                                    return (
+                                        f"https://streamtape.com/e/{rf.get('linkid')}"
+                                    )
+                    except:
+                        pass
 
-                    # 2. خطة بديلة: الفحص عبر معلومات الملف مباشرة (File Info)
-                    # ملاحظة: أحياناً يكون الملف جاهزاً والـ Remote ID انتهى واختفى
-                    # نستخدم بحث بالاسم أو بالقائمة في المحاولات الزوجية لتجنب الحظر
-                    if i % 2 == 0:
+                    # الاستراتيجية الثانية: البحث في المجلد (لربما انتهى واختفى من القائمة)
+                    try:
                         list_url = f"https://api.streamtape.com/file/listfolder?login={login}&key={key}"
                         l_res = await client.get(list_url)
                         l_data = l_res.json()
                         files = l_data.get("result", {}).get("files", [])
 
-                        # تنظيف الاسم للمقارنة الدقيقة
-                        # داخل دالة ستريم تاب (جزء البحث بالاسم)
-                        # نحذف المسافات من اسم ملفنا للبحث
-                        clean_search = file_name.lower().replace(" ", "").split(".")[0]
                         for f in files:
-                            # نحذف الشرطات والمسافات من اسم الملف في السيرفر للمقارنة
                             remote_clean = (
                                 f.get("name", "")
                                 .lower()
@@ -581,8 +577,10 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                                 .replace(" ", "")
                             )
                             if clean_search in remote_clean:
-                                print(f"✅ Streamtape Found by Normalized Name Match!")
+                                print(f"✅ Streamtape Success (Found in Folder List)!")
                                 return f"https://streamtape.com/e/{f.get('linkid')}"
+                    except:
+                        pass
     except Exception as e:
         print(f"❌ Streamtape Error Type: {type(e).__name__}")
         print(f"❌ Streamtape Error Details: {e}")
