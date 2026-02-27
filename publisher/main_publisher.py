@@ -74,10 +74,11 @@ def prepare_content(row, is_series_by_title):
 
     if episodes_list:
         content_type = "SERIES"
-        f_voe = episodes_list[0]["voe"]
-        f_vid = episodes_list[0]["vidtube"]
-        f_ok = episodes_list[0]["ok"]
-        f_vk = episodes_list[0]["vk"]  # جلب أول رابط VK محول للمسلسل
+        # تأمين جلب القيم الأولى للاستخدام الخارجي (لو لزم الأمر)
+        f_voe = episodes_list[0].get("voe", "")
+        f_vid = episodes_list[0].get("vidtube", "")
+        f_ok = episodes_list[0].get("ok", "")
+        f_vk = episodes_list[0].get("vk", "")
 
         # التعديل هنا لضمان توافق الهيكل مع نظام الحقن الجديد
         ep_buttons_html = (
@@ -85,11 +86,18 @@ def prepare_content(row, is_series_by_title):
         )
         for ep in episodes_list:
             is_active = "active" if ep["no"] == "1" else ""
-            # تجميع السيرفرات المتاحة للحلقة في قائمة
+
+            # التعديل: تجميع ديناميكي لكل السيرفرات المتاحة في كائن الحلقة
             current_links = []
-            for s_key in ["voe", "vidtube", "ok", "vk"]:
-                if ep.get(s_key):
-                    current_links.append({"name": s_key, "url": ep[s_key]})
+            excluded = ["down", "no", "telegram_direct", "archive"]
+
+            for s_key, s_url in ep.items():
+                if (
+                    s_key not in excluded
+                    and s_url
+                    and str(s_url).lower() not in ["nan", ""]
+                ):
+                    current_links.append({"name": s_key, "url": s_url})
 
             import json
 
@@ -101,26 +109,48 @@ def prepare_content(row, is_series_by_title):
         # إذا كانت قائمة الحلقات فارغة ولكننا نعلم أنه مسلسل من العنوان
         if is_series_by_title:
             content_type = "SERIES"
-            f_voe = str(row.get("voe_url", "")).strip()
-            f_vid = str(row.get("vidtube_url", "")).strip()
-            f_ok = str(row.get("ok_url", "")).strip()
-            # تصحيح روابط vidtube و vk
-            if "vidtube.one/" in f_vid and "embed-" not in f_vid:
-                f_vid = f_vid.replace("vidtube.one/", "vidtube.one/embed-")
-            vk_raw = str(row.get("vk_url", "")).strip()
-            f_vk = convert_vk_to_embed(vk_raw) if vk_raw and vk_raw != "nan" else ""
 
-            # بناء أزرار افتراضية (الحلقة 1 فقط حالياً)
+            # تجميع ديناميكي من الـ row مباشرة
+            current_links = []
+            excluded_from_view = [
+                "telegram_direct",
+                "archive",
+                "download",
+                "title",
+                "poster",
+                "story",
+                "labels",
+                "Rating",
+                "Movie Runtime",
+                "Year",
+            ]
+
+            for key, value in row.items():
+                if key.endswith("_url"):
+                    s_name = key.replace("_url", "")
+                    if s_name not in excluded_from_view:
+                        u = str(value).strip()
+                        if u and u.lower() not in ["nan", ""]:
+                            # تصحيحات سريعة للروابط المشهورة
+                            if s_name == "vidtube" and "embed-" not in u:
+                                u = u.replace("vidtube.one/", "vidtube.one/embed-")
+                            if s_name == "vk":
+                                u = convert_vk_to_embed(u)
+                            current_links.append({"name": s_name, "url": u})
+
+            import json
+
+            links_json = json.dumps(current_links).replace('"', "&quot;")
+            down_url = row.get("download_url", "")
+
+            # بناء أزرار افتراضية بنظام Dynamic
             ep_buttons_html = (
                 f'\n<div class="episodes-container ep-More" id="episodes-container">\n'
             )
-            ep_buttons_html += f'    <div class="ep-btn active" onclick="playEp(this, \'{f_voe}\', \'{f_vid}\', \'1\', \'{row.get("download_url", "")}\', \'{f_ok}\', \'{f_vk}\')">1</div>\n'
-            # في نهاية بناء ep_buttons_html
-            # إضافة العلامة المخفية لضمان مكان الحقن في المرات القادمة
-            ep_buttons_html += "\n\n</div>\n"
+            ep_buttons_html += f"    <div class=\"ep-btn active\" onclick=\"playEpDynamic(this, '1', '{down_url}', '{links_json}')\">1</div>\n"
+            ep_buttons_html += "\n</div>\n"
 
-            # ملء قائمة الحلقات وهمياً لضمان استمرار السكريبت
-            episodes_list = [{"no": "1", "voe": f_voe}]
+            episodes_list = [{"no": "1"}]  # للمحافظة على تدفق السكريبت
         else:
             # حالة الفيلم الحقيقية
             content_type = "MOVIE"
