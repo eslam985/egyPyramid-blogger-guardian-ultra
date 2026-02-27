@@ -782,6 +782,8 @@ HTML_TEMPLATE = r"""
 
 
   <script>
+    const url = data - posters[0].url;
+  
     // تجميع البيانات في مصفوفة ديناميكية
     const movieLinks = [];
     if ("{{VOE_URL}}" && "{{VOE_URL}}" !== "nan") movieLinks.push({ name: 'Voe', url: "{{VOE_URL}}" });
@@ -1936,6 +1938,8 @@ HTML_TEMPLATE_SERIES = r"""
     let currentEpNum = 1;
     let blogPostId = "{{POST_ID}}";
     let currentVoe = "";
+    const url = data - posters[0].url;
+    
     window.onload = function () {
       markWatchedFromStorage();
       const urlParams = new URLSearchParams(window.location.search);
