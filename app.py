@@ -12,6 +12,9 @@ from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import requests
+import json
+import re
+import html  # مكتبة أساسية لتنظيف رموز HTML
 
 load_dotenv()  # شحن المتغيرات أولاً
 import logging
@@ -285,8 +288,6 @@ def convert_vk_to_embed(url):
     ):
         return url
     try:
-        import re
-        import html  # مكتبة أساسية لتنظيف رموز HTML
 
         match_ids = re.search(r"video(-?\d+)_(\d+)", url)
         if not match_ids:
@@ -346,26 +347,36 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
         if not links_res.data:
             return {"status": "error", "error": "لا توجد روابط لهذه الحلقة!"}
 
-        # تجهيز روابط السيرفرات للدالة (بناء الـ HTML اللي هيتحقن)
-        # ملاحظة: استبدل الروابط حسب أسماء السيرفرات عندك (Voe, VK, Archive, الخ)
-        servers = {l["server_name"].lower(): l["url"] for l in links_res.data}
-        # --- [1] معالجة وتصحيح الروابط (الخوارزمية الذكية) ---
-        servers = {l["server_name"].lower(): l["url"] for l in links_res.data}
+        # --- [1] معالجة وتصحيح الروابط (النظام الديناميكي الشامل) ---
+        episode_links = []
+        excluded_servers = ["telegram_direct", "archive", "download"]
+        down_url = ""
 
-        # تصحيح رابط Archive (من details لـ embed)
-        archive_url = servers.get("archive", "")
-        if "details/" in archive_url:
-            archive_url = archive_url.replace("details/", "embed/")
+        for l in links_res.data:
+            s_name = l["server_name"].lower()
+            u = l["url"]
 
-        # تصحيح رابط VK (تحويله لـ Embed)
-        # استيراد requests في بداية الدالة أو الملف
+            if s_name == "download":
+                down_url = u
+                continue
 
-        # تصحيح رابط VK باستخدام الخوارزمية الأصلية
-        # تصحيح رابط VK (استدعاء الخوارزمية الذكية)
-        vk_url = convert_vk_to_embed(servers.get("vk", ""))
+            if s_name in excluded_servers or not u:
+                continue
 
-        # بناء الـ HTML الجديد للحلقة (الحقن)
-        new_ep_html = f"""<div class="ep-btn" onclick="playEp(this, '{servers.get('voe', '')}', '{servers.get('vidtube', '')}', '{episode['episode_number']}', '{servers.get('download', '')}', '{archive_url}', '{vk_url}')">{episode['episode_number']}</div>"""
+            # تصحيحات الروابط
+            if s_name == "vidtube" and "embed-" not in u:
+                u = u.replace("vidtube.one/", "vidtube.one/embed-")
+            if s_name == "vk":
+                u = convert_vk_to_embed(u)
+            if s_name == "archive" and "details/" in u:
+                u = u.replace("details/", "embed/")
+
+            episode_links.append({"name": s_name, "url": u})
+
+        links_json = json.dumps(episode_links).replace('"', "&quot;")
+
+        # --- [2] بناء الـ HTML بنظام playEpDynamic الجديد ---
+        new_ep_html = f"""<div class="ep-btn" onclick="playEpDynamic(this, '{episode['episode_number']}', '{down_url}', '{links_json}')">{episode['episode_number']}</div>"""
 
         # --- [2] جلب المحتوى وبدء المعالجة بـ BeautifulSoup ---
         # --- [2] جلب المحتوى وبدء المعالجة بـ BeautifulSoup ---
@@ -375,8 +386,8 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 
         # --- [3] تحديث زر التحميل الرئيسي (أعلى المقال) ---
         main_download_btn = soup.find("a", id="download-btn")
-        if main_download_btn and servers.get("download"):
-            main_download_btn["href"] = servers.get("download")
+        if main_download_btn and down_url:
+            main_download_btn["href"] = down_url
             main_download_btn.string = (
                 f" 📥 تحميل الحلقة {episode['episode_number']} HD "
             )
@@ -411,8 +422,6 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 @app.post("/api/blogger/toggle/{post_id}")
 async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
-        from services.blogger_api import BloggerService
-        from services.supabase_db import SupabaseService
 
         blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
         service = blogger_service.get_service()

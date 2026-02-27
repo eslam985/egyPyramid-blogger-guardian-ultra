@@ -73,7 +73,7 @@ window.editMedia = async function (mediaId) {
                         <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
                             <i class="fa fa-link"></i> السيرفرات
                         </button>
-                        <button type="button" onclick="syncToBlogger(${ep.id})" class="btn-mini" 
+                        <button type="button" onclick="syncToBlogge  <div class="ep-btn" onclick="playEp(this, 'https://voe.sx/e/lvcavgwxcynt', 'https://vidtube.one/embed-wzjlp1i2t4vs.html', '11', 'https://voe.sx/lvcavgwxcynt/download', 'https://archive.org/embed/egy_pyr_1772177156_e1', 'https://vk.com/video_ext.php?oid=-235805578&amp;id=456239087&amp;hash=2512937a347b99ca&amp;__ref=vk.admin_android&amp;api_hash=1772178604215929d4550e37ccf2_GEYDSOBSGM3TGMRR')">11</div>r(${ep.id})" class="btn-mini" 
                                 style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px;">
                             <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
                         </button>
