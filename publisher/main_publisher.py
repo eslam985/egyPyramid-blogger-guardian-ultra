@@ -333,15 +333,24 @@ def start_publishing_from_supabase():
 
                 # عملية الاستبدال داخل القالب المختار
                 # عملية الاستبدال داخل القالب المختار (النظام الديناميكي)
+                # عملية الاستبدال الذكية
                 final_html = (
                     current_template.replace("{{TITLE}}", title)
-                    .replace(
-                        "{{EPISODES_BUTTONS}}", ep_buttons
-                    )  # الأزرار الآن تحتوي على الـ JSON
+                    .replace("{{EPISODES_BUTTONS}}", ep_buttons)
                     .replace("{{POSTER_URL}}", row["poster"])
                     .replace("{{STORY}}", row["story"])
                     .replace("{{CUSTOM_LINK}}", slug_name)
                 )
+
+                # إضافة هامة: حقن الروابط للأفلام فقط لأن القالب يحتاجها بناءً على مصفوفة movieLinks
+                if not is_series:
+                    final_html = (
+                        final_html.replace("{{VOE_URL}}", row["voe_url"])
+                        .replace("{{VIDTUBE_URL}}", row["vidtube_url"])
+                        .replace("{{OK_URL}}", row["ok_url"])
+                        .replace("{{VK_URL}}", row["vk_url"])
+                        .replace("{{DOWNLOAD_URL}}", row["download_url"])
+                    )
 
                 # ملاحظة: تم حذف replace الخاص بالروابط الثابتة لأن الأزرار الديناميكية تتولى المهمة الآن
 
