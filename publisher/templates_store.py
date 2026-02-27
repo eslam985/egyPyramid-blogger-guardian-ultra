@@ -248,74 +248,51 @@ HTML_TEMPLATE = r"""
     font-weight: bold !important;
   }
 
-  /* ================================================= */
-  /* SERVER BUTTONS - أزرار السيرفرات */
+   /* ================================================= */
+  /* SERVER BUTTONS - أزرار السيرفرات المطورة */
   /* ================================================= */
   .server-buttons {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     background: var(--color-footer-bg);
-    padding: 12px 0;
+    padding: 20px 10px;
   }
 
   .server-btn {
     cursor: pointer;
-    color: #fff;
-    /* تأكيد اللون الأبيض للنص */
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
+    color: #fff !important;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    /* برواز خفيف جداً */
+    padding: 10px 18px;
+    border-radius: 8px;
     font-weight: bold;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    min-width: 120px;
-    opacity: 0.8;
-    /* جعل الأزرار غير النشطة باهتة قليلاً */
+    font-size: 13px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 110px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+
+    /* اللمسة الاحترافية: تدرج ناعم يخلي اللون مش فاقع */
+    background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.15), rgba(0, 0, 0, 0.15));
+    opacity: 0.85;
   }
 
   .server-btn:hover {
     opacity: 1;
-    transform: translateY(-2px);
-    filter: brightness(1.2);
+    transform: translateY(-3px);
+    filter: brightness(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
-  /* تخصيص ألوان السيرفرات */
-  .server-btn-1 {
-    background-color: #8e44ad !important;
-  }
-
-  /* Voe بنفسجي */
-  .server-btn-2 {
-    background-color: #e74c3c !important;
-  }
-
-  /* VidTube أحمر */
-  .server-btn-3 {
-    background-color: #f39c12 !important;
-  }
-
-  /* OK برتقالي */
-  .server-btn-4 {
-    background-color: #2980b9 !important;
-  }
-
-  /* VK أزرق */
-  .extra-server {
-    background-color: #27ae60 !important;
-  }
-
-  /* أي سيرفر إضافي أخضر */
-
-  /* لون حالة النشاط (Active) - الحقيقة الصارمة: نستخدم !important لإلغاء ألوان السيرفرات المحددة أعلاه */
+  /* تعديل حالة النشاط (Active) */
   .server-btn.active {
-    background-color: var(--color-secondary) !important;
-    /* اللون الذهبي أو المارون المعتاد في قالبك */
     opacity: 1;
-    box-shadow: 0 0 15px var(--color-secondary);
-    border: 2px solid #fff;
-    /* تمييز إضافي للزر المختار */
+    /* الحقيقة الصارمة: شلنا اللون الثابت عشان نسيب لون الجافا سكريبت يظهر */
+    border: 2px solid #fff !important;
+    transform: scale(1.08);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    z-index: 2;
   }
 
   /* ================================================= */
@@ -853,44 +830,64 @@ HTML_TEMPLATE = r"""
     }
 
     // الاحتفاظ بداله الحلقات في قالب الافلام احطياطي!
-    function playEpDynamic(btn, num, downloadUrl, linksJson) {
-      // 1. تحويل النص القادم من بايثون إلى مصفوفة حقيقية
-      const links = JSON.parse(linksJson);
-      const container = document.getElementById('dynamic-servers-container');
-      const epTitle = document.getElementById('current-ep');
-      const dBtn = document.getElementById('download-btn');
-      currentEpNum = parseInt(num);
-      // 2. تحديث العناوين والتحميل
-      if (epTitle) epTitle.innerText = "الحلقة " + num;
-      if (dBtn) dBtn.href = downloadUrl;
+  function playEpDynamic(btn, num, downloadUrl, linksJson) {
+    const rawLinks = JSON.parse(linksJson);
+    const container = document.getElementById('dynamic-servers-container');
+    const epTitle = document.getElementById('current-ep');
+    const dBtn = document.getElementById('download-btn');
+    currentEpNum = parseInt(num);
 
-      // 3. بناء أزرار السيرفرات ديناميكياً (هنا السحر!)
-      container.innerHTML = ''; // مسح الأزرار القديمة تماماً
+    if (epTitle) epTitle.innerText = "الحلقة " + num;
+    if (dBtn) dBtn.href = downloadUrl;
 
-      links.forEach((link, index) => {
-        const sBtn = document.createElement('button');
-        sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
-        sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
-        sBtn.onclick = function () {
-          // تفعيل الزر النشط
-          document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
-          sBtn.classList.add('active');
-          // تغيير الفيديو
-          changeS(sBtn, link.url);
-        };
-        container.appendChild(sBtn);
-      });
+    // 1. خريطة الأولوية والألوان (الباب موارب لأي سيرفر جديد)
+    const serverConfig = {
+      'vk': { priority: 1, color: '#4c75a3' }, // أزرق VK
+      'ok': { priority: 2, color: '#ee8208' }, // برتقالي OK
+      'vidtube': { priority: 3, color: '#ff0000' }, // أحمر VidTube
+      'voe': { priority: 4, color: '#00d0ff' }, // سماوي Voe
+      'doodstream': { priority: 5, color: '#111827' }, // أسود ليلي
+      'streamtape': { priority: 6, color: '#0056b3' }, // أزرق ملكي
+      'mixdrop': { priority: 7, color: '#10b981' }, // أخضر زمردي
+      'lulustream': { priority: 8, color: '#8b5cf6' }, // بنفسجي
+      'default': { priority: 99, color: '#444' }    // رمادي لأي سيرفر جديد
+    };
 
-      // 4. تشغيل أول سيرفر في القائمة تلقائياً
-      if (links.length > 0) {
-        changeS(null, links[0].url);
-      }
+    // 2. ترتيب السيرفرات بناءً على الخريطة
+    const sortedLinks = rawLinks.sort((a, b) => {
+      const pA = serverConfig[a.name.toLowerCase()]?.priority || serverConfig.default.priority;
+      const pB = serverConfig[b.name.toLowerCase()]?.priority || serverConfig.default.priority;
+      return pA - pB;
+    });
 
-      // 5. تمييز زر الحلقة وحفظ المشاهدة
-      document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      saveToWatched(num);
-    }
+    container.innerHTML = '';
+
+    // 3. إنشاء الأزرار بالألوان الجديدة
+    sortedLinks.forEach((link, index) => {
+      const sBtn = document.createElement('button');
+      const cfg = serverConfig[link.name.toLowerCase()] || serverConfig.default;
+
+      sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
+      sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
+
+      // تطبيق اللون المخصص للباكجراوند
+      sBtn.style.backgroundColor = cfg.color;
+      sBtn.style.borderColor = 'rgba(255,255,255,0.2)';
+
+      sBtn.onclick = function () {
+        document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
+        sBtn.classList.add('active');
+        changeS(sBtn, link.url);
+      };
+      container.appendChild(sBtn);
+    });
+
+    if (sortedLinks.length > 0) changeS(null, sortedLinks[0].url);
+
+    document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    saveToWatched(num);
+  }
     currentVoe = voeUrl;
     currentVid = vidUrl;
     // تحديث الروابط العالمية من المصفوفة الإضافية
@@ -1361,74 +1358,51 @@ HTML_TEMPLATE_SERIES = r"""
     font-weight: bold !important;
   }
 
-  /* ================================================= */
-  /* SERVER BUTTONS - أزرار السيرفرات */
+   /* ================================================= */
+  /* SERVER BUTTONS - أزرار السيرفرات المطورة */
   /* ================================================= */
   .server-buttons {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     background: var(--color-footer-bg);
-    padding: 12px 0;
+    padding: 20px 10px;
   }
 
   .server-btn {
     cursor: pointer;
-    color: #fff;
-    /* تأكيد اللون الأبيض للنص */
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
+    color: #fff !important;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    /* برواز خفيف جداً */
+    padding: 10px 18px;
+    border-radius: 8px;
     font-weight: bold;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    min-width: 120px;
-    opacity: 0.8;
-    /* جعل الأزرار غير النشطة باهتة قليلاً */
+    font-size: 13px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 110px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+
+    /* اللمسة الاحترافية: تدرج ناعم يخلي اللون مش فاقع */
+    background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.15), rgba(0, 0, 0, 0.15));
+    opacity: 0.85;
   }
 
   .server-btn:hover {
     opacity: 1;
-    transform: translateY(-2px);
-    filter: brightness(1.2);
+    transform: translateY(-3px);
+    filter: brightness(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
-  /* تخصيص ألوان السيرفرات */
-  .server-btn-1 {
-    background-color: #8e44ad !important;
-  }
-
-  /* Voe بنفسجي */
-  .server-btn-2 {
-    background-color: #e74c3c !important;
-  }
-
-  /* VidTube أحمر */
-  .server-btn-3 {
-    background-color: #f39c12 !important;
-  }
-
-  /* OK برتقالي */
-  .server-btn-4 {
-    background-color: #2980b9 !important;
-  }
-
-  /* VK أزرق */
-  .extra-server {
-    background-color: #27ae60 !important;
-  }
-
-  /* أي سيرفر إضافي أخضر */
-
-  /* لون حالة النشاط (Active) - الحقيقة الصارمة: نستخدم !important لإلغاء ألوان السيرفرات المحددة أعلاه */
+  /* تعديل حالة النشاط (Active) */
   .server-btn.active {
-    background-color: var(--color-secondary) !important;
-    /* اللون الذهبي أو المارون المعتاد في قالبك */
     opacity: 1;
-    box-shadow: 0 0 15px var(--color-secondary);
-    border: 2px solid #fff;
-    /* تمييز إضافي للزر المختار */
+    /* الحقيقة الصارمة: شلنا اللون الثابت عشان نسيب لون الجافا سكريبت يظهر */
+    border: 2px solid #fff !important;
+    transform: scale(1.08);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    z-index: 2;
   }
 
   /* ================================================= */
@@ -1995,44 +1969,67 @@ HTML_TEMPLATE_SERIES = r"""
     }
 
     // استبدل أو أضف هذه الدالة داخل الـ script
-    function playEpDynamic(btn, num, downloadUrl, linksJson) {
-      // 1. تحويل النص القادم من بايثون إلى مصفوفة حقيقية
-      const links = JSON.parse(linksJson);
-      const container = document.getElementById('dynamic-servers-container');
-      const epTitle = document.getElementById('current-ep');
-      const dBtn = document.getElementById('download-btn');
-      currentEpNum = parseInt(num);
-      // 2. تحديث العناوين والتحميل
-      if (epTitle) epTitle.innerText = "الحلقة " + num;
-      if (dBtn) dBtn.href = downloadUrl;
+  function playEpDynamic(btn, num, downloadUrl, linksJson) {
+    const rawLinks = JSON.parse(linksJson);
+    const container = document.getElementById('dynamic-servers-container');
+    const epTitle = document.getElementById('current-ep');
+    const dBtn = document.getElementById('download-btn');
+    currentEpNum = parseInt(num);
 
-      // 3. بناء أزرار السيرفرات ديناميكياً (هنا السحر!)
-      container.innerHTML = ''; // مسح الأزرار القديمة تماماً
+    if (epTitle) epTitle.innerText = "الحلقة " + num;
+    if (dBtn) {
+    dBtn.href = downloadUrl;
+    dBtn.innerHTML = `📥 تحميل الحلقة ${num} HD`; // هنا التغيير الديناميكي للنص
+}
 
-      links.forEach((link, index) => {
-        const sBtn = document.createElement('button');
-        sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
-        sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
-        sBtn.onclick = function () {
-          // تفعيل الزر النشط
-          document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
-          sBtn.classList.add('active');
-          // تغيير الفيديو
-          changeS(sBtn, link.url);
-        };
-        container.appendChild(sBtn);
-      });
+    // 1. خريطة الأولوية والألوان (الباب موارب لأي سيرفر جديد)
+    const serverConfig = {
+      'vk': { priority: 1, color: '#4c75a3' }, // أزرق VK
+      'ok': { priority: 2, color: '#ee8208' }, // برتقالي OK
+      'vidtube': { priority: 3, color: '#ff0000' }, // أحمر VidTube
+      'voe': { priority: 4, color: '#00d0ff' }, // سماوي Voe
+      'doodstream': { priority: 5, color: '#111827' }, // أسود ليلي
+      'streamtape': { priority: 6, color: '#0056b3' }, // أزرق ملكي
+      'mixdrop': { priority: 7, color: '#10b981' }, // أخضر زمردي
+      'lulustream': { priority: 8, color: '#8b5cf6' }, // بنفسجي
+      'default': { priority: 99, color: '#444' }    // رمادي لأي سيرفر جديد
+    };
 
-      // 4. تشغيل أول سيرفر في القائمة تلقائياً
-      if (links.length > 0) {
-        changeS(null, links[0].url);
-      }
+    // 2. ترتيب السيرفرات بناءً على الخريطة
+    const sortedLinks = rawLinks.sort((a, b) => {
+      const pA = serverConfig[a.name.toLowerCase()]?.priority || serverConfig.default.priority;
+      const pB = serverConfig[b.name.toLowerCase()]?.priority || serverConfig.default.priority;
+      return pA - pB;
+    });
 
-      // 5. تمييز زر الحلقة وحفظ المشاهدة
-      document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      saveToWatched(num);
-    }
+    container.innerHTML = '';
+
+    // 3. إنشاء الأزرار بالألوان الجديدة
+    sortedLinks.forEach((link, index) => {
+      const sBtn = document.createElement('button');
+      const cfg = serverConfig[link.name.toLowerCase()] || serverConfig.default;
+
+      sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
+      sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
+
+      // تطبيق اللون المخصص للباكجراوند
+      sBtn.style.backgroundColor = cfg.color;
+      sBtn.style.borderColor = 'rgba(255,255,255,0.2)';
+
+      sBtn.onclick = function () {
+        document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
+        sBtn.classList.add('active');
+        changeS(sBtn, link.url);
+      };
+      container.appendChild(sBtn);
+    });
+
+    if (sortedLinks.length > 0) changeS(null, sortedLinks[0].url);
+
+    document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    saveToWatched(num);
+  }
 
     function playNext() {
       let nextNum = currentEpNum + 1;
