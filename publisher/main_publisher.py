@@ -186,19 +186,28 @@ def update_series_post(
         down_url = str(row.get("download_url", "")).strip()
 
         # التعديل: تجميع ديناميكي لكل السيرفرات المتاحة في الصف
-        # التعديل: تجميع ديناميكي مع استبعاد تليجرام وأرشيف
+        # 1. تجميع الروابط المتاحة لهذه الحلقة من الـ row الممرر (تعديل ديناميكي)
         episode_links = []
-        excluded_servers = ["telegram_direct", "archive", "download"] 
-        
+        excluded_servers = ["telegram_direct", "archive", "download"]
+
         for key, value in row.items():
+            # البحث عن أي مفتاح ينتهي بـ _url (مثل streamtape_url, doodstream_url)
             if key.endswith("_url"):
                 s_name = key.replace("_url", "")
-                # استبعاد السيرفرات غير المرغوب فيها
+
+                # تخطي السيرفرات المستبعدة
                 if s_name in excluded_servers:
                     continue
-                    
+
                 u = str(value).strip()
+                # التأكد من أن الرابط صالح وليس فارغاً
                 if u and u.lower() not in ["nan", "", "pending", "none"]:
+                    # تصحيح روابط vidtube و ok و vk لو لزم الأمر
+                    if s_name == "vidtube" and "embed-" not in u:
+                        u = u.replace("vidtube.one/", "vidtube.one/embed-")
+                    if s_name == "vk":
+                        u = convert_vk_to_embed(u)
+
                     episode_links.append({"name": s_name, "url": u})
 
         import json
@@ -306,9 +315,9 @@ def start_publishing_from_supabase():
                 "Rating": m_data.get("rating", "7.5"),
                 "Movie Runtime": m_data.get("runtime", "غير محدد"),
                 "Year": m_data.get("year", ""),
-                "download_url": links_map.get("download", "")
+                "download_url": links_map.get("download", ""),
             }
-            
+
             # فلترة السيرفرات: استبعاد تليجرام وأرشيف من قائمة العرض فقط
             excluded_from_view = ["telegram_direct", "archive", "download"]
             for server, url in links_map.items():
