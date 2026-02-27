@@ -7,7 +7,6 @@ from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
 import os
 import uvicorn
-from datetime import datetime
 from fastapi import BackgroundTasks
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
