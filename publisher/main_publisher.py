@@ -189,8 +189,11 @@ def update_series_post(
         content = post.get("content", "")
 
         # 3. منع التكرار داخل HTML بلوجر
-        if f", '{ep_no}'," in content:
-            print(f"🟡 الحلقة {ep_no} موجودة مسبقاً في مقال بلوجر.")
+        # هنسمح بالتحديث حتى لو موجودة عشان نحدث السيرفرات (Force Update)
+        if f", '{ep_no}'," in content and "playEpDynamic" in content:
+            # لو موجودة وبالنظام الجديد فعلاً، خلاص مش لازم نحدث
+            print(f"🟡 الحلقة {ep_no} موجودة بالنظام الجديد فعلاً.")
+            # return True # ممكن تقفل الريتيرن دي لو عايز تجبره يلبس الكود الجديد
             return True
 
         # 4. معالجة الروابط وتحديث Supabase (بدلاً من الأرشيف القديم)
@@ -335,8 +338,7 @@ def start_publishing_from_supabase():
             )
             links_map = {l["server_name"]: l["url"] for l in l_query.data}
 
-            # بناء الـ Row بشكل ديناميكي ليشمل كل السيرفرات القادمة من ساب باز
-            # بناء الـ Row مع استثناء السيرفرات التي لا تظهر كـ "مشاهدة"
+            # 2. بناء الـ Row الأساسي
             row = {
                 "title": title,
                 "poster": m_data.get("poster_url", ""),
@@ -348,11 +350,10 @@ def start_publishing_from_supabase():
                 "download_url": links_map.get("download", ""),
             }
 
-            # فلترة السيرفرات: استبعاد تليجرام وأرشيف من قائمة العرض فقط
-            excluded_from_view = ["telegram_direct", "archive", "download"]
-            for server, url in links_map.items():
-                if server not in excluded_from_view:
-                    row[f"{server}_url"] = url
+            # 3. إضافة كل سيرفر موجود في ساب باز إلى الـ row تلقائياً
+            for s_name, s_url in links_map.items():
+                if s_name not in ["download", "telegram_direct", "archive"]:
+                    row[f"{s_name}_url"] = s_url
 
             # 3. اختيار القالب وبناء المحتوى (Logic الاستدعاء)
             # استدعاء دالة prepare_content التي تملكها أصلاً لاختيار القالب المناسب
