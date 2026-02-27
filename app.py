@@ -16,9 +16,9 @@ import json
 import re
 import html  # مكتبة أساسية لتنظيف رموز HTML
 from publisher.main_publisher import start_publishing_from_supabase
+import logging
 
 load_dotenv()  # شحن المتغيرات أولاً
-import logging
 
 
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
