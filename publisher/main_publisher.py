@@ -185,19 +185,21 @@ def update_series_post(
         )  # تحويل يدوي سريع للـ HTML
         down_url = str(row.get("download_url", "")).strip()
 
-        # 1. تجميع الروابط المتاحة لهذه الحلقة من قاعدة البيانات
-        # 1. تجميع الروابط المتاحة لهذه الحلقة من الـ row الممرر
+        # التعديل: تجميع ديناميكي لكل السيرفرات المتاحة في الصف
+        # التعديل: تجميع ديناميكي مع استبعاد تليجرام وأرشيف
         episode_links = []
-        mapping = {
-            "voe_url": "voe",
-            "vidtube_url": "vidtube",
-            "ok_url": "ok",
-            "vk_url": "vk",
-        }
-        for key, s_name in mapping.items():
-            u = str(row.get(key, "")).strip()
-            if u and u.lower() not in ["nan", "", "pending", "none"]:
-                episode_links.append({"name": s_name, "url": u})
+        excluded_servers = ["telegram_direct", "archive", "download"] 
+        
+        for key, value in row.items():
+            if key.endswith("_url"):
+                s_name = key.replace("_url", "")
+                # استبعاد السيرفرات غير المرغوب فيها
+                if s_name in excluded_servers:
+                    continue
+                    
+                u = str(value).strip()
+                if u and u.lower() not in ["nan", "", "pending", "none"]:
+                    episode_links.append({"name": s_name, "url": u})
 
         import json
 
@@ -294,20 +296,24 @@ def start_publishing_from_supabase():
             )
             links_map = {l["server_name"]: l["url"] for l in l_query.data}
 
+            # بناء الـ Row بشكل ديناميكي ليشمل كل السيرفرات القادمة من ساب باز
+            # بناء الـ Row مع استثناء السيرفرات التي لا تظهر كـ "مشاهدة"
             row = {
                 "title": title,
-                "voe_url": links_map.get("voe", ""),
-                "vidtube_url": links_map.get("vidtube", ""),
-                "ok_url": links_map.get("ok", ""),
-                "vk_url": links_map.get("vk", ""),
-                "download_url": links_map.get("download", ""),
                 "poster": m_data.get("poster_url", ""),
                 "story": m_data.get("story", ""),
                 "labels": m_data.get("labels", ""),
                 "Rating": m_data.get("rating", "7.5"),
                 "Movie Runtime": m_data.get("runtime", "غير محدد"),
                 "Year": m_data.get("year", ""),
+                "download_url": links_map.get("download", "")
             }
+            
+            # فلترة السيرفرات: استبعاد تليجرام وأرشيف من قائمة العرض فقط
+            excluded_from_view = ["telegram_direct", "archive", "download"]
+            for server, url in links_map.items():
+                if server not in excluded_from_view:
+                    row[f"{server}_url"] = url
 
             # 3. اختيار القالب وبناء المحتوى (Logic الاستدعاء)
             # استدعاء دالة prepare_content التي تملكها أصلاً لاختيار القالب المناسب
