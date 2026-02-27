@@ -551,7 +551,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
             data = res.json()
 
             # التأكد من قبول السيرفر للأمر
+            # التأكد من قبول السيرفر للأمر
             if data.get("status") == 200:
+                remote_id = data.get("result", {}).get("id")
 
                 # تعريف دالة التنظيف داخل السياق لمرة واحدة
                 def clean_it(text):
@@ -559,38 +561,49 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
                 target = clean_it(file_name.split(".")[0])
 
-                # حلقة الفحص (واحدة فقط ومستقيمة)
                 for i in range(1, 61):
                     await asyncio.sleep(15)
                     print(f"🔄 Streamtape Polling Attempt {i}/60...")
 
-                    # 1. فحص القائمة الجارية (Running Converts)
+                    # 1. الفحص المباشر عبر الـ ID (الأولوية القصوى حسب الديكومنتيشن)
                     try:
-                        conv_url = f"https://api.streamtape.com/file/runningconverts?login={login}&key={key}"
-                        c_res = await client.get(conv_url)
-                        running_files = c_res.json().get("result", [])
+                        status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
+                        s_res = await client.get(status_url)
+                        s_data = s_res.json()
+                        task_info = s_data.get("result", {}).get(remote_id, {})
 
-                        for rf in running_files:
-                            if target in clean_it(rf.get("name", "")):
-                                if rf.get("linkid"):
-                                    print(
-                                        f"🎯 Streamtape Sniper Success (Found in Running)!"
-                                    )
-                                    return (
-                                        f"https://streamtape.com/e/{rf.get('linkid')}"
-                                    )
+                        # إذا ظهر الرابط في حقل url يعني المهمة اكتملت
+                        # التعديل هنا: سحب الـ id الفعلي للملف من نتيجة الفحص
+                        if task_info.get("url"):
+                            print(f"✅ Streamtape Success (Direct Match)!")
+                            final_id = task_info.get("id")  # هذا هو المعرف الأضمن للملف
+                            return f"https://streamtape.com/e/{final_id}"
                     except Exception:
-                        pass  # في حال فشل طلب الـ API ننتظر الدورة القادمة
+                        pass
 
-                    # 2. فحص المجلد (List Folder)
+                    # 2. نظام الطوارئ: فحص المجلد (في حال تأخر تحديث حالة الـ ID)
+                    # 2. نظام الطوارئ المتطور: فحص المجلد بالكلمات المفتاحية
                     try:
                         list_url = f"https://api.streamtape.com/file/listfolder?login={login}&key={key}"
                         l_res = await client.get(list_url)
                         files = l_res.json().get("result", {}).get("files", [])
 
+                        # استخراج الكلمات الهامة فقط من الاسم (مثل: المداح، 11)
+                        keywords = [
+                            k
+                            for k in file_name.split(".")[0].replace("-", " ").split()
+                            if len(k) > 1
+                        ]
+
                         for f in files:
-                            if target in clean_it(f.get("name", "")):
-                                print(f"✅ Streamtape Success (Found in Folder List)!")
+                            remote_name = f.get("name", "").lower()
+                            # التحقق إذا كانت كل الكلمات المفتاحية موجودة في اسم الملف بالسيرفر
+                            if all(
+                                clean_it(k) in clean_it(remote_name) for k in keywords
+                            ):
+                                print(
+                                    f"✅ Streamtape Success (Advanced Emergency Match)!"
+                                )
                                 return f"https://streamtape.com/e/{f.get('linkid')}"
                     except Exception:
                         pass
