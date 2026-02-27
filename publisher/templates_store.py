@@ -1837,302 +1837,256 @@ HTML_TEMPLATE_SERIES = r"""
  </div>
 <!-- مشغل الفيديو -->
 <div class="video-container">
- <!-- عنوان المشغل -->
- <div class="player-header">
-  جاري عرض: <span id="current-ep" class="current-episode">{{TITLE}}</span>
- </div>
- <!-- أزرار السيرفرات -->
- <div class="server-buttons">
-  <button class="server-btn active" onclick="changeS(this, currentVoe)">سيرفر Voe</button>
-  <button class="server-btn server-btn-2" onclick="changeS(this, currentVid)">سيرفر VidTube</button>
-  <button class="server-btn server-btn-3" onclick="changeS(this, currentOk)">سيرفر OK.ru</button>
-  <button class="server-btn server-btn-4" onclick="changeS(this, currentVk)">سيرفر VK</button>
- </div>
-<!-- مشغل الفيديو -->
-<div class="video-container">
- <!-- عنوان المشغل -->
- <div class="player-header">
-  جاري عرض: <span id="current-ep" class="current-episode">{{TITLE}}</span>
- </div>
- <!-- أزرار السيرفرات -->
- <div class="server-buttons">
-  <button class="server-btn active" onclick="changeS(this, currentVoe)">سيرفر Voe</button>
-  <button class="server-btn server-btn-2" onclick="changeS(this, currentVid)">سيرفر VidTube</button>
-  <button class="server-btn server-btn-3" onclick="changeS(this, currentOk)">سيرفر OK.ru</button>
-  <button class="server-btn server-btn-4" onclick="changeS(this, currentVk)">سيرفر VK</button>
- </div>
- <!-- مشغل الفيديو -->
-<div class="player">
-   <iframe id="video-player-frame" src="about:blank" data-src="{{VOE_URL}}" data-poster="{{POSTER_WIDE}}" allowfullscreen></iframe>
+  <!-- عنوان المشغل -->
+  <div class="player-header">
+    جاري عرض: <span id="current-ep" class="current-episode">{{TITLE}}</span>
+  </div>
+  <!-- أزرار السيرفرات -->
+  <div class="server-buttons" id="dynamic-servers-container">
+  </div>
+  <!-- مشغل الفيديو -->
+  <div class="player">
+    <iframe id="video-player-frame" src="about:blank" data-src="{{VOE_URL}}" data-poster="{{POSTER_WIDE}}"
+      allowfullscreen></iframe>
+  </div>
+  <!-- تحكمات الفيديو -->
+  <div class="video-controls">
+    <button class="control-btn" onclick="playPrev()">❮ الحلقة السابقة</button>
+    <button class="control-btn" id="next-ep-btn" onclick="playNext()">الحلقة التالية ❯</button>
+  </div>
+  <!-- قسم التحميل -->
+  <div class="download-section">
+    <a href="{{DOWNLOAD_URL}}" id="download-btn" target="_blank" class="download-btn">
+      📥 تحميل الحلقة HD
+    </a>
+    <button onclick="toggleTheater()" class="theater-btn">
+      💡 وضع السينما للمشاهدة الليلية
+    </button>
+  </div>
 </div>
- <!-- تحكمات الفيديو -->
- <div class="video-controls">
-  <button class="control-btn" onclick="playPrev()">❮ الحلقة السابقة</button>
-  <button class="control-btn" id="next-ep-btn" onclick="playNext()">الحلقة التالية ❯</button>
- </div>
- <!-- قسم التحميل -->
- <div class="download-section">
-  <a href="{{DOWNLOAD_URL}}" id="download-btn" target="_blank" class="download-btn">
-   📥 تحميل الحلقة HD
-  </a>
-  <button onclick="toggleTheater()" class="theater-btn">
-   💡 وضع السينما للمشاهدة الليلية
-  </button>
- </div>
- <!-- عنوان قسم الحلقات -->
+<!-- عنوان قسم الحلقات -->
 
 <h3 class="episodes-title">اختر الحلقة التي تريد مشاهدتها :</h3>
 <div class="episodes-container ep-More" id="episodes-container">
-    {{EPISODES_BUTTONS}}
+  {{EPISODES_BUTTONS}}
 </div>
 <!-- إعلان سمارت لينك إضافي -->
 
 <div class="smartlink-ad footer-ad">
- <h2 class="smartlink-title">📥 اختر سيرفر المشاهدة والتحميل</h2>
- <a href="https://belongingstransform.com/ga4gj8416?key=eee839b2435cd4844da21654efab149f" target="_blank" rel="nofollow"
-  class="smartlink-btn">
-  ▶ سيرفر VIP (سريع جداً)
- </a>
- <a href="https://belongingstransform.com/tszjr66n?key=7ac57491c7a686b5703eab322b3e4435" target="_blank" rel="nofollow"
-  class="smartlink-backup">
-  ▶ سيرفر احتياطي (جودة 1080p)
- </a>
- <p class="note-text">* ملاحظة: السيرفرات تدعم استكمال التحميل</p>
-</div>
+  <h2 class="smartlink-title">📥 اختر سيرفر المشاهدة والتحميل</h2>
+  <a href="https://semicolondriverelevated.com/ga4gj8416?key=eee839b2435cd4844da21654efab149f" target="_blank"
+    rel="nofollow" class="smartlink-btn">
+    ▶ سيرفر VIP (سريع جداً)
+  </a>
+  <a href="https://semicolondriverelevated.com/tszjr66n?key=7ac57491c7a686b5703eab322b3e4435" target="_blank"
+    rel="nofollow" class="smartlink-backup">
+    ▶ سيرفر احتياطي (جودة 1080p)
+  </a>
+  <p class="note-text">* ملاحظة: السيرفرات تدعم استكمال التحميل</p>
 </div>
 
 <div class="seo-section">
- <h4 class="seo-title">🏷️ وسوم البحث ذات الصلة:</h4>
- <div class="seo-tags-wrapper">
-  {{TAGS_CONTENT}}
- </div>
+  <h4 class="seo-title">🏷️ وسوم البحث ذات الصلة:</h4>
+  <div class="seo-tags-wrapper">
+    {{TAGS_CONTENT}}
+  </div>
 </div>
 
 <script>
-// تشفير البيانات الأولية للحلقات
-const _0xData = {
-    v: "{{VOE_URL}}",
-    vt: "{{VIDTUBE_URL}}",
-    ok: "{{OK_URL}}",
-    vk: "{{VK_URL}}"
-};
-let currentVoe = _0xData.v;
-let currentVid = _0xData.vt;
-let currentOk = _0xData.ok;
-let currentVk = _0xData.vk;
-let blogPostId = "{{POST_ID}}";
-let currentEpNum = 1;
+  // تعريف المتغيرات العالمية المطلوبة للنظام الديناميكي
+  let currentEpNum = 1;
+  let blogPostId = "{{POST_ID}}";
+  let currentVoe = "";
+  window.onload = function () {
+    markWatchedFromStorage();
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetEp = urlParams.get('ep');
 
-window.onload = function () {
-  // تفعيل الرابط المخفي برمجياً
-  const hiddenFrame = document.getElementById('video-player-frame');
-  if (hiddenFrame && hiddenFrame.getAttribute('data-src')) {
-      currentVoe = hiddenFrame.getAttribute('data-src');
+    // إذا وجد رقم حلقة في الرابط يشغلها فوراً
+    if (targetEp) {
+      const epBtn = document.querySelector(`.ep-btn[onclick*="'${targetEp}'"]`);
+      if (epBtn) {
+        epBtn.click();
+        return;
+      }
+    }
+
+    // إذا لم يجد، يشغل أول حلقة نشطة
+    const firstEp = document.querySelector('.ep-btn.active');
+    if (firstEp) {
+      firstEp.click();
+    }
+  };
+
+
+  function playPrev() {
+    let prevNum = currentEpNum - 1;
+    let prevBtn = document.querySelector(`.ep-btn[onclick*="'${prevNum}'"]`);
+    if (prevBtn) {
+      prevBtn.click();
+    } else {
+      alert("هذه هي الحلقة الأولى.");
+    }
   }
 
-  markWatchedFromStorage();
-  checkServer(currentVid, '.server-btn-2');
-  checkServer(currentOk, '.server-btn-3');
-  checkServer(currentVk, '.server-btn-4');
+  // استبدل أو أضف هذه الدالة داخل الـ script
+  function playEpDynamic(btn, num, downloadUrl, linksJson) {
+    // 1. تحويل النص القادم من بايثون إلى مصفوفة حقيقية
+    const links = JSON.parse(linksJson);
+    const container = document.getElementById('dynamic-servers-container');
+    const epTitle = document.getElementById('current-ep');
+    const dBtn = document.getElementById('download-btn');
+    currentEpNum = parseInt(num);
+    // 2. تحديث العناوين والتحميل
+    if (epTitle) epTitle.innerText = "الحلقة " + num;
+    if (dBtn) dBtn.href = downloadUrl;
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const targetEp = urlParams.get('ep');
+    // 3. بناء أزرار السيرفرات ديناميكياً (هنا السحر!)
+    container.innerHTML = ''; // مسح الأزرار القديمة تماماً
 
-  if (targetEp) {
-   const epBtn = document.querySelector(`.ep-btn[onclick*="'${targetEp}'"]`);
-   if (epBtn) { epBtn.click(); return; }
+    links.forEach((link, index) => {
+      const sBtn = document.createElement('button');
+      sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
+      sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
+      sBtn.onclick = function () {
+        // تفعيل الزر النشط
+        document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
+        sBtn.classList.add('active');
+        // تغيير الفيديو
+        changeS(sBtn, link.url);
+      };
+      container.appendChild(sBtn);
+    });
+
+    // 4. تشغيل أول سيرفر في القائمة تلقائياً
+    if (links.length > 0) {
+      changeS(null, links[0].url);
+    }
+
+    // 5. تمييز زر الحلقة
+    document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
   }
 
-  const firstBtn = document.querySelector('.server-btn.active');
-  if (firstBtn) {
-      changeS(firstBtn, currentVoe);
-      // تحفيز الحارس فوراً
-      if (typeof secureMedia === 'function') secureMedia();
-  }
- };
-
-
-
- function playPrev() {
-  let prevNum = currentEpNum - 1;
-  let prevBtn = document.querySelector(`.ep-btn[onclick*="'${prevNum}'"]`);
-  if (prevBtn) {
-   prevBtn.click();
-  } else {
-   alert("هذه هي الحلقة الأولى.");
-  }
- }
-
- // استبدل أو أضف هذه الدالة داخل الـ script
- function playEp(btn, voe, vid, num, down, ok, vk) {
-  // تحديث الروابط العالمية فوراً
-  currentVoe = voe;
-  currentVid = vid;
-  currentOk = ok;
-  currentVk = vk;
-  currentEpNum = parseInt(num); // <-- هذا هو السطر الناقص (تحويل الرقم لنوع عددي وتحديثه)
-
-  // تحديث رقم الحلقة في الواجهة
-  const epTitle = document.getElementById('current-ep');
-  if (epTitle) epTitle.innerText = "الحلقة " + num;
-
-  // تحديث رابط التحميل
-  const dBtn = document.getElementById('download-btn');
-  if (dBtn) dBtn.href = down;
-
-  // حفظ الحلقة كـ "تمت المشاهدة"
-  if (typeof saveToWatched === "function") saveToWatched(num);
-
-  // إعادة ضبط السيرفرات
-  const sBtns = document.querySelectorAll('.server-btn');
-  sBtns[0].style.display = (voe && voe !== 'nan') ? 'inline-block' : 'none';
-  sBtns[1].style.display = (vid && vid !== 'nan') ? 'inline-block' : 'none';
-  sBtns[2].style.display = (ok && ok !== 'nan') ? 'inline-block' : 'none';
-  sBtns[3].style.display = (vk && vk !== 'nan') ? 'inline-block' : 'none';
-
-  // تشغيل السيرفر الأول المتاح تلقائياً
-// البحث عن أول سيرفر متاح للحلقة المختارة لتشغيله تلقائياً
-  const availableLinks = [voe, vid, ok, vk];
-  const firstAvailableIndex = availableLinks.findIndex(link => link && link !== 'nan' && link.toLowerCase() !== 'pending' && link !== "");
-  
-  if (firstAvailableIndex !== -1) {
-    changeS(sBtns[firstAvailableIndex], availableLinks[firstAvailableIndex]);
+  function playNext() {
+    let nextNum = currentEpNum + 1;
+    let nextBtn = document.querySelector(`.ep-btn[onclick*="'${nextNum}'"]`);
+    if (nextBtn) {
+      nextBtn.click();
+    } else {
+      alert("لقد وصلت لآخر حلقة متوفرة حالياً.");
+    }
   }
 
-  // تمييز الزر النشط
-  document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
- }
 
- function playNext() {
-  let nextNum = currentEpNum + 1;
-  let nextBtn = document.querySelector(`.ep-btn[onclick*="'${nextNum}'"]`);
-  if (nextBtn) {
-   nextBtn.click();
-  } else {
-   alert("لقد وصلت لآخر حلقة متوفرة حالياً.");
+  function changeS(btn, url) {
+    const frame = document.getElementById('video-player-frame');
+    if (!frame) return;
+
+    const isUnlocked = window.location.search.includes('unlocked=true');
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isFB = /FBAN|FBAV/i.test(ua);
+
+    const newFrame = frame.cloneNode(true);
+
+    if (url.includes("ok.ru")) {
+      newFrame.setAttribute('referrerpolicy', 'no-referrer');
+      newFrame.setAttribute('sandbox', 'allow-forms allow-scripts allow-same-origin allow-popups allow-presentation');
+    } else {
+      newFrame.removeAttribute('sandbox');
+      newFrame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    }
+    // استبدل الجزء الخاص بتحديث حالة الأزرار بهذا
+    if (btn) {
+      let sBtns = document.querySelectorAll('.server-btn');
+      sBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    // --- التعديل الأمني الجوهري هنا ---
+    newFrame.src = "about:blank"; // تفريغ الرابط الصريح
+    newFrame.setAttribute('data-src', url); // إخفاء الرابط في الـ Attribute
+    frame.parentNode.replaceChild(newFrame, frame);
+
+
+    // استدعاء "الحارس" لتأمين الرابط الجديد فوراً
+    if (typeof secureMedia === 'function') {
+      secureMedia();
+    }
+    // ----------------------------------
+
+    // بقية كود حل مشكلة فيسبوك (Manual Fix) تظل كما هي...
+    const oldFix = document.getElementById('fb-fix-btn');
+    if (oldFix) oldFix.remove();
+    if (isFB && isUnlocked) {
+      const manualFix = document.createElement('a');
+      manualFix.id = 'fb-fix-btn';
+      manualFix.className = 'no-lock';
+      const currentUrl = window.location.href.split('?')[0];
+      const finalRedirectUrl = currentUrl + "?unlocked=true&ep=" + currentEpNum + "&refresh=" + Date.now();
+      const isAndroid = /Android/i.test(ua);
+
+      if (isAndroid) {
+        const cleanUrl = finalRedirectUrl.replace(/^https?:\/\//, '');
+        manualFix.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+      } else {
+        manualFix.href = finalRedirectUrl;
+      }
+
+      if (isAndroid && !window.location.search.includes('ref=auto')) {
+        setTimeout(() => { window.location.href = manualFix.href; }, 1000);
+      }
+
+      manualFix.target = "_blank";
+      manualFix.innerText = "\u26A0\uFE0F حل مشكلة المشغل: اضغط للفتح في متصفح خارجي";
+      manualFix.style = "display:block; text-decoration:none; text-align:center; padding:15px; background:#e74c3c; color:#fff !important; border-radius:12px; margin:15px auto; font-weight:bold; font-size:14px; width:100%; box-sizing:border-box; border: 2px solid #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: pulse-red 2s infinite;";
+
+      if (!document.getElementById('fix-animation')) {
+        const style = document.createElement('style');
+        style.id = 'fix-animation';
+        style.innerHTML = "@keyframes pulse-red { 0% {transform:scale(1);} 50% {transform:scale(1.03); background:#c0392b;} 100% {transform:scale(1);} }";
+        document.head.appendChild(style);
+      }
+
+      const downloadWrapper = document.querySelector('.download-section');
+      if (downloadWrapper) {
+        downloadWrapper.after(manualFix);
+      }
+    }
   }
- }
 
-
-function changeS(btn, url) {
-  const frame = document.getElementById('video-player-frame');
-  if (!frame) return;
-
-  const isUnlocked = window.location.search.includes('unlocked=true');
-  const ua = navigator.userAgent || navigator.vendor || window.opera;
-  const isFB = /FBAN|FBAV/i.test(ua);
-
-  const newFrame = frame.cloneNode(true);
-  
-  if (url.includes("ok.ru")) {
-   newFrame.setAttribute('referrerpolicy', 'no-referrer');
-   newFrame.setAttribute('sandbox', 'allow-forms allow-scripts allow-same-origin allow-popups allow-presentation');
-  } else {
-   newFrame.removeAttribute('sandbox');
-   newFrame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+  function saveToWatched(num) {
+    let watched = JSON.parse(localStorage.getItem('watched_' + blogPostId) || "[]");
+    if (!watched.includes(num)) {
+      watched.push(num);
+      localStorage.setItem('watched_' + blogPostId, JSON.stringify(watched));
+    }
   }
 
-  // --- التعديل الأمني الجوهري هنا ---
-  newFrame.src = "about:blank"; // تفريغ الرابط الصريح
-  newFrame.setAttribute('data-src', url); // إخفاء الرابط في الـ Attribute
-  frame.parentNode.replaceChild(newFrame, frame);
-
-  // تحديث حالة الأزرار
-  let sBtns = document.querySelectorAll('.server-btn');
-  sBtns.forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-
-  // استدعاء "الحارس" لتأمين الرابط الجديد فوراً
-  if (typeof secureMedia === 'function') {
-    secureMedia();
+  function markWatchedFromStorage() {
+    let watched = JSON.parse(localStorage.getItem('watched_' + blogPostId) || "[]");
+    watched.forEach(num => {
+      let btn = document.querySelector(`.ep-btn[onclick*="'${num}'"]`);
+      if (btn) btn.classList.add('watched');
+    });
   }
-  // ----------------------------------
 
-  // بقية كود حل مشكلة فيسبوك (Manual Fix) تظل كما هي...
-  const oldFix = document.getElementById('fb-fix-btn');
-  if (oldFix) oldFix.remove();
-  if (isFB && isUnlocked) {
-   const manualFix = document.createElement('a');
-   manualFix.id = 'fb-fix-btn';
-   manualFix.className = 'no-lock';
-   const currentUrl = window.location.href.split('?')[0];
-   const finalRedirectUrl = currentUrl + "?unlocked=true&ep=" + currentEpNum + "&refresh=" + Date.now();
-   const isAndroid = /Android/i.test(ua);
-
-   if (isAndroid) {
-    const cleanUrl = finalRedirectUrl.replace(/^https?:\/\//, '');
-    manualFix.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
-   } else {
-    manualFix.href = finalRedirectUrl;
-   }
-
-   if (isAndroid && !window.location.search.includes('ref=auto')) {
-    setTimeout(() => { window.location.href = manualFix.href; }, 1000);
-   }
-
-   manualFix.target = "_blank";
-   manualFix.innerText = "\u26A0\uFE0F حل مشكلة المشغل: اضغط للفتح في متصفح خارجي";
-   manualFix.style = "display:block; text-decoration:none; text-align:center; padding:15px; background:#e74c3c; color:#fff !important; border-radius:12px; margin:15px auto; font-weight:bold; font-size:14px; width:100%; box-sizing:border-box; border: 2px solid #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.3); animation: pulse-red 2s infinite;";
-
-   if (!document.getElementById('fix-animation')) {
-    const style = document.createElement('style');
-    style.id = 'fix-animation';
-    style.innerHTML = "@keyframes pulse-red { 0% {transform:scale(1);} 50% {transform:scale(1.03); background:#c0392b;} 100% {transform:scale(1);} }";
-    document.head.appendChild(style);
-   }
-
-   const downloadWrapper = document.querySelector('.download-section');
-   if (downloadWrapper) {
-    downloadWrapper.after(manualFix);
-   }
+  function toggleTheater() {
+    const videoContainer = document.querySelector('.video-container');
+    let overlay = document.getElementById('theater-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'theater-overlay';
+      overlay.setAttribute('style', 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:999; cursor:pointer;');
+      overlay.onclick = toggleTheater;
+      document.body.appendChild(overlay);
+      videoContainer.style.position = 'relative';
+      videoContainer.style.zIndex = '1000';
+      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      overlay.remove();
+      videoContainer.style.zIndex = '1';
+    }
   }
- }
-
- function saveToWatched(num) {
-  let watched = JSON.parse(localStorage.getItem('watched_' + blogPostId) || "[]");
-  if (!watched.includes(num)) {
-   watched.push(num);
-   localStorage.setItem('watched_' + blogPostId, JSON.stringify(watched));
-  }
- }
-
- function markWatchedFromStorage() {
-  let watched = JSON.parse(localStorage.getItem('watched_' + blogPostId) || "[]");
-  watched.forEach(num => {
-   let btn = document.querySelector(`.ep-btn[onclick*="'${num}'"]`);
-   if (btn) btn.classList.add('watched');
-  });
- }
-
- function toggleTheater() {
-  const videoContainer = document.querySelector('.video-container');
-  let overlay = document.getElementById('theater-overlay');
-  if (!overlay) {
-   overlay = document.createElement('div');
-   overlay.id = 'theater-overlay';
-   overlay.setAttribute('style', 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:999; cursor:pointer;');
-   overlay.onclick = toggleTheater;
-   document.body.appendChild(overlay);
-   videoContainer.style.position = 'relative';
-   videoContainer.style.zIndex = '1000';
-   videoContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  } else {
-   overlay.remove();
-   videoContainer.style.zIndex = '1';
-  }
- }
-
- function checkServer(url, selector) {
-  const btn = document.querySelector(selector);
-  if (btn) {
-   if (!url || url === "" || url === "nan" || url.toLowerCase() === "pending") {
-    btn.style.display = 'none';
-   } else {
-    btn.style.display = 'inline-block';
-   }
-  }
- }
 </script>
 """
 

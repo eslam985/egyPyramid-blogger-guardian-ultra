@@ -85,11 +85,18 @@ def prepare_content(row, is_series_by_title):
         )
         for ep in episodes_list:
             is_active = "active" if ep["no"] == "1" else ""
-            # بناء الزر مع قفلة صحيحة ومؤكدة </div>
-            ep_buttons_html += f'    <div class="ep-btn {is_active}" onclick="playEp(this, \'{ep["voe"]}\', \'{ep["vidtube"]}\', \'{ep["no"]}\', \'{ep["down"]}\', \'{ep["ok"]}\', \'{ep["vk"]}\')">{ep["no"]}</div>\n'
+            # تجميع السيرفرات المتاحة للحلقة في قائمة
+            current_links = []
+            for s_key in ["voe", "vidtube", "ok", "vk"]:
+                if ep.get(s_key):
+                    current_links.append({"name": s_key, "url": ep[s_key]})
 
-        # إضافة التعليق المخفي اختيارياً لضمان أمان الحقن مستقبلاً
-        ep_buttons_html += "\n\n</div>\n"
+            import json
+
+            links_json = json.dumps(current_links).replace('"', "&quot;")
+
+            # بناء الزر الديناميكي
+            ep_buttons_html += f'    <div class="ep-btn {is_active}" onclick="playEpDynamic(this, \'{ep["no"]}\', \'{ep["down"]}\', \'{links_json}\')">{ep["no"]}</div>\n'
     else:
         # إذا كانت قائمة الحلقات فارغة ولكننا نعلم أنه مسلسل من العنوان
         if is_series_by_title:
@@ -178,7 +185,26 @@ def update_series_post(
         )  # تحويل يدوي سريع للـ HTML
         down_url = str(row.get("download_url", "")).strip()
 
-        new_btn = f"<div class=\"ep-btn\" onclick=\"playEp(this, '{voe_url}', '{vid_url}', '{ep_no}', '{down_url}', '{ok_url}', '{vk_url}')\">{ep_no}</div>"
+        # 1. تجميع الروابط المتاحة لهذه الحلقة من قاعدة البيانات
+        # 1. تجميع الروابط المتاحة لهذه الحلقة من الـ row الممرر
+        episode_links = []
+        mapping = {
+            "voe_url": "voe",
+            "vidtube_url": "vidtube",
+            "ok_url": "ok",
+            "vk_url": "vk",
+        }
+        for key, s_name in mapping.items():
+            u = str(row.get(key, "")).strip()
+            if u and u.lower() not in ["nan", "", "pending", "none"]:
+                episode_links.append({"name": s_name, "url": u})
+
+        import json
+
+        links_json = json.dumps(episode_links).replace('"', "&quot;")
+
+        # 2. بناء الزر الديناميكي الجديد
+        new_btn = f"<div class=\"ep-btn\" onclick=\"playEpDynamic(this, '{ep_no}', '{down_url}', '{links_json}')\">{ep_no}</div>"
 
         # 6. عملية الحقن داخل كلاس ep-More
         target_marker = 'ep-More"'
@@ -285,15 +311,15 @@ def start_publishing_from_supabase():
 
             # 3. اختيار القالب وبناء المحتوى (Logic الاستدعاء)
             # استدعاء دالة prepare_content التي تملكها أصلاً لاختيار القالب المناسب
-            _, episodes_list, ep_buttons, f_voe, f_vid, f_ok, f_vk = prepare_content(
-                row, is_series
-            )
+            _, _, ep_buttons, _, _, _, _ = prepare_content(row, is_series)
 
             # 4. منطق اتخاذ القرار (تحديث حلقة أم نشر جديد)
             if old_post_id and str(old_post_id).lower() != "nan":
                 print(f"🔄 جاري حقن الحلقة {ep_no} في المقال {old_post_id}...")
                 # اجعله هكذا (نمرر رقم الحلقة الصريح ep_no)
-                success = update_series_post(service, old_post_id, row, send_telegram_update=True, ep_no=ep_no)
+                success = update_series_post(
+                    service, old_post_id, row, send_telegram_update=True, ep_no=ep_no
+                )
             else:
                 # --- لوجيك النشر الجديد كلياً (بناء القالب لأول مرة) ---
                 print(f"🆕 إنشاء مقال جديد لـ {title}...")
@@ -306,15 +332,18 @@ def start_publishing_from_supabase():
                 )
 
                 # عملية الاستبدال داخل القالب المختار
+                # عملية الاستبدال داخل القالب المختار (النظام الديناميكي)
                 final_html = (
                     current_template.replace("{{TITLE}}", title)
-                    .replace("{{VOE_URL}}", f_voe)
-                    .replace("{{VIDTUBE_URL}}", f_vid)
-                    .replace("{{EPISODES_BUTTONS}}", ep_buttons)
+                    .replace(
+                        "{{EPISODES_BUTTONS}}", ep_buttons
+                    )  # الأزرار الآن تحتوي على الـ JSON
                     .replace("{{POSTER_URL}}", row["poster"])
                     .replace("{{STORY}}", row["story"])
                     .replace("{{CUSTOM_LINK}}", slug_name)
                 )
+
+                # ملاحظة: تم حذف replace الخاص بالروابط الثابتة لأن الأزرار الديناميكية تتولى المهمة الآن
 
                 # إضافة الهيدر المخفي للـ Snippet
                 extra_header = f'<div style="display:none;"><img src="{row["poster"]}" />{auto_desc}</div>'
