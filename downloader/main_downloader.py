@@ -63,8 +63,8 @@ def save_to_supabase(
     meta_data=None,
 ):
     try:
-        clean_title, category, actual_ep_no = get_clean_media_data(display_title)
-        c_title, c_cat, c_ep = get_clean_media_data(original_task_name)
+        # نسحب كل البيانات من الاسم الأصلي الخام لضمان وجود رقم الحلقة والفئة
+        c_title, c_cat, actual_ep_no = get_clean_media_data(original_task_name)
 
         media_payload = {
             "tmdb_id": (
@@ -232,8 +232,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
         display_title = original_task_name
 
-    # --- 2. نظام منع التكرار (البحث في شيت الأرشيف) 🆕 ---
-    # معرف شيت الأرشيف الخاص بك الذي أرسلته لي
     # --- 2. نظام منع التكرار المطور (أفلام + حلقات مسلسلات) ---
     # --- 2. نظام منع التكرار الاحترافي (Supabase) ---
     # 1. استخراج البيانات النظيفة فوراً قبل أي فحص
@@ -591,7 +589,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
                 # نتائج Voe
                 voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
-                
+
                 voe_down = (
                     f"https://voe.sx/{file_id}/download" if file_id else "Failed"
                 )  # أضف هذا السطر

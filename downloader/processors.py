@@ -326,8 +326,8 @@ def upload_to_vk_local(title, file_path):
             if response.status_code == 200:
                 print(f"✅ VK Upload Success. Fetching Secure Embed Link...")
 
-                # ننتظر 3 ثوانٍ لضمان أن السيرفر قام بتسجيل الفيديو في قاعدة بياناته
-                time.sleep(3)
+                # ننتظر 8 ثوانٍ لضمان أن السيرفر قام بتسجيل الفيديو في قاعدة بياناته
+                time.sleep(8)
 
                 # استدعاء ميثود video.get للحصول على رابط الـ player (الإيفريم)
                 get_api_url = "https://api.vk.com/method/video.get"
@@ -560,9 +560,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                 target = clean_it(file_name.split(".")[0])
 
                 # حلقة الفحص (واحدة فقط ومستقيمة)
-                for i in range(1, 51):
+                for i in range(1, 61):
                     await asyncio.sleep(15)
-                    print(f"🔄 Streamtape Polling Attempt {i}/50...")
+                    print(f"🔄 Streamtape Polling Attempt {i}/60...")
 
                     # 1. فحص القائمة الجارية (Running Converts)
                     try:
@@ -678,18 +678,29 @@ async def upload_to_mixdrop(file_path, email, key):
         return None
 
 
-# ابحث عن الدالة وغير السطر الخاص بالـ re.sub
 def get_clean_media_data(raw_name):
-    is_series = any(word in raw_name for word in ["مسلسل", "الحلقة", "حلقة", "موسم"])
-    category = "tv" if is_series else "movie"
+    # 1. البحث عن النمط الأجنبي (S01E05) أو العربي المختصر (ح 5)
+    # أضفنا [ح] للبحث عن حرف ح يليه رقم
+    pattern = re.search(r"(?:[sS](\d+)[eE]|[ح]\s*)(\d+)", raw_name)
 
-    # تعديل الـ Regex ليكون أكثر قوة وحذف أي شيء يبدأ من ( - الحلقة)
-    clean_title = re.sub(
-        r"[-–]?\s*(?:الحلقة|حلقة|الموسم|موسم)\s*\d+.*", "", raw_name
-    ).strip()
+    # 2. البحث عن النمط العربي الطويل (الحلقة 5)
+    arabic_pattern = re.search(r"(?:الحلقة|حلقة)\s*(\d+)", raw_name)
 
-    ep_match = re.search(r"(?:الحلقة|حلقة)\s*(\d+)", raw_name)
-    ep_no = int(ep_match.group(1)) if ep_match else 1
+    if pattern:
+        category = "tv"
+        ep_no = int(pattern.group(2))
+        # تنظيف الاسم من النمط المكتشف
+        clean_title = re.sub(r"(?:[sS]\d+[eE]|[ح]\s*)\d+.*", "", raw_name).strip()
+    elif arabic_pattern or any(word in raw_name for word in ["مسلسل", "موسم"]):
+        category = "tv"
+        ep_no = int(arabic_pattern.group(1)) if arabic_pattern else 1
+        clean_title = re.sub(
+            r"[-–]?\s*(?:الحلقة|حلقة|الموسم|موسم)\s*\d+.*", "", raw_name
+        ).strip()
+    else:
+        category = "movie"
+        ep_no = 1
+        clean_title = raw_name.strip()
 
     return clean_title, category, ep_no
 
