@@ -327,7 +327,7 @@ def upload_to_vk_local(title, file_path):
                 print(f"✅ VK Upload Success. Fetching Secure Embed Link...")
 
                 # ننتظر 8 ثوانٍ لضمان أن السيرفر قام بتسجيل الفيديو في قاعدة بياناته
-                time.sleep(8)
+                time.sleep(20)
 
                 # استدعاء ميثود video.get للحصول على رابط الـ player (الإيفريم)
                 get_api_url = "https://api.vk.com/method/video.get"
