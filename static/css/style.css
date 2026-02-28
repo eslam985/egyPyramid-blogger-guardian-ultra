@@ -155,6 +155,7 @@ button {
 
 .search-bar form {
     display: flex;
+    flex-direction: row-reverse;
     width: 100%;
 }
 
@@ -946,6 +947,7 @@ button {
     max-width: 500px;
     border: 1px solid #333;
     color: white;
+    display: contents;
 }
 
 .modal-header {
@@ -1022,25 +1024,34 @@ button {
 /* تنسيقات حاوية التقدم الثابتة أسفل الشاشة */
 /* التنسيق الجديد لحاوية التقدم - احترافي وعائم */
 .download-progress-fixed {
-    display: none; /* مخفي افتراضياً */
+    display: none;
+    /* مخفي افتراضياً */
     position: fixed;
-    bottom: 20px; /* مرفوع قليلاً عن الحافة */
-    left: 20px;   /* في الزاوية اليسرى */
-    width: 350px; /* عرض محدد لا يغطي الصفحة */
-    max-height: 400px; /* أقصى طول مسموح به */
-    overflow-y: auto;  /* سكرول داخلي إذا زادت المهام */
-    background: rgba(17, 17, 17, 0.95); /* شفافية بسيطة لمظهر عصري */
+    bottom: 20px;
+    /* مرفوع قليلاً عن الحافة */
+    left: 20px;
+    /* في الزاوية اليسرى */
+    width: 350px;
+    /* عرض محدد لا يغطي الصفحة */
+    max-height: 400px;
+    /* أقصى طول مسموح به */
+    overflow-y: auto;
+    /* سكرول داخلي إذا زادت المهام */
+    background: rgba(17, 17, 17, 0.95);
+    /* شفافية بسيطة لمظهر عصري */
     border: 1px solid #28a745;
     border-radius: 12px;
     padding: 15px;
     z-index: 10000;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5); /* ظل لإبرازها */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    /* ظل لإبرازها */
 }
 
 /* تحسين السكرول بار الداخلي */
 .download-progress-fixed::-webkit-scrollbar {
     width: 5px;
 }
+
 .download-progress-fixed::-webkit-scrollbar-thumb {
     background: #28a745;
     border-radius: 10px;
@@ -1110,28 +1121,54 @@ button {
 .text-end {
     text-align: left;
 }
+
 /* الألوان الأساسية */
-.bg-success { background-color: #28a745 !important; }
-.bg-info    { background-color: #17a2b8 !important; }
-.bg-primary { background-color: #007bff !important; }
-.bg-danger  { background-color: #dc3545 !important; }
-.bg-warning { background-color: #ffc107 !important; }
+.bg-success {
+    background-color: #28a745 !important;
+}
+
+.bg-info {
+    background-color: #17a2b8 !important;
+}
+
+.bg-primary {
+    background-color: #007bff !important;
+}
+
+.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.bg-warning {
+    background-color: #ffc107 !important;
+}
 
 /* تأثير الحركة للشريط */
 .progress-bar-animated {
-    background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, .15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .15) 50%, rgba(255, 255, 255, .15) 75%, transparent 75%, transparent);
     background-size: 1rem 1rem;
     animation: progress-bar-stripes 1s linear infinite;
 }
 
 @keyframes progress-bar-stripes {
-    from { background-position: 1rem 0; }
-    to { background-position: 0 0; }
+    from {
+        background-position: 1rem 0;
+    }
+
+    to {
+        background-position: 0 0;
+    }
 }
 
 /* نصوص الخطأ */
-.text-danger { color: #ff4d4d !important; }
-.fw-black { font-weight: 900 !important; }
+.text-danger {
+    color: #ff4d4d !important;
+}
+
+.fw-black {
+    font-weight: 900 !important;
+}
+
 /* بما أن الموقع RTL، الـ end هو اليسار */
 
 .progress-bar-striped {
