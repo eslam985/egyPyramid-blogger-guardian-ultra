@@ -316,15 +316,16 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
     # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
 
+    # التعديل البرمجي لفك تشفير الروابط العنيدة
     domain = urlparse(url).netloc
     referer_url = f"https://{domain}/"
 
     cmd = [
         "yt-dlp",
-        "-v",  # مهم جداً لرؤية سبب المنع الحقيقي في اللوجات
+        "-v",
         "--no-playlist",
         "--concurrent-fragments",
-        "5",
+        "10",  # زيادة السرعة
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "--add-header",
@@ -333,15 +334,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         f"Origin: {referer_url}",
         "--add-header",
         "Accept: */*",
-        "--add-header",
-        "Accept-Language: en-US,en;q=0.9",
-        "--add-header",
-        "Range: bytes=0-",
         "--no-check-certificate",
+        "--prefer-free-formats",
+        "--legacy-server-connect",  # للسيرفرات القديمة التي ترفض الاتصال الحديث
         "--socket-timeout",
-        "30",
+        "60",
+        "--geo-bypass",  # محاولة تخطي الحجب الجغرافي
         "-f",
-        "best",
+        "bestvideo+bestaudio/best",  # إجبار السحب بأي صيغة متاحة
         f"{url}",
         "-o",
         download_path_template,
