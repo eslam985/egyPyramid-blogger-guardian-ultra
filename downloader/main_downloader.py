@@ -333,16 +333,20 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         f"Referer: {fixed_referer}",
         "--add-header",
         "Origin: https://vidtube.one",
-        # --- استعادة القوة الضاربة ---
+        # --- التعديل لرفع السرعة وضمان الاستمرار ---
         "--concurrent-fragments",
-        "5",  # العودة لـ 5 قطع لسرعة السحب
+        "16",  # رفع القوة لـ 10 قنوات سحب
+        "--file-access-retries",
+        "infinite",  # محاولات لا نهائية للوصول للملف
+        "--fragment-retries",
+        "infinite",  # لو قطعة فشلت يعيدها فوراً
         "--hls-use-mpegts",  # لضمان عدم الانقطاع عند 9%
+        # ----------------------------------------
         "--no-check-certificate",
         "--socket-timeout",
         "60",
-        # سأعطل البروكسي مؤقتاً لتجربة الـ IP المباشر
+        # تأكد أن البروكسي معطل (لان الرابط مربوط بـ IP جهازك حالياً)
         # "--proxy", "socks5://127.0.0.1:9050",
-        # ----------------------------
         "-f",
         "best",
         f"{url}",
