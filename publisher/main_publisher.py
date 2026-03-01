@@ -222,27 +222,16 @@ def update_series_post(
         # التعديل: تجميع ديناميكي لكل السيرفرات المتاحة في الصف
         # 1. تجميع الروابط المتاحة لهذه الحلقة من الـ row الممرر (تعديل ديناميكي)
         episode_links = []
-        excluded_servers = ["telegram_direct", "archive", "download"]
-
-        for key, value in row.items():
-            # البحث عن أي مفتاح ينتهي بـ _url (مثل streamtape_url, doodstream_url)
-            if key.endswith("_url"):
-                s_name = key.replace("_url", "")
-
-                # تخطي السيرفرات المستبعدة
-                if s_name in excluded_servers:
-                    continue
-
-                u = str(value).strip()
-                # التأكد من أن الرابط صالح وليس فارغاً
-                if u and u.lower() not in ["nan", "", "pending", "none"]:
-                    # تصحيح روابط vidtube و ok و vk لو لزم الأمر
-                    if s_name == "vidtube" and "embed-" not in u:
-                        u = u.replace("vidtube.one/", "vidtube.one/embed-")
-                    if s_name == "vk":
-                        u = convert_vk_to_embed(u)
-
-                    episode_links.append({"name": s_name, "url": u})
+        target_servers = ["voe", "vidtube", "ok", "vk", "doodstream", "streamtape"]
+        for s_name in target_servers:
+            u = row.get(f"{s_name}_url") or row.get(s_name)
+            if u and str(u).lower() not in ["nan", "", "none", "pending"]:
+                u = str(u).strip()
+                if s_name == "vidtube" and "embed-" not in u:
+                    u = u.replace("vidtube.one/", "vidtube.one/embed-")
+                if s_name == "vk":
+                    u = convert_vk_to_embed(u)
+                episode_links.append({"name": s_name, "url": u})
 
         import json
 
@@ -382,16 +371,20 @@ def start_publishing_from_supabase():
 
                 # --- الكود الجديد يبدأ من هنا ---
                 # 1. تجميع روابط السيرفرات ديناميكياً
+                # 1. تجميع روابط السيرفرات ديناميكياً
                 current_links = []
-                for key, value in row.items():
-                    if (
-                        key.endswith("_url")
-                        and value
-                        and str(value).lower() not in ["nan", "", "none", "pending"]
-                    ):
-                        s_name = key.replace("_url", "")
-                        u = str(value).strip()
-                        # تصحيحات الروابط
+                target_servers = [
+                    "voe",
+                    "vidtube",
+                    "ok",
+                    "vk",
+                    "doodstream",
+                    "streamtape",
+                ]
+                for s_name in target_servers:
+                    u = row.get(f"{s_name}_url") or row.get(s_name)
+                    if u and str(u).lower() not in ["nan", "", "none", "pending"]:
+                        u = str(u).strip()
                         if s_name == "vidtube" and "embed-" not in u:
                             u = u.replace("vidtube.one/", "vidtube.one/embed-")
                         if s_name == "vk":
@@ -418,9 +411,19 @@ def start_publishing_from_supabase():
                 # 1. استخراج أول رابط متاح للمشغل (Default Server)
                 first_voe = row.get("voe_url", "")
                 # إذا لم يوجد voe، نبحث عن أي سيرفر آخر متاح في الروابط الديناميكية
-                default_url = first_voe if first_voe and str(first_voe).lower() != "nan" else (current_links[0]['url'] if current_links else "about:blank")
+                default_url = (
+                    first_voe
+                    if first_voe and str(first_voe).lower() != "nan"
+                    else (current_links[0]["url"] if current_links else "about:blank")
+                )
 
-                # 2. عملية الحقن الشاملة (تأكد من إضافة VOE_URL و POST_ID)
+                # 1. تجهيز المتغيرات الإضافية (MetaData)
+                search_desc = f"مشاهدة فيلم {title} مترجم اون لاين بجودة عالية. تفاصيل فيلم {title} والقصة وسيرفرات المشاهدة."
+                current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S+02:00")
+                logo_url = "https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_80,h_80,c_fill/blogger/logo.webp"  # ضع رابط لوجو موقعك هنا
+                lang_work = row.get("LANGUAGE", " مدبلج / مترجم")
+
+                # 2. عملية الحقن الشاملة (تأكد من شمول كل الأقواس)
                 final_html = (
                     current_template.replace("{{TITLE}}", title)
                     .replace("{{POSTER_URL}}", row["poster"])
@@ -432,9 +435,17 @@ def start_publishing_from_supabase():
                     .replace("{{RATING}}", row.get("Rating", "7.5"))
                     .replace("{{RUNTIME}}", row.get("Movie Runtime", "غير محدد"))
                     .replace("{{LABELS}}", row.get("labels", "Movies"))
-                    # السطرين القادمين هما حل مشكلة الـ 404 والشاشة السوداء
-                    .replace("{{VOE_URL}}", default_url) 
-                    .replace("{{POST_ID}}", str(m_id)) # نستخدم ID الميديا كمعرف للقفل
+                    .replace("{{VOE_URL}}", default_url)
+                    .replace("{{POST_ID}}", str(m_id))
+                    # --- الإضافات الجديدة لإصلاح الميتا داتا ---
+                    .replace("{{SEARCH_DESCRIPTION}}", search_desc)
+                    .replace("{{CURRENT_DATE}}", current_time)
+                    .replace("{{LOGO_URL}}", logo_url)
+                    .replace("{{LANGUAGE}}", lang_work)
+                    .replace(
+                        "{{DURATION_ISO}}", "PT2H28M"
+                    )  # يمكنك جعلها ديناميكية لاحقاً
+                    .replace("{{TAGS_CONTENT}}", generate_seo_tags(title))
                 )
                 # --- الكود الجديد ينتهي هنا ---
 
