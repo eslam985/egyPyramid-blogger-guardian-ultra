@@ -799,7 +799,7 @@ HTML_TEMPLATE = r"""
       } else if (movieLinks.length > 0) {
         // بدلاً من استدعاء دالة غير موجودة، سنستخدم دالة playEpDynamic مباشرة
         playEpDynamic(null, 'مشاهدة الفيلم', '{{DOWNLOAD_URL}}', JSON.stringify(movieLinks));
-        
+
       }
       markWatchedFromStorage();
     };
@@ -890,7 +890,7 @@ HTML_TEMPLATE = r"""
       if (!frame) return;
 
       // فحص القفل من الرابط أو من ذاكرة المتصفح مباشرة
-      const isUnlocked = window.location.search.includes('unlocked=true') || localStorage.getItem('pyramid_unlocked') === 'true';
+      const isUnlocked = window.location.search.includes('unlocked=true') || localStorage.getItem('pyramid_unlocked_' + blogPostId) === 'true';
 
       const ua = navigator.userAgent || navigator.vendor || window.opera;
       const isFB = /FBAN|FBAV/i.test(ua);
@@ -928,9 +928,14 @@ HTML_TEMPLATE = r"""
       }, 100);
 
       // تحديث حالة الأزرار
+      // تحديث حالة الأزرار
       let sBtns = document.querySelectorAll('.server-btn');
       sBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+
+      // التعديل هنا: التأكد من وجود الزر قبل إضافة الكلاس
+      if (btn) {
+        btn.classList.add('active');
+      }
 
       const oldFix = document.getElementById('fb-fix-btn');
       if (oldFix) oldFix.remove();
@@ -970,7 +975,7 @@ HTML_TEMPLATE = r"""
           downloadWrapper.after(manualFix);
         }
       }
-        
+
     } // نهاية الدالة
 
     function saveToWatched(num) {
@@ -1006,6 +1011,8 @@ HTML_TEMPLATE = r"""
         videoContainer.style.zIndex = '1';
       }
     }
+
+
   </script>
   """
 
