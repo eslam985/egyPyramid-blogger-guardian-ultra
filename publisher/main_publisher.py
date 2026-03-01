@@ -282,15 +282,13 @@ def update_series_post(
             k: (str(v) if v is not None and str(v).lower() != "nan" else "")
             for k, v in row.items()
         }
-        tg_text = generate_facebook_template(
-            row_clean,
-            datetime.now().strftime("%Y-%m-%d"),
-            "SERIES",
-            f"الحلقة {ep_no}",
-            lang_val,
-        )
+        # التعديل: إرسال الـ row بالكامل لتوليد بوست الفيسبوك آلياً
         send_to_telegram(
-            row_clean.get("poster", ""), tg_text, updated_post_obj.get("url")
+            row=row_clean,
+            content_type="SERIES",
+            action_text=f"الحلقة {ep_no}",
+            post_url=updated_post_obj.get("url"),
+            lang_val=lang_val,
         )
 
         print(f"✅ تم حقن الحلقة {ep_no} بنجاح في بلوجر وساب باز.")
@@ -499,14 +497,14 @@ def start_publishing_from_supabase():
                 )
                 new_id = post_result.get("id")
                 # إرسال إشعار للفيلم الجديد أو المسلسل الجديد
-                tg_caption = generate_facebook_template(
-                    row,
-                    datetime.now().strftime("%Y-%m-%d"),
-                    content_type,
-                    "مشاهدة الآن",
-                    lang_work,
+                # التعديل: إرسال الـ row بالكامل لتوليد بوست الفيسبوك آلياً
+                send_to_telegram(
+                    row=row,
+                    content_type=content_type,
+                    action_text="مشاهدة الآن",
+                    post_url=post_result.get("url"),
+                    lang_val=lang_work,
                 )
-                send_to_telegram(row["poster"], tg_caption, post_result.get("url"))
                 print(f"✈️ تم إرسال إشعار تليجرام للنشر الجديد: {title}")
                 # تحديث ساب باز برقم البوست الجديد فوراً
                 supabase.table("medias").update({"blogger_post_id": new_id}).eq(

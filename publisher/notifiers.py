@@ -116,35 +116,53 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     return final_output
 
 
-def send_to_telegram(photo_url, caption, post_url):
-    """إرسال البوستر والتمبلت مع ضمان عدم الرفض من تليجرام"""
+def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة أصلية"):
+    """
+    هذه الدالة الآن تأخذ البيانات الخام، تولد قالب الفيسبوك، وترسله لتليجرام
+    """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ خطأ: مفاتيح تليجرام غير موجودة في الـ .env")
+        print("⚠️ خطأ: مفاتيح تليجرام غير موجودة")
         return
 
+    # 1. توليد التاريخ الحالي بشكل جميل
+    human_date = datetime.now().strftime("%Y-%m-%d")
+
+    # 2. استدعاء توليد القالب (البوست اللي هتاخده كوبي للفيس)
+    facebook_post = generate_facebook_template(
+        row, human_date, content_type, action_text, lang_val
+    )
+
+    # 3. تجهيز بيانات الإرسال
+    photo_url = row.get("poster") or row.get("poster_url")
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
 
-    # 1. قص النص لو طويل جداً (Telegram Limit 1024)
-    safe_caption = caption[:1000] + "..." if len(caption) > 1000 else caption
+    # تأمين طول النص (تليجرام بحد أقصى 1024 حرف للصور)
+    safe_caption = (
+        facebook_post if len(facebook_post) < 1024 else facebook_post[:1000] + "..."
+    )
 
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "photo": photo_url,
         "caption": safe_caption,
-        # ملاحظة: شيلنا HTML mode عشان الهاشتاجات متبوظش الدنيا
         "reply_markup": json.dumps(
-            {"inline_keyboard": [[{"text": "🍿 مشاهدة الآن", "url": post_url}]]}
+            {
+                "inline_keyboard": [
+                    [{"text": "🍿 مشاهدة الآن (المقال الرسمي)", "url": post_url}]
+                ]
+            }
         ),
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        # إضافة إمكانية إعادة المحاولة لو حصل DNS Error زي اللي ظهر في الـ Log
+        response = requests.post(url, json=payload, timeout=20)
         if response.status_code == 200:
-            print(f"✈️ تم إرسال إشعار تليجرام بنجاح.")
+            print(f"✈️ تم إرسال 'بوست الفيسبوك' إلى تليجرام بنجاح!")
         else:
-            print(f"⚠️ تليجرام رفض الإرسال: {response.text}")
+            print(f"⚠️ تليجرام رفض: {response.text}")
     except Exception as e:
-        print(f"⚠️ خطأ اتصال بتليجرام: {e}")
+        print(f"⚠️ فشل إرسال بوست الفيسبوك لتليجرام: {e}")
 
 
 # اجعل المتغير يشير للدالة الحقيقية مباشرة
