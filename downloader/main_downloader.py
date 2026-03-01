@@ -314,65 +314,55 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     print(f"📡 جاري فحص الرابط وبدء السحب...")
 
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
-    # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
-
-    # التعديل البرمجي لفك تشفير الروابط العنيدة
-    # التعديل النهائي باستخدام نظام الهوية المزدوجة (Headers + Cookies)
+    # استخراج الدومين الفعلي للسيرفر لضبط الـ Referer والـ Origin بدقة
     from urllib.parse import urlparse
 
     domain = urlparse(url).netloc
-    referer_url = f"https://{domain}/"
-
-    # مسار ملف الكوكيز (تأكد أن الملف موجود في هذا المسار)
-    cookies_path = os.path.join(BASE_DIR, "cookies.txt")
+    server_origin = f"https://{domain}"
 
     cmd = [
         "yt-dlp",
         "-v",
         "--no-playlist",
+        # تغيير الهوية لمتصفح أندرويد (تجاوز أسهل للحماية)
         "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36",
         "--add-header",
-        f"Referer: {referer_url}",
+        f"Referer: {server_origin}/",
         "--add-header",
-        f"Origin: {referer_url}",
+        f"Origin: {server_origin}",
+        "--add-header",
+        "Accept: */*",
+        "--add-header",
+        "Accept-Language: en-US,en;q=0.9",
+        "--add-header",
+        "Connection: keep-alive",
         "--no-check-certificate",
     ]
 
-    # إضافة سطر الكوكيز فقط إذا كان الملف موجوداً لتجنب الأخطاء
+    # ملاحظة: سأترك الكوكيز ولكن إذا فشل التحميل احذف ملف cookies.txt من جيت هاب
     if os.path.exists(cookies_path):
         cmd.extend(["--cookies", cookies_path])
-        print("🍪 تم دمج ملف الكوكيز بنجاح لكسر حماية الـ IP.")
-    else:
-        print("⚠️ تحذير: ملف cookies.txt غير موجود، سيتم التحميل بدون هوية.")
+        print("🍪 تم دمج ملف الكوكيز بنجاح.")
 
-    # تكملة بقية الأوامر (تعديل استراتيجي لكسر حماية الـ 9%)
     cmd.extend(
         [
-            "--hls-prefer-native",          # استخدام محرك hls داخلي بدلاً من ffmpeg
-            "--fragment-retries", "infinite",# محاولات لا نهائية لو فشل أي جزء
-            "--concurrent-fragments", "1",   # تحميل قطعة واحدة فقط في المرة (أهم سطر للتمويه)
-            "--socket-timeout", "60",
-            "--buffer-size", "16K",          # تقليل البفر لعدم إرهاق الاتصال
-            "-f", "bestvideo+bestaudio/best",
+            "--hls-prefer-native",
+            "--fragment-retries",
+            "infinite",
+            "--concurrent-fragments",
+            "1",  # التحميل قطعة بقطعة للتمويه
+            "--socket-timeout",
+            "30",
+            "-f",
+            "best",
             f"{url}",
-            "-o", download_path_template,
+            "-o",
+            download_path_template,
             "--newline",
-            "--progress-template", "download:[%(progress._percent_str)s]",
+            "--progress-template",
+            "download:[%(progress._percent_str)s]",
         ]
-    )
-
-    # أضف -v لإظهار تفاصيل المنع الحقيقية
-    cmd.insert(1, "-v")
-    process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
-    pbar_dl = tqdm(
-        total=100,
-        desc=f"📥 جاري التحميل: {display_title[:20]}",
-        unit="%",
-        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-        mininterval=1.0,  # لن يطبع أي سطر جديد إلا بعد مرور ثانية كاملة مهما كانت السرعة
     )
 
     last_db_update = 0
