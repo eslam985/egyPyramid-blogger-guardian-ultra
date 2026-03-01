@@ -1,24 +1,41 @@
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
+import uvicorn
+import logging
+import json
+import re
+import html
+import requests
+from dotenv import load_dotenv
+import sys
+import os
+
+# إضافة المسار الحالي لمسارات بايثون لضمان رؤية مجلد services و publisher
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 1. شحن المتغيرات فوراً قبل أي استدعاء آخر
+load_dotenv()
+
+from fastapi import (
+    FastAPI,
+    Request,
+    Form,
+    Depends,
+    HTTPException,
+    status,
+    BackgroundTasks,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from bs4 import BeautifulSoup
+
+# 2. استدعاء الخدمات المركزية
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
-import os
-import uvicorn
-from fastapi import BackgroundTasks
-from dotenv import load_dotenv
-from bs4 import BeautifulSoup
-import requests
-import json
-import re
-import html  # مكتبة أساسية لتنظيف رموز HTML
+
+# 3. استدعاء الأدوات ومحرك النشر من مجلد publisher (مكانهم الحالي حسب الـ ls)
+from publisher.utils import generate_ai_seo_description, generate_clean_slug
+from publisher.notifiers import send_to_telegram
 from publisher.main_publisher import start_publishing_from_supabase
-import logging
-
-load_dotenv()  # شحن المتغيرات أولاً
-
 
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -325,7 +342,9 @@ def convert_vk_to_embed(url):
 
 # مسار المزامنة الفعلي مع بلوجر
 @app.post("/api/episodes/{ep_id}/sync")
-async def sync_episode_to_blogger(ep_id: int, background_tasks: BackgroundTasks, user: str = Depends(authenticate)):
+async def sync_episode_to_blogger(
+    ep_id: int, background_tasks: BackgroundTasks, user: str = Depends(authenticate)
+):
     try:
         # 1. جلب بيانات الحلقة والعمل المرتبط بها
         ep_res = (
@@ -340,15 +359,21 @@ async def sync_episode_to_blogger(ep_id: int, background_tasks: BackgroundTasks,
 
         episode = ep_res.data
         post_id = episode.get("medias", {}).get("blogger_post_id")
-        
+
         # إذا لم يوجد مقال، سنعطي أمر للمحرك بالعمل فوراً
         if not post_id:
             from publisher.main_publisher import start_publishing_from_supabase
+
             # تحديث الحالة لكي يراها المحرك
-            supabase.table("episodes").update({"blogger_sync": "Approved"}).eq("id", ep_id).execute()
+            supabase.table("episodes").update({"blogger_sync": "Approved"}).eq(
+                "id", ep_id
+            ).execute()
             # تشغيل المحرك في الخلفية
             background_tasks.add_task(start_publishing_from_supabase)
-            return {"status": "success", "message": "🆕 عمل جديد! جاري إنشاء المقال في الخلفية..."}
+            return {
+                "status": "success",
+                "message": "🆕 عمل جديد! جاري إنشاء المقال في الخلفية...",
+            }
 
         # 2. جلب الروابط وتجهيز الـ HTML الجديد للحلقة
         links_res = (

@@ -4,10 +4,12 @@ import time
 import json
 from datetime import datetime
 
-# 1. استدعاء الخدمات المركزية (المرجع الأساسي لجميع الدوال الذكية)
+# 1. استدعاء الخدمات المركزية
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
-from services.utils import (
+
+# 2. استدعاء الأدوات المحلية (تأكد من وجود النقطة قبل اسم الملف)
+from .utils import (
     ar_to_en,
     clean_for_match,
     convert_vk_to_embed,
@@ -16,9 +18,9 @@ from services.utils import (
     generate_seo_tags,
     format_duration_iso,
 )
-from services.notifiers import send_to_telegram, generate_facebook_template
+from .notifiers import send_to_telegram, generate_facebook_template
 
-# 2. استدعاء القوالب فقط من المجلد الحالي
+# 3. استدعاء القوالب
 from .templates_store import HTML_TEMPLATE_SERIES, HTML_TEMPLATE_MOVIE
 
 # 3. تعريف المتغيرات العالمية (Global Variables) لتوافق الكود القديم
