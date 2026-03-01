@@ -782,8 +782,6 @@ HTML_TEMPLATE = r"""
 
 
   <script>
-    const url = data - posters[0].url;
-
     // تجميع البيانات في مصفوفة ديناميكية
     const movieLinks = [];
     if ("{{VOE_URL}}" && "{{VOE_URL}}" !== "nan") movieLinks.push({ name: 'Voe', url: "{{VOE_URL}}" });
@@ -801,6 +799,7 @@ HTML_TEMPLATE = r"""
       } else if (movieLinks.length > 0) {
         // بدلاً من استدعاء دالة غير موجودة، سنستخدم دالة playEpDynamic مباشرة
         playEpDynamic(null, 'مشاهدة الفيلم', '{{DOWNLOAD_URL}}', JSON.stringify(movieLinks));
+        
       }
       markWatchedFromStorage();
     };
@@ -971,16 +970,7 @@ HTML_TEMPLATE = r"""
           downloadWrapper.after(manualFix);
         }
       }
-      // تحفيز سكريبت الحارس لفحص العنصر الجديد وتأمينه فوراً
-      // تحفيز سكريبت الحارس
-      if (typeof secureMedia === 'function') {
-        secureMedia();
-      }
-
-      if (btn) {
-        document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      }
+        
     } // نهاية الدالة
 
     function saveToWatched(num) {
@@ -1016,7 +1006,8 @@ HTML_TEMPLATE = r"""
         videoContainer.style.zIndex = '1';
       }
     }
-  </script>"""
+  </script>
+  """
 
 
 ########################################
