@@ -6,7 +6,7 @@ import asyncio
 import httpx
 import urllib.parse
 import requests
-import google.generativeai as genai
+from google import genai
 from deep_translator import GoogleTranslator
 from functools import partial
 from .engine import ProgressStream
@@ -43,7 +43,7 @@ CLOUDINARY_CONFIG = {
 }
 
 translator = GoogleTranslator(source="auto", target="ar")
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 def get_movie_data(name):
