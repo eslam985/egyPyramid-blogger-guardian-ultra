@@ -2,7 +2,7 @@ import os
 import re
 import time
 from datetime import datetime
-
+import json
 # 1. استدعاء الخدمات (من الملفات الخارجية)
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
@@ -389,14 +389,24 @@ def start_publishing_from_supabase():
                 )
 
                 # إضافة هامة: حقن الروابط للأفلام فقط لأن القالب يحتاجها بناءً على مصفوفة movieLinks
-                if not is_series:
-                    final_html = (
-                        final_html.replace("{{VOE_URL}}", row["voe_url"])
-                        .replace("{{VIDTUBE_URL}}", row["vidtube_url"])
-                        .replace("{{OK_URL}}", row["ok_url"])
-                        .replace("{{VK_URL}}", row["vk_url"])
-                        .replace("{{DOWNLOAD_URL}}", row["download_url"])
-                    )
+                # إضافة هامة: حقن الروابط للأفلام (استخدام .get لمنع خطأ KeyError)
+                # نظام حقن السيرفرات الديناميكي (يعمل للأفلام والمسلسلات)
+                # نجمع كل السيرفرات التي تبدأ بـ _url من الـ row
+                movie_links = []
+                for key, value in row.items():
+                    if key.endswith("_url") and value and value not in ["nan", "", "None", "Pending", "#"]:
+                        server_base_name = key.replace("_url", "")
+                        movie_links.append({"name": server_base_name, "url": value})
+                
+                # تحويل المصفوفة لنص JSON لكي يفهمها سكريبت التشغيل عندك
+                links_json = json.dumps(movie_links).replace('"', "&quot;")
+                
+                # بناء زر المشاهدة الوحيد (للأفلام) أو تحديث القالب
+                # الحقيقة الصارمة: نحن الآن نضع كل السيرفرات داخل الزر الديناميكي
+                dynamic_btn = f"""<div class="ep-btn" onclick="playEpDynamic(this, 'مشاهدة الفيلم', '{row.get('download_url', '')}', '{links_json}')">▶ مشاهدة وتحميل الفيلم</div>"""
+                
+                final_html = final_html.replace("{{EPISODES_BUTTONS}}", dynamic_btn)
+                final_html = final_html.replace("{{DOWNLOAD_URL}}", row.get("download_url", "#"))
 
                 # ملاحظة: تم حذف replace الخاص بالروابط الثابتة لأن الأزرار الديناميكية تتولى المهمة الآن
 
