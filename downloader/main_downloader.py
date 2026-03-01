@@ -343,6 +343,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "--concurrent-fragments",
         "1",
         "--socket-timeout",
+        "--geo-bypass",
         "30",
         "-f",
         "best",
