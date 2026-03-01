@@ -9,11 +9,6 @@ import asyncio
 from internetarchive import upload as archive_upload
 from urllib.parse import urlparse
 
-
-# 1. استيراد النسخة المهذبة من tqdm التي صنعناها في import google.colabprocessors
-# هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
-
-
 from .processors import (
     tqdm,
     get_clean_media_data,
@@ -24,6 +19,7 @@ from .processors import (
     upload_to_voe_api,
     upload_to_vk_local,
     upload_to_lulustream,
+    upload_poster_to_cloudinary,
 )
 
 # 2. استيراد المحرك
@@ -218,6 +214,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # احتفظ بالاسم الأصلي الذي كتبته في التاسك كخطة احتياطية
     original_task_name = str(name).strip()
 
+    # ابحث عن هذا الجزء (حوالي السطر 200) واستبدله بهذا:
     (
         display_title,
         meta_story,
@@ -228,6 +225,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_runtime,
         meta_year,
     ) = get_movie_data(name)
+
+    # --- الإصلاح الجوهري هنا ---
+    # معالجة البوستر فوراً قبل أي استدعاء لسوبابيز
+    final_poster = upload_poster_to_cloudinary(raw_poster) if raw_poster else raw_poster
     # افترضنا أن دالة get_movie_data تعيد الـ ID أيضاً أو القاموس الكامل
     # إذا كانت get_movie_data تعيد بيانات فقط، سنقوم ببناء قاموس وهمي لـ meta_data
     current_meta = {"id": None}  # يمكنك تطوير هذا لاحقاً لجلب الـ ID الحقيقي
@@ -291,6 +292,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     temp_id = f"loading_{timestamp}"
 
     # استدعاء الحفظ الأولي للحصول على e_id
+    # استدعاء الحفظ الأولي للحصول على e_id
     e_id = save_to_supabase(
         None,
         None,
@@ -298,7 +300,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         display_title,
         original_task_name,
         meta_story,
-        raw_poster,
+        final_poster,    # تم التعديل
         meta_year,
         meta_rating,
         temp_id,
@@ -658,7 +660,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     display_title,
                     original_task_name,
                     meta_story,
-                    raw_poster,
+                    final_poster,
                     meta_year,
                     meta_rating,
                     identifier,
@@ -718,7 +720,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     display_title,
                     original_task_name,
                     meta_story,
-                    raw_poster,
+                    final_poster, # تأكد أنها final_poster وليست raw_poster
                     meta_year,
                     meta_rating,
                     identifier,
