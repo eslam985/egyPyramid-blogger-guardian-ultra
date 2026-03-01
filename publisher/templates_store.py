@@ -757,8 +757,11 @@ HTML_TEMPLATE = r"""
     <div class="player-header">
       جاري عرض: <span id="current-ep" class="current-episode">{{TITLE}}</span>
     </div>
-    <div class="server-buttons" id="dynamic-servers-container">
+    <div style="display:none;">{{EPISODES_BUTTONS}}</div>
+
+<div class="server-buttons" id="dynamic-servers-container">
     </div>
+
 
     <div class="player">
       <iframe id="video-player-frame" src="about:blank" data-src="{{VOE_URL}}" allowfullscreen></iframe>
@@ -782,8 +785,6 @@ HTML_TEMPLATE = r"""
 
 
   <script>
-
-
     let currentEpNum = 1; // للفيلم نعتبره حلقة 1 دائماً
     let blogPostId = "{{POST_ID}}";
 
