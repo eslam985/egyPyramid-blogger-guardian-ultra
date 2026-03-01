@@ -445,7 +445,7 @@ def start_publishing_from_supabase():
                     .replace(
                         "{{DURATION_ISO}}", "PT2H28M"
                     )  # يمكنك جعلها ديناميكية لاحقاً
-                    .replace("{{TAGS_CONTENT}}", generate_seo_tags(title))
+                    .replace("{{TAGS_CONTENT}}", generate_seo_tags(title, row.get("labels", "Movies")))
                 )
                 # --- الكود الجديد ينتهي هنا ---
 
