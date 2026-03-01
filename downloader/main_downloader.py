@@ -337,14 +337,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Sec-Ch-Ua-Mobile: ?0",
         "--add-header",
         'Sec-Ch-Ua-Platform: "Windows"',
-        # ---------------------------------------
+        # ... الأجزاء السابقة كما هي ...
         "--hls-use-mpegts",
         "--hls-prefer-native",
         "--concurrent-fragments",
         "1",
-        "--socket-timeout",
         "--geo-bypass",
-        "30",
+        "--socket-timeout",
+        "30",  # الرقم يجب أن يأتي مباشرة بعد التايم أوت
         "-f",
         "best",
         f"{url}",
