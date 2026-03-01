@@ -325,7 +325,7 @@ def convert_vk_to_embed(url):
 
 # مسار المزامنة الفعلي مع بلوجر
 @app.post("/api/episodes/{ep_id}/sync")
-async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate)):
+async def sync_episode_to_blogger(ep_id: int, background_tasks: BackgroundTasks, user: str = Depends(authenticate)):
     try:
         # 1. جلب بيانات الحلقة والعمل المرتبط بها
         ep_res = (
@@ -340,8 +340,15 @@ async def sync_episode_to_blogger(ep_id: int, user: str = Depends(authenticate))
 
         episode = ep_res.data
         post_id = episode.get("medias", {}).get("blogger_post_id")
+        
+        # إذا لم يوجد مقال، سنعطي أمر للمحرك بالعمل فوراً
         if not post_id:
-            return {"status": "error", "error": "هذا العمل غير مرتبط بمقال بلوجر!"}
+            from publisher.main_publisher import start_publishing_from_supabase
+            # تحديث الحالة لكي يراها المحرك
+            supabase.table("episodes").update({"blogger_sync": "Approved"}).eq("id", ep_id).execute()
+            # تشغيل المحرك في الخلفية
+            background_tasks.add_task(start_publishing_from_supabase)
+            return {"status": "success", "message": "🆕 عمل جديد! جاري إنشاء المقال في الخلفية..."}
 
         # 2. جلب الروابط وتجهيز الـ HTML الجديد للحلقة
         links_res = (

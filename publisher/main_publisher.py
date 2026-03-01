@@ -309,7 +309,7 @@ def start_publishing_from_supabase():
             supabase.table("episodes")
             .select("*, medias(*)")
             .eq("is_synced", False)
-            .eq("blogger_sync", "Approved")
+            .in_("blogger_sync", ["Approved", "Done", "Pending"]) # يقرأ أي حالة طالما لم يُنشر
             .execute()
         )
         new_tasks = query.data
@@ -412,7 +412,7 @@ def start_publishing_from_supabase():
                     # بدلاً من السطر القديم الذي يسبب الخطأ
                     "labels": [
                         l.strip()
-                        for l in str(m_data.get("labels", "") or "").split(",")
+                        for l in str(m_data.get("labels") or "Movies").split(",")
                         if l.strip()
                     ],
                     "description": auto_desc,
