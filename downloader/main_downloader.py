@@ -7,9 +7,11 @@ import nest_asyncio
 from urllib.parse import unquote
 import asyncio
 from internetarchive import upload as archive_upload
+from urllib.parse import urlparse
 
 # 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
 # هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
+
 
 from .processors import (
     tqdm,
@@ -312,24 +314,32 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     print(f"📡 جاري فحص الرابط وبدء السحب...")
 
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
+    # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
+
+    domain = urlparse(url).netloc
+    referer_url = f"https://{domain}/"
+
     cmd = [
         "yt-dlp",
+        "-v",  # مهم جداً لرؤية سبب المنع الحقيقي في اللوجات
         "--no-playlist",
         "--concurrent-fragments",
         "5",
         "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "--add-header",
-        "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
+        f"Referer: {referer_url}",
         "--add-header",
-        "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
+        f"Origin: {referer_url}",
         "--add-header",
-        "Referer: https://vidtube.one/",
+        "Accept: */*",
         "--add-header",
-        "Origin: https://vidtube.one",
+        "Accept-Language: en-US,en;q=0.9",
+        "--add-header",
+        "Range: bytes=0-",
         "--no-check-certificate",
         "--socket-timeout",
-        "60",
+        "30",
         "-f",
         "best",
         f"{url}",
