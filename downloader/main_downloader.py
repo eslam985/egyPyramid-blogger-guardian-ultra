@@ -328,10 +328,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         # --- خدعة المحترفين: تزييف الـ IP ليبدو كأنه منزلي وليس من مركز بيانات ---
         "--add-header",
-        "X-Forwarded-For: 197.34.22.145",
-        "--add-header",
-        "Client-IP: 197.34.22.145",
-        "--add-header",
         f"Referer: {server_origin}/",
         "--add-header",
         'Sec-Ch-Ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
@@ -339,7 +335,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Sec-Ch-Ua-Mobile: ?0",
         "--add-header",
         'Sec-Ch-Ua-Platform: "Windows"',
-        "--proxy", "socks5://127.0.0.1:9050",
+        "--proxy",
+        "socks5://127.0.0.1:9050",
         # ------------------------------------------------------------------
         "--no-check-certificates",
         "--hls-use-mpegts",  # لضمان عدم الانقطاع عند 9%
