@@ -262,3 +262,31 @@ def generate_ai_seo_description(movie_title, story_summary):
         return random.choice(templates)
     except:
         return f"مشاهدة وتحميل فيلم {title_clean} مترجم بجودة عالية حصرياً على إيجي بيراميد."
+
+
+def format_duration_iso(runtime_str):
+    """تحويل وقت الفيلم (عربي أو إنجليزي) إلى تنسيق ISO 8601"""
+    try:
+        runtime_str = str(runtime_str).lower()
+        # استخراج كافة الأرقام من النص (مثلاً: "1 ساعة و 38 دقيقة" تصبح ['1', '38'])
+        numbers = re.findall(r'\d+', runtime_str)
+        
+        if not numbers:
+            return "PT2H"  # قيمة افتراضية في حال الفشل
+            
+        # حالة وجود رقمين (ساعات ودقائق) - الترتيب دائماً ساعة ثم دقيقة
+        if len(numbers) >= 2:
+            return f"PT{numbers[0]}H{numbers[1]}M"
+            
+        # حالة وجود رقم واحد فقط
+        if len(numbers) == 1:
+            # لو النص يحتوي على 'ساعة' أو 'h' نعتبر الرقم ساعات
+            if any(word in runtime_str for word in ['h', 'ساعة', 'ساعات']):
+                return f"PT{numbers[0]}H"
+            # غير ذلك نعتبره دقائق (مثلاً: "90 دقيقة")
+            else:
+                return f"PT{numbers[0]}M"
+                
+        return "PT2H"
+    except:
+        return "PT2H"

@@ -17,6 +17,7 @@ from .utils import (
     generate_clean_slug,
     generate_ai_seo_description,
     generate_seo_tags,
+    format_duration_iso,
 )
 from .notifiers import send_to_telegram, generate_facebook_template
 
@@ -442,9 +443,7 @@ def start_publishing_from_supabase():
                     .replace("{{CURRENT_DATE}}", current_time)
                     .replace("{{LOGO_URL}}", logo_url)
                     .replace("{{LANGUAGE}}", lang_work)
-                    .replace(
-                        "{{DURATION_ISO}}", "PT2H28M"
-                    )  # يمكنك جعلها ديناميكية لاحقاً
+                    .replace("{{DURATION_ISO}}", format_duration_iso(row.get("Movie Runtime", "120")))
                     .replace("{{TAGS_CONTENT}}", generate_seo_tags(title, row.get("labels", "Movies")))
                 )
                 # --- الكود الجديد ينتهي هنا ---
