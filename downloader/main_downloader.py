@@ -179,7 +179,9 @@ def save_to_supabase(
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # 1. تثبيت المسار القابل للكتابة (الورشة)
-    BASE_DIR = "/kaggle/working/project"
+    # 1. تثبيت المسار القابل للكتابة (الورشة) - يتكيف آلياً مع Colab أو Kaggle
+    BASE_PATH = "/kaggle/working" if os.path.exists("/kaggle/working") else "/content"
+    BASE_DIR = os.path.join(BASE_PATH, "project")
 
     # 2. التأكد من الانتقال إليه فعلياً لضمان أن أي ملف نسبي يُنشأ هناك
     if os.path.exists(BASE_DIR):
