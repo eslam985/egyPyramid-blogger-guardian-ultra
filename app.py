@@ -92,6 +92,7 @@ async def add_new_work(
     tmdb_id: str = Form(None),
     labels: str = Form(None),
     runtime: str = Form(None),
+    duration_iso: str = Form(None),  # أضف هذا السطر
     poster_url: str = Form(...),
 ):
     payload = {
@@ -103,6 +104,7 @@ async def add_new_work(
         "tmdb_id": tmdb_id,
         "labels": labels,
         "runtime": runtime,
+        "duration_iso": duration_iso,  # أضف هذا السطر
         "poster_url": poster_url,
     }
     new_media = SupabaseService.add_media(payload)
@@ -138,6 +140,7 @@ async def update_media(
     tmdb_id: str = Form(None),
     labels: str = Form(None),
     runtime: str = Form(None),
+    duration_iso: str = Form(None),  # أضف هذا السطر
     poster_url: str = Form(...),
 ):
     data = {
@@ -149,6 +152,7 @@ async def update_media(
         "tmdb_id": tmdb_id,
         "labels": labels,
         "runtime": runtime,
+        "duration_iso": duration_iso,  # أضف هذا السطر
         "poster_url": poster_url,
     }
     SupabaseService.update_media(media_id, data)
