@@ -346,21 +346,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     else:
         print("⚠️ تحذير: ملف cookies.txt غير موجود، سيتم التحميل بدون هوية.")
 
-    # تكملة بقية الأوامر
+    # تكملة بقية الأوامر (تعديل استراتيجي لكسر حماية الـ 9%)
     cmd.extend(
         [
-            "--concurrent-fragments",
-            "10",
-            "--socket-timeout",
-            "60",
-            "-f",
-            "bestvideo+bestaudio/best",
+            "--hls-prefer-native",          # استخدام محرك hls داخلي بدلاً من ffmpeg
+            "--fragment-retries", "infinite",# محاولات لا نهائية لو فشل أي جزء
+            "--concurrent-fragments", "1",   # تحميل قطعة واحدة فقط في المرة (أهم سطر للتمويه)
+            "--socket-timeout", "60",
+            "--buffer-size", "16K",          # تقليل البفر لعدم إرهاق الاتصال
+            "-f", "bestvideo+bestaudio/best",
             f"{url}",
-            "-o",
-            download_path_template,
+            "-o", download_path_template,
             "--newline",
-            "--progress-template",
-            "download:[%(progress._percent_str)s]",
+            "--progress-template", "download:[%(progress._percent_str)s]",
         ]
     )
 
