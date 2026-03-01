@@ -317,38 +317,52 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
 
     # التعديل البرمجي لفك تشفير الروابط العنيدة
+    # التعديل النهائي باستخدام نظام الهوية المزدوجة (Headers + Cookies)
+    from urllib.parse import urlparse
+
     domain = urlparse(url).netloc
     referer_url = f"https://{domain}/"
+
+    # مسار ملف الكوكيز (تأكد أن الملف موجود في هذا المسار)
+    cookies_path = os.path.join(BASE_DIR, "cookies.txt")
 
     cmd = [
         "yt-dlp",
         "-v",
         "--no-playlist",
-        "--concurrent-fragments",
-        "10",  # زيادة السرعة
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "--add-header",
         f"Referer: {referer_url}",
         "--add-header",
         f"Origin: {referer_url}",
-        "--add-header",
-        "Accept: */*",
         "--no-check-certificate",
-        "--prefer-free-formats",
-        "--legacy-server-connect",  # للسيرفرات القديمة التي ترفض الاتصال الحديث
-        "--socket-timeout",
-        "60",
-        "--geo-bypass",  # محاولة تخطي الحجب الجغرافي
-        "-f",
-        "bestvideo+bestaudio/best",  # إجبار السحب بأي صيغة متاحة
-        f"{url}",
-        "-o",
-        download_path_template,
-        "--newline",
-        "--progress-template",
-        "download:[%(progress._percent_str)s]",
     ]
+
+    # إضافة سطر الكوكيز فقط إذا كان الملف موجوداً لتجنب الأخطاء
+    if os.path.exists(cookies_path):
+        cmd.extend(["--cookies", cookies_path])
+        print("🍪 تم دمج ملف الكوكيز بنجاح لكسر حماية الـ IP.")
+    else:
+        print("⚠️ تحذير: ملف cookies.txt غير موجود، سيتم التحميل بدون هوية.")
+
+    # تكملة بقية الأوامر
+    cmd.extend(
+        [
+            "--concurrent-fragments",
+            "10",
+            "--socket-timeout",
+            "60",
+            "-f",
+            "bestvideo+bestaudio/best",
+            f"{url}",
+            "-o",
+            download_path_template,
+            "--newline",
+            "--progress-template",
+            "download:[%(progress._percent_str)s]",
+        ]
+    )
 
     # أضف -v لإظهار تفاصيل المنع الحقيقية
     cmd.insert(1, "-v")
