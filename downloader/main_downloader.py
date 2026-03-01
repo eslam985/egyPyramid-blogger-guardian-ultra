@@ -337,7 +337,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Origin: https://vidtube.one",
         # --- التعديل لرفع السرعة وضمان الاستمرار ---
         "--concurrent-fragments",
-        "16",  # رفع القوة لـ 10 قنوات سحب
+        "10",  # رفع القوة لـ 10 قنوات سحب
         "--file-access-retries",
         "infinite",  # محاولات لا نهائية للوصول للملف
         "--fragment-retries",
