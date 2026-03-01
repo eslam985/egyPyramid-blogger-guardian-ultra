@@ -314,7 +314,21 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     print(f"📡 جاري فحص الرابط وبدء السحب...")
 
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
-    # استخراج الدومين الفعلي للسيرفر لضبط الـ Referer والـ Origin بدقة
+    # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
+
+    # التعديل البرمجي لفك تشفير الروابط العنيدة
+    # التعديل النهائي باستخدام نظام الهوية المزدوجة (Headers + Cookies)
+    from urllib.parse import urlparse
+
+    domain = urlparse(url).netloc
+    referer_url = f"https://{domain}/"
+
+    # مسار ملف الكوكيز (تأكد أن الملف موجود في هذا المسار)
+    # 1. تعريف مسار الكوكيز أولاً (هذا هو السطر الذي كان ناقصاً وتسبب في الخطأ)
+    cookies_path = os.path.join(BASE_DIR, "cookies.txt")
+
+    # 2. استخراج الدومين الفعلي للسيرفر
+    from urllib.parse import urlparse
 
     domain = urlparse(url).netloc
     server_origin = f"https://{domain}"
@@ -323,7 +337,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "yt-dlp",
         "-v",
         "--no-playlist",
-        # تغيير الهوية لمتصفح أندرويد (تجاوز أسهل للحماية)
         "--user-agent",
         "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36",
         "--add-header",
@@ -334,23 +347,22 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Accept: */*",
         "--add-header",
         "Accept-Language: en-US,en;q=0.9",
-        "--add-header",
-        "Connection: keep-alive",
         "--no-check-certificate",
     ]
-    cookies_path = os.path.join(BASE_DIR, "cookies.txt")
-    # ملاحظة: سأترك الكوكيز ولكن إذا فشل التحميل احذف ملف cookies.txt من جيت هاب
+
+    # 3. الآن يمكنك استخدام cookies_path بأمان
     if os.path.exists(cookies_path):
         cmd.extend(["--cookies", cookies_path])
         print("🍪 تم دمج ملف الكوكيز بنجاح.")
 
+    # 4. بقية الأوامر الاستراتيجية
     cmd.extend(
         [
             "--hls-prefer-native",
             "--fragment-retries",
             "infinite",
             "--concurrent-fragments",
-            "1",  # التحميل قطعة بقطعة للتمويه
+            "1",
             "--socket-timeout",
             "30",
             "-f",
@@ -362,6 +374,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "--progress-template",
             "download:[%(progress._percent_str)s]",
         ]
+    )
+
+    # أضف -v لإظهار تفاصيل المنع الحقيقية
+    cmd.insert(1, "-v")
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    pbar_dl = tqdm(
+        total=100,
+        desc=f"📥 جاري التحميل: {display_title[:20]}",
+        unit="%",
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        mininterval=1.0,  # لن يطبع أي سطر جديد إلا بعد مرور ثانية كاملة مهما كانت السرعة
     )
 
     last_db_update = 0
