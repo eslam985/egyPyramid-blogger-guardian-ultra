@@ -9,7 +9,8 @@ import asyncio
 from internetarchive import upload as archive_upload
 from urllib.parse import urlparse
 
-# 1. استيراد النسخة المهذبة من tqdm التي صنعناها في processors
+
+# 1. استيراد النسخة المهذبة من tqdm التي صنعناها في import google.colabprocessors
 # هذا السطر هو الأهم لضمان ثبات شكل البروجرس بار
 
 
@@ -178,17 +179,26 @@ def save_to_supabase(
 
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
-    # 1. تثبيت المسار القابل للكتابة (الورشة)
-    # 1. تثبيت المسار القابل للكتابة (الورشة) - يتكيف آلياً مع Colab أو Kaggle
-    BASE_PATH = "/kaggle/working" if os.path.exists("/kaggle/working") else "/content"
+    # 1. تحديد المسار باحترافية (كشف التزييف)
+    try:
+        import google.colab  # هذا السطر يجب أن يكون داخل الـ try
+
+        BASE_PATH = "/content"
+    except ImportError:
+        # إذا فشل الاستيراد، فهذا يعني أننا لسنا في كولاب
+        BASE_PATH = (
+            "/kaggle/working" if os.path.exists("/kaggle/working") else os.getcwd()
+        )
+
     BASE_DIR = os.path.join(BASE_PATH, "project")
 
-    # 2. التأكد من الانتقال إليه فعلياً لضمان أن أي ملف نسبي يُنشأ هناك
-    if os.path.exists(BASE_DIR):
-        os.chdir(BASE_DIR)
+    # 2. التأكد من إنشاء المجلد والدخول إليه
+    os.makedirs(BASE_DIR, exist_ok=True)
+    os.chdir(BASE_DIR)
 
-    # 3. طباعة المسار للتأكد في اللوجات (اختياري لل debugging)
+    # هذا السطر سيطبع الآن المسار الحقيقي الصحيح (/content/project في كولاب)
     print(f"🛠️ مسار العمل الحالي للوحش: {os.getcwd()}")
+    # باقي الكود كما هو...
 
     await ensure_dependencies()
     timestamp = int(time.time())
@@ -337,7 +347,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Origin: https://vidtube.one",
         # --- التعديل لرفع السرعة وضمان الاستمرار ---
         "--concurrent-fragments",
-        "10",  # رفع القوة لـ 10 قنوات سحب
+        "13",  # رفع القوة لـ 10 قنوات سحب
         "--file-access-retries",
         "infinite",  # محاولات لا نهائية للوصول للملف
         "--fragment-retries",
