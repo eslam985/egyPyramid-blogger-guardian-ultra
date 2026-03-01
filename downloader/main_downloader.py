@@ -189,7 +189,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     await ensure_dependencies()
     timestamp = int(time.time())
 
-    # ... بقية الكود كما هو ...
     # --- 1. تنظيف الاسم وجلب البيانات الذكية ---
 
     if "topcinema.rip" in str(name):
