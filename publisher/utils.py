@@ -2,7 +2,7 @@ import os
 import re
 import time
 import requests
-import datetime
+from datetime import datetime
 import random
 from groq import Groq
 from google import genai
