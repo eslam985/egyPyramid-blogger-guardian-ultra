@@ -318,17 +318,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # التعديل البرمجي لفك تشفير الروابط العنيدة
     # 1. استخراج الدومين الفعلي للسيرفر لضبط الهوية بدقة
+    # 1. استخراج الدومين الفعلي للسيرفر لضبط الهوية بدقة
     domain = urlparse(url).netloc
     server_origin = f"https://{domain}"
 
-    # 2. بناء أمر الوحش (هوية أندرويد + لغة + استراتيجية النفس الطويل)
+    # 2. بناء أمر الوحش (نسخة كسر حماية الـ 9% والـ IP Block)
     cmd = [
         "yt-dlp",
         "-v",
         "--no-playlist",
-        # هوية أندرويد لتجاوز أسهل للحماية
+        # تمويه المتصفح ليكون Chrome على Windows (أكثر استقراراً مع سيرفرات tnmr)
         "--user-agent",
-        "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "--add-header",
         f"Referer: {server_origin}/",
         "--add-header",
@@ -336,16 +337,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "--add-header",
         "Accept: */*",
         "--add-header",
-        "Accept-Language: en-US,en;q=0.9",
+        "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
         "--no-check-certificate",
-        "--hls-prefer-native",  # استخدام المحرك الداخلي لثبات الـ m3u8
+        # --- التعديلات الجوهرية لضمان عدم الانقطاع ---
+        "--hls-use-mpegts",  # هام: يمنع السيرفر من اكتشاف انقطاع الـ Session
+        "--hls-prefer-native",  # استخدام المحرك الداخلي بدلاً من ffmpeg
         "--fragment-retries",
-        "infinite",  # محاولات لا نهائية لو فصل السيرفر
+        "infinite",
         "--concurrent-fragments",
-        "1",  # تحميل قطعة واحدة للتمويه (هام جداً!)
+        "1",  # قطعة واحدة لعدم لفت انتباه الحماية
         "--socket-timeout",
         "30",
         "--geo-bypass",
+        # ---------------------------------------
         "-f",
         "best",
         f"{url}",
