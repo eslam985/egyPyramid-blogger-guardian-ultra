@@ -248,7 +248,7 @@ HTML_TEMPLATE = r"""
     font-weight: bold !important;
   }
 
-   /* ================================================= */
+  /* ================================================= */
   /* SERVER BUTTONS - أزرار السيرفرات المطورة */
   /* ================================================= */
   .server-buttons {
@@ -783,7 +783,7 @@ HTML_TEMPLATE = r"""
 
   <script>
     const url = data - posters[0].url;
-  
+
     // تجميع البيانات في مصفوفة ديناميكية
     const movieLinks = [];
     if ("{{VOE_URL}}" && "{{VOE_URL}}" !== "nan") movieLinks.push({ name: 'Voe', url: "{{VOE_URL}}" });
@@ -795,31 +795,15 @@ HTML_TEMPLATE = r"""
     let blogPostId = "{{POST_ID}}";
 
     window.onload = function () {
-      const container = document.getElementById('dynamic-servers-container');
-      if (!container) return;
-
-      // بناء الأزرار ديناميكياً بناءً على الروابط المتوفرة فقط
-      movieLinks.forEach((link, index) => {
-        const sBtn = document.createElement('button');
-        sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
-        sBtn.innerText = 'سيرفر ' + link.name.toUpperCase();
-        sBtn.onclick = function () {
-          document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
-          sBtn.classList.add('active');
-          changeS(sBtn, link.url);
-        };
-        container.appendChild(sBtn);
-      });
-
-      // تشغيل أول سيرفر متوفر فوراً
-      if (movieLinks.length > 0) {
-        changeS(null, movieLinks[0].url);
+      const mainBtn = document.querySelector('.ep-btn');
+      if (mainBtn) {
+        mainBtn.click();
+      } else if (movieLinks.length > 0) {
+        // بدلاً من استدعاء دالة غير موجودة، سنستخدم دالة playEpDynamic مباشرة
+        playEpDynamic(null, 'مشاهدة الفيلم', '{{DOWNLOAD_URL}}', JSON.stringify(movieLinks));
       }
-
       markWatchedFromStorage();
     };
-
-
 
     function playPrev() {
       let prevNum = currentEpNum - 1;
@@ -832,113 +816,64 @@ HTML_TEMPLATE = r"""
     }
 
     // الاحتفاظ بداله الحلقات في قالب الافلام احطياطي!
-  function playEpDynamic(btn, num, downloadUrl, linksJson) {
-    const rawLinks = JSON.parse(linksJson);
-    const container = document.getElementById('dynamic-servers-container');
-    const epTitle = document.getElementById('current-ep');
-    const dBtn = document.getElementById('download-btn');
-    currentEpNum = parseInt(num);
+    function playEpDynamic(btn, num, downloadUrl, linksJson) {
+      const rawLinks = JSON.parse(linksJson);
+      const container = document.getElementById('dynamic-servers-container');
+      const epTitle = document.getElementById('current-ep');
+      const dBtn = document.getElementById('download-btn');
+      currentEpNum = parseInt(num);
 
-    if (epTitle) epTitle.innerText = "الحلقة " + num;
-    if (dBtn) dBtn.href = downloadUrl;
+      if (epTitle) epTitle.innerText = "الحلقة " + num;
+      if (dBtn) dBtn.href = downloadUrl;
 
-    // 1. خريطة الأولوية والألوان (الباب موارب لأي سيرفر جديد)
-    const serverConfig = {
-      'vk': { priority: 1, color: '#4c75a3' }, // أزرق VK
-      'ok': { priority: 2, color: '#ee8208' }, // برتقالي OK
-      'vidtube': { priority: 3, color: '#ff0000' }, // أحمر VidTube
-      'voe': { priority: 4, color: '#00d0ff' }, // سماوي Voe
-      'doodstream': { priority: 5, color: '#111827' }, // أسود ليلي
-      'streamtape': { priority: 6, color: '#0056b3' }, // أزرق ملكي
-      'mixdrop': { priority: 7, color: '#10b981' }, // أخضر زمردي
-      'lulustream': { priority: 8, color: '#8b5cf6' }, // بنفسجي
-      'default': { priority: 99, color: '#444' }    // رمادي لأي سيرفر جديد
-    };
-
-    // 2. ترتيب السيرفرات بناءً على الخريطة
-    const sortedLinks = rawLinks.sort((a, b) => {
-      const pA = serverConfig[a.name.toLowerCase()]?.priority || serverConfig.default.priority;
-      const pB = serverConfig[b.name.toLowerCase()]?.priority || serverConfig.default.priority;
-      return pA - pB;
-    });
-
-    container.innerHTML = '';
-
-    // 3. إنشاء الأزرار بالألوان الجديدة
-    sortedLinks.forEach((link, index) => {
-      const sBtn = document.createElement('button');
-      const cfg = serverConfig[link.name.toLowerCase()] || serverConfig.default;
-
-      sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
-      sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
-
-      // تطبيق اللون المخصص للباكجراوند
-      sBtn.style.backgroundColor = cfg.color;
-      sBtn.style.borderColor = 'rgba(255,255,255,0.2)';
-
-      sBtn.onclick = function () {
-        document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
-        sBtn.classList.add('active');
-        changeS(sBtn, link.url);
+      // 1. خريطة الأولوية والألوان (الباب موارب لأي سيرفر جديد)
+      const serverConfig = {
+        'vk': { priority: 1, color: '#4c75a3' }, // أزرق VK
+        'ok': { priority: 2, color: '#ee8208' }, // برتقالي OK
+        'vidtube': { priority: 3, color: '#ff0000' }, // أحمر VidTube
+        'voe': { priority: 4, color: '#00d0ff' }, // سماوي Voe
+        'doodstream': { priority: 5, color: '#111827' }, // أسود ليلي
+        'streamtape': { priority: 6, color: '#0056b3' }, // أزرق ملكي
+        'mixdrop': { priority: 7, color: '#10b981' }, // أخضر زمردي
+        'lulustream': { priority: 8, color: '#8b5cf6' }, // بنفسجي
+        'default': { priority: 99, color: '#444' }    // رمادي لأي سيرفر جديد
       };
-      container.appendChild(sBtn);
-    });
 
-    if (sortedLinks.length > 0) changeS(null, sortedLinks[0].url);
+      // 2. ترتيب السيرفرات بناءً على الخريطة
+      const sortedLinks = rawLinks.sort((a, b) => {
+        const pA = serverConfig[a.name.toLowerCase()]?.priority || serverConfig.default.priority;
+        const pB = serverConfig[b.name.toLowerCase()]?.priority || serverConfig.default.priority;
+        return pA - pB;
+      });
 
-    document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    saveToWatched(num);
-  }
-    currentVoe = voeUrl;
-    currentVid = vidUrl;
-    // تحديث الروابط العالمية من المصفوفة الإضافية
-    currentOk = extraUrls[0] || "nan";
-    currentVk = extraUrls[1] || "nan";
-    currentEpNum = parseInt(num);
+      container.innerHTML = '';
 
-    const downBtn = document.getElementById('download-btn');
-    if (downBtn) downBtn.href = downUrl || "#";
+      // 3. إنشاء الأزرار بالألوان الجديدة
+      sortedLinks.forEach((link, index) => {
+        const sBtn = document.createElement('button');
+        const cfg = serverConfig[link.name.toLowerCase()] || serverConfig.default;
 
-    const serverList = document.getElementById('server-list');
-    // حذف الأزرار القديمة المضافة ديناميكياً فقط
-    const extraBtns = serverList.querySelectorAll('.extra-server');
-    extraBtns.forEach(b => b.remove());
+        sBtn.className = 'server-btn' + (index === 0 ? ' active' : '');
+        sBtn.innerText = 'سيرفر ' + (link.name.toUpperCase());
 
-    // تحديث ظهور VidTube (الزر الثابت الثاني)
-    // تحديث ظهور السيرفرات الثابتة في القالب
-    checkServer(vidUrl, '.server-btn-2');
-    checkServer(extraUrls[0], '.server-btn-3'); // OK
-    checkServer(extraUrls[1], '.server-btn-4'); // VK
+        // تطبيق اللون المخصص للباكجراوند
+        sBtn.style.backgroundColor = cfg.color;
+        sBtn.style.borderColor = 'rgba(255,255,255,0.2)';
 
-    // إضافة سيرفرات OK و VK ديناميكياً
-    const serverNames = ["سيرفر OK", "سيرفر VK", "سيرفر إضافي"];
-    extraUrls.forEach((url, index) => {
-      if (url && url !== "" && url !== "nan" && url.toLowerCase() !== "pending") {
-        const newBtn = document.createElement('button');
-        newBtn.className = "server-btn extra-server";
-        newBtn.innerText = serverNames[index] || `سيرفر ${index + 1}`;
-        newBtn.onclick = function () { changeS(this, url); };
-        serverList.appendChild(newBtn);
-      }
-    });
+        sBtn.onclick = function () {
+          document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
+          sBtn.classList.add('active');
+          changeS(sBtn, link.url);
+        };
+        container.appendChild(sBtn);
+      });
 
-    // تمييز Voe كافتراضي دائماً عند تغيير الحلقة
-    const allSBtns = document.querySelectorAll('.server-btn');
-    allSBtns.forEach(b => b.classList.remove('active'));
-    if (allSBtns[0]) {
-      allSBtns[0].classList.add('active');
-      changeS(allSBtns[0], voeUrl);
+      if (sortedLinks.length > 0) changeS(null, sortedLinks[0].url);
+
+      document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      saveToWatched(num);
     }
-
-    saveToWatched(num);
-    btn.classList.add('watched');
-    document.querySelector('.video-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    document.getElementById('current-ep').innerText = "الحلقة " + num;
-
-    document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-
 
     function playNext() {
       let nextNum = currentEpNum + 1;
@@ -1037,10 +972,16 @@ HTML_TEMPLATE = r"""
         }
       }
       // تحفيز سكريبت الحارس لفحص العنصر الجديد وتأمينه فوراً
+      // تحفيز سكريبت الحارس
       if (typeof secureMedia === 'function') {
         secureMedia();
       }
-    }
+
+      if (btn) {
+        document.querySelectorAll('.server-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+    } // نهاية الدالة
 
     function saveToWatched(num) {
       let watched = JSON.parse(localStorage.getItem('watched_' + blogPostId) || "[]");
@@ -1075,7 +1016,6 @@ HTML_TEMPLATE = r"""
         videoContainer.style.zIndex = '1';
       }
     }
-
   </script>"""
 
 

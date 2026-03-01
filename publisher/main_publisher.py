@@ -3,6 +3,7 @@ import re
 import time
 from datetime import datetime
 import json
+
 # 1. استدعاء الخدمات (من الملفات الخارجية)
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
@@ -309,7 +310,9 @@ def start_publishing_from_supabase():
             supabase.table("episodes")
             .select("*, medias(*)")
             .eq("is_synced", False)
-            .in_("blogger_sync", ["Approved", "Done", "Pending"]) # يقرأ أي حالة طالما لم يُنشر
+            .in_(
+                "blogger_sync", ["Approved", "Done", "Pending"]
+            )  # يقرأ أي حالة طالما لم يُنشر
             .execute()
         )
         new_tasks = query.data
@@ -377,38 +380,53 @@ def start_publishing_from_supabase():
                     HTML_TEMPLATE_SERIES if is_series else HTML_TEMPLATE_MOVIE
                 )
 
-                # عملية الاستبدال داخل القالب المختار
-                # عملية الاستبدال داخل القالب المختار (النظام الديناميكي)
-                # عملية الاستبدال الذكية
+                # --- الكود الجديد يبدأ من هنا ---
+                # 1. تجميع روابط السيرفرات ديناميكياً
+                current_links = []
+                for key, value in row.items():
+                    if (
+                        key.endswith("_url")
+                        and value
+                        and str(value).lower() not in ["nan", "", "none", "pending"]
+                    ):
+                        s_name = key.replace("_url", "")
+                        u = str(value).strip()
+                        # تصحيحات الروابط
+                        if s_name == "vidtube" and "embed-" not in u:
+                            u = u.replace("vidtube.one/", "vidtube.one/embed-")
+                        if s_name == "vk":
+                            u = convert_vk_to_embed(u)
+                        current_links.append({"name": s_name, "url": u})
+
+                links_json = json.dumps(current_links).replace('"', "&quot;")
+                down_link = row.get("download_url", "#")
+
+                # 2. بناء "كتلة الأزرار" بناءً على النوع
+                if is_series:
+                    # للمسلسل: نستخدم الحلقات التي تم تجهيزها في ep_buttons
+                    final_buttons = ep_buttons
+                else:
+                    # للفيلم: ننشئ حاوية تحتوي على زر "مشاهدة الفيلم" الذي يولد السيرفرات
+                    final_buttons = f"""
+                    <div class="episodes-container ep-More">
+                        <div class="ep-btn active" onclick="playEpDynamic(this, 'مشاهدة الفيلم', '{down_link}', '{links_json}')">▶ اضغط هنا لمشاهدة الفيلم</div>
+                    </div>
+                    """
+
+                # 3. عملية الحقن النهائية في القالب
                 final_html = (
                     current_template.replace("{{TITLE}}", title)
-                    .replace("{{EPISODES_BUTTONS}}", ep_buttons)
                     .replace("{{POSTER_URL}}", row["poster"])
                     .replace("{{STORY}}", row["story"])
                     .replace("{{CUSTOM_LINK}}", slug_name)
+                    .replace("{{EPISODES_BUTTONS}}", final_buttons)
+                    .replace("{{DOWNLOAD_URL}}", down_link)
+                    .replace("{{DISPLAY_DATE}}", row.get("Year", "2026"))
+                    .replace("{{RATING}}", row.get("Rating", "7.5"))
+                    .replace("{{RUNTIME}}", row.get("Movie Runtime", "غير محدد"))
+                    .replace("{{LABELS}}", row.get("labels", "Movies"))
                 )
-
-                # إضافة هامة: حقن الروابط للأفلام فقط لأن القالب يحتاجها بناءً على مصفوفة movieLinks
-                # إضافة هامة: حقن الروابط للأفلام (استخدام .get لمنع خطأ KeyError)
-                # نظام حقن السيرفرات الديناميكي (يعمل للأفلام والمسلسلات)
-                # نجمع كل السيرفرات التي تبدأ بـ _url من الـ row
-                movie_links = []
-                for key, value in row.items():
-                    if key.endswith("_url") and value and value not in ["nan", "", "None", "Pending", "#"]:
-                        server_base_name = key.replace("_url", "")
-                        movie_links.append({"name": server_base_name, "url": value})
-                
-                # تحويل المصفوفة لنص JSON لكي يفهمها سكريبت التشغيل عندك
-                links_json = json.dumps(movie_links).replace('"', "&quot;")
-                
-                # بناء زر المشاهدة الوحيد (للأفلام) أو تحديث القالب
-                # الحقيقة الصارمة: نحن الآن نضع كل السيرفرات داخل الزر الديناميكي
-                dynamic_btn = f"""<div class="ep-btn" onclick="playEpDynamic(this, 'مشاهدة الفيلم', '{row.get('download_url', '')}', '{links_json}')">▶ مشاهدة وتحميل الفيلم</div>"""
-                
-                final_html = final_html.replace("{{EPISODES_BUTTONS}}", dynamic_btn)
-                final_html = final_html.replace("{{DOWNLOAD_URL}}", row.get("download_url", "#"))
-
-                # ملاحظة: تم حذف replace الخاص بالروابط الثابتة لأن الأزرار الديناميكية تتولى المهمة الآن
+                # --- الكود الجديد ينتهي هنا ---
 
                 # إضافة الهيدر المخفي للـ Snippet
                 extra_header = f'<div style="display:none;"><img src="{row["poster"]}" />{auto_desc}</div>'
