@@ -1,16 +1,13 @@
 import os
 import re
 import time
-from datetime import datetime
 import json
+from datetime import datetime
 
-# 1. استدعاء الخدمات (من الملفات الخارجية)
+# 1. استدعاء الخدمات المركزية (المرجع الأساسي لجميع الدوال الذكية)
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
-
-# 2. استدعاء القوالب والأدوات المساعدة (من المجلد الحالي)
-from .templates_store import HTML_TEMPLATE_SERIES, HTML_TEMPLATE_MOVIE
-from .utils import (
+from services.utils import (
     ar_to_en,
     clean_for_match,
     convert_vk_to_embed,
@@ -19,7 +16,10 @@ from .utils import (
     generate_seo_tags,
     format_duration_iso,
 )
-from .notifiers import send_to_telegram, generate_facebook_template
+from services.notifiers import send_to_telegram, generate_facebook_template
+
+# 2. استدعاء القوالب فقط من المجلد الحالي
+from .templates_store import HTML_TEMPLATE_SERIES, HTML_TEMPLATE_MOVIE
 
 # 3. تعريف المتغيرات العالمية (Global Variables) لتوافق الكود القديم
 # هذا يحل أخطاء "supabase is not defined"
@@ -373,7 +373,7 @@ def start_publishing_from_supabase():
                 print(f"🆕 إنشاء مقال جديد لـ {title}...")
 
                 # توليد الـ SEO والوصف (نفس اللوجيك القديم عندك)
-                auto_desc = f"مشاهدة وتحميل {title} مترجم بجودة عالية."
+                auto_desc = generate_ai_seo_description(title, row.get("story", ""))
                 slug_name = generate_clean_slug(title)
                 current_template = (
                     HTML_TEMPLATE_SERIES if is_series else HTML_TEMPLATE_MOVIE
@@ -424,14 +424,16 @@ def start_publishing_from_supabase():
                 # --- التعديل الجوهري لإصلاح الشاشة السوداء ---
 
                 # 1. استخراج أول رابط متاح للمشغل (Default Server)
-                # 1. استخراج أول رابط حقيقي متاح للمشغل
-                # نبحث عن voe أولاً في links_map، وإذا لم يوجد نأخذ أول سيرفر متاح في القائمة الديناميكية
+                # اختيار أول سيرفر متاح كمشغل افتراضي مع التأكد من جاهزيته
                 f_voe = links_map.get("voe")
-                default_url = (
-                    f_voe
-                    if f_voe and str(f_voe).lower() != "nan"
-                    else (current_links[0]["url"] if current_links else "about:blank")
-                )
+                if f_voe and str(f_voe).lower() != "nan":
+                    default_url = f_voe
+                elif current_links:
+                    default_url = current_links[0]["url"]
+                else:
+                    default_url = "https://about:blank"  # حماية لو مفيش روابط خالص
+
+                print(f"🎬 [Player]: المشغل الافتراضي جاهز برابط: {default_url}")
 
                 # 1. تجهيز المتغيرات الإضافية (MetaData)
                 search_desc = f"مشاهدة فيلم {title} مترجم اون لاين بجودة عالية. تفاصيل فيلم {title} والقصة وسيرفرات المشاهدة."
@@ -494,7 +496,16 @@ def start_publishing_from_supabase():
                     .execute()
                 )
                 new_id = post_result.get("id")
-
+                # إرسال إشعار للفيلم الجديد أو المسلسل الجديد
+                tg_caption = generate_facebook_template(
+                    row,
+                    datetime.now().strftime("%Y-%m-%d"),
+                    content_type,
+                    "مشاهدة الآن",
+                    lang_work,
+                )
+                send_to_telegram(row["poster"], tg_caption, post_result.get("url"))
+                print(f"✈️ تم إرسال إشعار تليجرام للنشر الجديد: {title}")
                 # تحديث ساب باز برقم البوست الجديد فوراً
                 supabase.table("medias").update({"blogger_post_id": new_id}).eq(
                     "id", m_id

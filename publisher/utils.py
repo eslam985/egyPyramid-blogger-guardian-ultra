@@ -9,10 +9,10 @@ from google import genai
 from google.genai import types
 from textblob import TextBlob
 from deep_translator import GoogleTranslator
-from dotenv import load_dotenv # أضف هذا السطر
+from dotenv import load_dotenv  # أضف هذا السطر
 
 # 1. شحن المتغيرات (هذا يقرأ ملف .env في جهازك المحلي)
-load_dotenv() 
+load_dotenv()
 
 # 2. استدعاء المفاتيح
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -30,7 +30,9 @@ if not GEMINI_API_KEY:
     print("⚠️ Warning: GEMINI_API_KEY is missing!")
     client_gemini = None
 else:
-    client_gemini = genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})
+    client_gemini = genai.Client(
+        api_key=GEMINI_API_KEY, http_options={"api_version": "v1"}
+    )
 
 
 def ar_to_en(text):
@@ -113,6 +115,8 @@ def generate_clean_slug(text):
         slug_parts = [random_tag] + filtered_words[:5]
 
         slug = "-".join(slug_parts)
+        # --- التعديل هنا لترى النتيجة في الكونسول ---
+        print(f"🔗 [Slug] تم توليد الرابط بنجاح: {slug}")
         return slug
 
     except Exception as e:
@@ -149,10 +153,12 @@ def convert_vk_to_embed(url):
 
         if hash_match:
             final_hash = hash_match.group(1)
-            return f"https://vk.com/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
+            fixed_url = f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
+            print(f"✅ [VK] تم استخراج وتصحيح الرابط: {fixed_url}")
+            return fixed_url
         else:
             # محاولة أخيرة لو لم يجد الـ hash: إرجاع رابط الـ ext بدون hash (أحياناً يعمل)
-            return f"https://vk.com/video_ext.php?oid={fixed_oid}&id={fixed_id}"
+            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}"
 
     except Exception as e:
         print(f"⚠️ فشل استخراج VK Hash: {e}")
@@ -241,7 +247,9 @@ def generate_ai_seo_description(movie_title, story_summary):
             if second_index != -1:
                 ai_text = ai_text[:second_index].strip()
 
-        return ai_text[:158].strip()  # قص الزيادة لضمان توافق جوجل
+        description = ai_text[:158].strip()
+        print(f"📝 [SEO Desc]: {description}")
+        return description
     except Exception as e:
         # كود الطوارئ (Fallback) المعدل لمنع التكرار
         clean_story = story_summary.replace("\n", " ").strip()
@@ -269,24 +277,24 @@ def format_duration_iso(runtime_str):
     try:
         runtime_str = str(runtime_str).lower()
         # استخراج كافة الأرقام من النص (مثلاً: "1 ساعة و 38 دقيقة" تصبح ['1', '38'])
-        numbers = re.findall(r'\d+', runtime_str)
-        
+        numbers = re.findall(r"\d+", runtime_str)
+
         if not numbers:
             return "PT2H"  # قيمة افتراضية في حال الفشل
-            
+
         # حالة وجود رقمين (ساعات ودقائق) - الترتيب دائماً ساعة ثم دقيقة
         if len(numbers) >= 2:
             return f"PT{numbers[0]}H{numbers[1]}M"
-            
+
         # حالة وجود رقم واحد فقط
         if len(numbers) == 1:
             # لو النص يحتوي على 'ساعة' أو 'h' نعتبر الرقم ساعات
-            if any(word in runtime_str for word in ['h', 'ساعة', 'ساعات']):
+            if any(word in runtime_str for word in ["h", "ساعة", "ساعات"]):
                 return f"PT{numbers[0]}H"
             # غير ذلك نعتبره دقائق (مثلاً: "90 دقيقة")
             else:
                 return f"PT{numbers[0]}M"
-                
+
         return "PT2H"
     except:
         return "PT2H"

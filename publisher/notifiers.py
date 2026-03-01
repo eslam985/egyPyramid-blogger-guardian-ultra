@@ -92,7 +92,8 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
         lang_val = "دبلجة عربية احترافية 🎙️"
     else:
         lang_val = "لغة أصلية (مترجم) 📝"
-    return f"""
+    # التمبلت النهائي
+    final_output = f"""
 🎬 {hook_text} 🎬
 
 {type_label}: {clean_title_no_stars}
@@ -111,27 +112,39 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
 ---
 #{hashtag_title} {smart_hashtags} {trending_hashtags}
     """
+    print(f"📢 [Hook Generated]: {hook_text}")  # عشان تتابع الـ AI طلع إيه
+    return final_output
 
 
 def send_to_telegram(photo_url, caption, post_url):
-    """دالة موحدة ترسل البوستر والتمبلت الكامل في كل الحالات"""
+    """إرسال البوستر والتمبلت مع ضمان عدم الرفض من تليجرام"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ خطأ: مفاتيح تليجرام غير موجودة في الـ .env")
+        return
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+
+    # 1. قص النص لو طويل جداً (Telegram Limit 1024)
+    safe_caption = caption[:1000] + "..." if len(caption) > 1000 else caption
 
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "photo": photo_url,
-        "caption": caption,
-        "parse_mode": "HTML",
+        "caption": safe_caption,
+        # ملاحظة: شيلنا HTML mode عشان الهاشتاجات متبوظش الدنيا
         "reply_markup": json.dumps(
             {"inline_keyboard": [[{"text": "🍿 مشاهدة الآن", "url": post_url}]]}
         ),
     }
 
     try:
-        requests.post(url, json=payload)
-        print(f"✈️ تم إرسال إشعار تليجرام بنجاح (التمبلت الكامل).")
+        response = requests.post(url, json=payload, timeout=15)
+        if response.status_code == 200:
+            print(f"✈️ تم إرسال إشعار تليجرام بنجاح.")
+        else:
+            print(f"⚠️ تليجرام رفض الإرسال: {response.text}")
     except Exception as e:
-        print(f"⚠️ خطأ تليجرام: {e}")
+        print(f"⚠️ خطأ اتصال بتليجرام: {e}")
 
 
 # اجعل المتغير يشير للدالة الحقيقية مباشرة
