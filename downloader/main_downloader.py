@@ -315,7 +315,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
     # استخراج الدومين الفعلي للسيرفر لضبط الـ Referer والـ Origin بدقة
-    from urllib.parse import urlparse
 
     domain = urlparse(url).netloc
     server_origin = f"https://{domain}"
@@ -339,7 +338,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "Connection: keep-alive",
         "--no-check-certificate",
     ]
-
+    cookies_path = os.path.join(BASE_DIR, "cookies.txt")
     # ملاحظة: سأترك الكوكيز ولكن إذا فشل التحميل احذف ملف cookies.txt من جيت هاب
     if os.path.exists(cookies_path):
         cmd.extend(["--cookies", cookies_path])
