@@ -224,15 +224,15 @@ def update_series_post(
         # 1. تجميع الروابط المتاحة لهذه الحلقة من الـ row الممرر (تعديل ديناميكي)
         episode_links = []
         target_servers = [
-                    "voe",
-                    "vidtube",
-                    "ok",
-                    "vk",
-                    "doodstream",
-                    "streamtape",
-                    "lulustream",
-                    "mixdrop",
-                ]
+            "voe",
+            "vidtube",
+            "ok",
+            "vk",
+            "doodstream",
+            "streamtape",
+            "lulustream",
+            "mixdrop",
+        ]
         for s_name in target_servers:
             u = row.get(f"{s_name}_url") or row.get(s_name)
             if u and str(u).lower() not in ["nan", "", "none", "pending"]:
@@ -381,9 +381,8 @@ def start_publishing_from_supabase():
 
                 # --- الكود الجديد يبدأ من هنا ---
                 # 1. تجميع روابط السيرفرات ديناميكياً
-                # 1. تجميع روابط السيرفرات ديناميكياً
+                # 1. تجميع روابط السيرفرات ديناميكياً من المصدر الخام (links_map)
                 current_links = []
-                # إضافة السيرفرات الجديدة لضمان حقنها
                 target_servers = [
                     "voe",
                     "vidtube",
@@ -394,10 +393,13 @@ def start_publishing_from_supabase():
                     "lulustream",
                     "mixdrop",
                 ]
+
                 for s_name in target_servers:
-                    u = row.get(f"{s_name}_url") or row.get(s_name)
+                    # نسحب الرابط مباشرة من ساب باز وليس من الـ row الوهمي
+                    u = links_map.get(s_name)
                     if u and str(u).lower() not in ["nan", "", "none", "pending"]:
                         u = str(u).strip()
+                        # تصحيحات الروابط (Embed)
                         if s_name == "vidtube" and "embed-" not in u:
                             u = u.replace("vidtube.one/", "vidtube.one/embed-")
                         if s_name == "vk":
@@ -422,11 +424,12 @@ def start_publishing_from_supabase():
                 # --- التعديل الجوهري لإصلاح الشاشة السوداء ---
 
                 # 1. استخراج أول رابط متاح للمشغل (Default Server)
-                first_voe = row.get("voe_url", "")
-                # إذا لم يوجد voe، نبحث عن أي سيرفر آخر متاح في الروابط الديناميكية
+                # 1. استخراج أول رابط حقيقي متاح للمشغل
+                # نبحث عن voe أولاً في links_map، وإذا لم يوجد نأخذ أول سيرفر متاح في القائمة الديناميكية
+                f_voe = links_map.get("voe")
                 default_url = (
-                    first_voe
-                    if first_voe and str(first_voe).lower() != "nan"
+                    f_voe
+                    if f_voe and str(f_voe).lower() != "nan"
                     else (current_links[0]["url"] if current_links else "about:blank")
                 )
 

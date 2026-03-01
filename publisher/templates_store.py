@@ -782,28 +782,16 @@ HTML_TEMPLATE = r"""
 
 
   <script>
-    // تجميع البيانات في مصفوفة ديناميكية
-    const movieLinks = [];
-    if ("{{VOE_URL}}" && "{{VOE_URL}}" !== "nan") movieLinks.push({ name: 'Voe', url: "{{VOE_URL}}" });
-    if ("{{VIDTUBE_URL}}" && "{{VIDTUBE_URL}}" !== "nan") movieLinks.push({ name: 'VidTube', url: "{{VIDTUBE_URL}}" });
-    if ("{{OK_URL}}" && "{{OK_URL}}" !== "nan") movieLinks.push({ name: 'OK', url: "{{OK_URL}}" });
-    if ("{{VK_URL}}" && "{{VK_URL}}" !== "nan") movieLinks.push({ name: 'VK', url: "{{VK_URL}}" });
+
 
     let currentEpNum = 1; // للفيلم نعتبره حلقة 1 دائماً
     let blogPostId = "{{POST_ID}}";
 
     window.onload = function () {
       const mainBtn = document.querySelector('.ep-btn');
-      if (mainBtn) {
-        mainBtn.click();
-      } else if (movieLinks.length > 0) {
-        // بدلاً من استدعاء دالة غير موجودة، سنستخدم دالة playEpDynamic مباشرة
-        playEpDynamic(null, 'مشاهدة الفيلم', '{{DOWNLOAD_URL}}', JSON.stringify(movieLinks));
-
-      }
+      if (mainBtn) mainBtn.click();
       markWatchedFromStorage();
     };
-
     function playPrev() {
       let prevNum = currentEpNum - 1;
       let prevBtn = document.querySelector(`.ep-btn[onclick*="'${prevNum}'"]`);
@@ -1011,8 +999,6 @@ HTML_TEMPLATE = r"""
         videoContainer.style.zIndex = '1';
       }
     }
-
-
   </script>
   """
 
