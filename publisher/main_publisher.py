@@ -413,7 +413,14 @@ def start_publishing_from_supabase():
                     </div>
                     """
 
-                # 3. عملية الحقن النهائية في القالب
+                # --- التعديل الجوهري لإصلاح الشاشة السوداء ---
+
+                # 1. استخراج أول رابط متاح للمشغل (Default Server)
+                first_voe = row.get("voe_url", "")
+                # إذا لم يوجد voe، نبحث عن أي سيرفر آخر متاح في الروابط الديناميكية
+                default_url = first_voe if first_voe and str(first_voe).lower() != "nan" else (current_links[0]['url'] if current_links else "about:blank")
+
+                # 2. عملية الحقن الشاملة (تأكد من إضافة VOE_URL و POST_ID)
                 final_html = (
                     current_template.replace("{{TITLE}}", title)
                     .replace("{{POSTER_URL}}", row["poster"])
@@ -425,6 +432,9 @@ def start_publishing_from_supabase():
                     .replace("{{RATING}}", row.get("Rating", "7.5"))
                     .replace("{{RUNTIME}}", row.get("Movie Runtime", "غير محدد"))
                     .replace("{{LABELS}}", row.get("labels", "Movies"))
+                    # السطرين القادمين هما حل مشكلة الـ 404 والشاشة السوداء
+                    .replace("{{VOE_URL}}", default_url) 
+                    .replace("{{POST_ID}}", str(m_id)) # نستخدم ID الميديا كمعرف للقفل
                 )
                 # --- الكود الجديد ينتهي هنا ---
 
