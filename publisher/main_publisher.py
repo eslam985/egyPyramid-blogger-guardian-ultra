@@ -223,7 +223,16 @@ def update_series_post(
         # التعديل: تجميع ديناميكي لكل السيرفرات المتاحة في الصف
         # 1. تجميع الروابط المتاحة لهذه الحلقة من الـ row الممرر (تعديل ديناميكي)
         episode_links = []
-        target_servers = ["voe", "vidtube", "ok", "vk", "doodstream", "streamtape"]
+        target_servers = [
+                    "voe",
+                    "vidtube",
+                    "ok",
+                    "vk",
+                    "doodstream",
+                    "streamtape",
+                    "lulustream",
+                    "mixdrop",
+                ]
         for s_name in target_servers:
             u = row.get(f"{s_name}_url") or row.get(s_name)
             if u and str(u).lower() not in ["nan", "", "none", "pending"]:
@@ -374,6 +383,7 @@ def start_publishing_from_supabase():
                 # 1. تجميع روابط السيرفرات ديناميكياً
                 # 1. تجميع روابط السيرفرات ديناميكياً
                 current_links = []
+                # إضافة السيرفرات الجديدة لضمان حقنها
                 target_servers = [
                     "voe",
                     "vidtube",
@@ -381,6 +391,8 @@ def start_publishing_from_supabase():
                     "vk",
                     "doodstream",
                     "streamtape",
+                    "lulustream",
+                    "mixdrop",
                 ]
                 for s_name in target_servers:
                     u = row.get(f"{s_name}_url") or row.get(s_name)
@@ -443,8 +455,14 @@ def start_publishing_from_supabase():
                     .replace("{{CURRENT_DATE}}", current_time)
                     .replace("{{LOGO_URL}}", logo_url)
                     .replace("{{LANGUAGE}}", lang_work)
-                    .replace("{{DURATION_ISO}}", format_duration_iso(row.get("Movie Runtime", "120")))
-                    .replace("{{TAGS_CONTENT}}", generate_seo_tags(title, row.get("labels", "Movies")))
+                    .replace(
+                        "{{DURATION_ISO}}",
+                        format_duration_iso(row.get("Movie Runtime", "120")),
+                    )
+                    .replace(
+                        "{{TAGS_CONTENT}}",
+                        generate_seo_tags(title, row.get("labels", "Movies")),
+                    )
                 )
                 # --- الكود الجديد ينتهي هنا ---
 
