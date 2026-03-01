@@ -101,27 +101,27 @@ window.editMedia = async function (mediaId) {
         // أضف هذا السطر داخل window.editMedia
         document.getElementById('duration_iso').value = data.duration_iso || '';
         const epSection = document.getElementById('episodesSection');
-        if (data.category === 'tv') {
+        if (data.category === 'tv' || data.category === 'movie') {
             epSection.style.display = 'block';
             const epList = document.getElementById('episodesList');
             // الحقيقة الصارمة: دمجنا الـ identifier مع أزرار التحكم في مكان واحد
             epList.innerHTML = data.episodes.map(ep => `
-    <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
-        <span>حلقة ${ep.episode_number} <small style="color:gray;">[${ep.identifier || 'بدون ID'}]</small></span>
-        <div style="display:flex; gap:5px;">
-            <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
-                <i class="fa fa-link"></i> السيرفرات
-            </button>
-            <button type="button" onclick="syncToBlogger(${ep.id})" class="btn-mini" 
-                    style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px;">
-                <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
-            </button>
-            <button type="button" onclick="deleteEpisode(${ep.id})" class="btn-mini" style="background:#ef4444; color:white; padding:4px 8px; border-radius:4px;">
-                <i class="fa fa-trash"></i> حذف
-            </button>
-        </div>
-    </div>
-`).join('');
+            <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
+                <span>حلقة ${ep.episode_number} <small style="color:gray;">[${ep.identifier || 'بدون ID'}]</small></span>
+                <div style="display:flex; gap:5px;">
+                    <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
+                        <i class="fa fa-link"></i> السيرفرات
+                    </button>
+                    <button type="button" onclick="syncToBlogger(${ep.id})" class="btn-mini" 
+                            style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px;">
+                        <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
+                    </button>
+                    <button type="button" onclick="deleteEpisode(${ep.id})" class="btn-mini" style="background:#ef4444; color:white; padding:4px 8px; border-radius:4px;">
+                        <i class="fa fa-trash"></i> حذف
+                    </button>
+                </div>
+            </div>
+        `).join('');
         } else {
             epSection.style.display = 'none';
         }
