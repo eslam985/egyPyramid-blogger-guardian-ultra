@@ -315,10 +315,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
     # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
-
-    # التعديل البرمجي لفك تشفير الروابط العنيدة
-    # 1. استخراج الدومين الفعلي للسيرفر لضبط الهوية بدقة
-    # 1. استخراج الدومين الفعلي للسيرفر لضبط الهوية بدقة
     domain = urlparse(url).netloc
     server_origin = f"https://{domain}"
 
@@ -327,29 +323,27 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "yt-dlp",
         "-v",
         "--no-playlist",
-        # تمويه المتصفح ليكون Chrome على Windows (أكثر استقراراً مع سيرفرات tnmr)
+        # --- الإضافات الجديدة لكسر حماية المواقع ---
+        "--client-certificate",
+        "",  # محاولة تخطي حواجز SSL معينة
+        "--no-check-certificates",
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "--add-header",
         f"Referer: {server_origin}/",
         "--add-header",
-        f"Origin: {server_origin}",
+        'Sec-Ch-Ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
         "--add-header",
-        "Accept: */*",
+        "Sec-Ch-Ua-Mobile: ?0",
         "--add-header",
-        "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
-        "--no-check-certificate",
-        # --- التعديلات الجوهرية لضمان عدم الانقطاع ---
-        "--hls-use-mpegts",  # هام: يمنع السيرفر من اكتشاف انقطاع الـ Session
-        "--hls-prefer-native",  # استخدام المحرك الداخلي بدلاً من ffmpeg
-        "--fragment-retries",
-        "infinite",
+        'Sec-Ch-Ua-Platform: "Windows"',
+        # ---------------------------------------
+        "--hls-use-mpegts",
+        "--hls-prefer-native",
         "--concurrent-fragments",
-        "1",  # قطعة واحدة لعدم لفت انتباه الحماية
+        "1",
         "--socket-timeout",
         "30",
-        "--geo-bypass",
-        # ---------------------------------------
         "-f",
         "best",
         f"{url}",
