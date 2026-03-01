@@ -312,40 +312,37 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
 
     print(f"📡 جاري فحص الرابط وبدء السحب...")
-
-    # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
-    # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
-    domain = urlparse(url).netloc
-    server_origin = f"https://{domain}"
-
     # 2. بناء أمر الوحش (نسخة كسر حماية الـ 9% والـ IP Block)
     # 2. بناء أمر الوحش (نسخة كسر حماية الـ IP Block والتمويه الجغرافي)
+    # 1. تحديد المصدر (الذي يطلبه السيرفر عادةً)
+    # ملاحظة: سنثبت الـ Referer ليظهر كأننا قادمون من مشغل مشهور
+    fixed_referer = "https://vidtube.one/"
+
+    # 2. بناء أمر الوحش (النسخة التي كانت تسحب الـ m3u8 بنجاح)
     cmd = [
         "yt-dlp",
         "-v",
         "--no-playlist",
         "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        # --- خدعة المحترفين: تزييف الـ IP ليبدو كأنه منزلي وليس من مركز بيانات ---
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         "--add-header",
-        f"Referer: {server_origin}/",
+        "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
         "--add-header",
-        'Sec-Ch-Ua: "Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+        "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
         "--add-header",
-        "Sec-Ch-Ua-Mobile: ?0",
+        f"Referer: {fixed_referer}",
         "--add-header",
-        'Sec-Ch-Ua-Platform: "Windows"',
-        "--proxy",
-        "socks5://127.0.0.1:9050",
-        # ------------------------------------------------------------------
-        "--no-check-certificates",
-        "--hls-use-mpegts",  # لضمان عدم الانقطاع عند 9%
-        "--hls-prefer-native",
+        "Origin: https://vidtube.one",
+        # --- استعادة القوة الضاربة ---
         "--concurrent-fragments",
-        "1",  # التحميل قطعة بقطعة للتمويه
-        "--geo-bypass",  # تخطي الحجب الجغرافي
+        "5",  # العودة لـ 5 قطع لسرعة السحب
+        "--hls-use-mpegts",  # لضمان عدم الانقطاع عند 9%
+        "--no-check-certificate",
         "--socket-timeout",
-        "60",  # زيادة وقت الانتظار للسيرفرات البطيئة
+        "60",
+        # سأعطل البروكسي مؤقتاً لتجربة الـ IP المباشر
+        # "--proxy", "socks5://127.0.0.1:9050",
+        # ----------------------------
         "-f",
         "best",
         f"{url}",
