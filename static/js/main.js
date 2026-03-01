@@ -101,27 +101,67 @@ window.editMedia = async function (mediaId) {
         // أضف هذا السطر داخل window.editMedia
         document.getElementById('duration_iso').value = data.duration_iso || '';
         const epSection = document.getElementById('episodesSection');
+        const epList = document.getElementById('episodesList');
+        const epHeader = epSection.querySelector('h3');
+        const addEpBtn = epSection.querySelector('.btn-add-episode');
+
+        // الحقيقة الصارمة: إظهار القسم للنوعين مع تخصيص العرض لكل منهما
         if (data.category === 'tv' || data.category === 'movie') {
             epSection.style.display = 'block';
-            const epList = document.getElementById('episodesList');
-            // الحقيقة الصارمة: دمجنا الـ identifier مع أزرار التحكم في مكان واحد
-            epList.innerHTML = data.episodes.map(ep => `
-            <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
-                <span>حلقة ${ep.episode_number} <small style="color:gray;">[${ep.identifier || 'بدون ID'}]</small></span>
-                <div style="display:flex; gap:5px;">
-                    <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px;">
-                        <i class="fa fa-link"></i> السيرفرات
-                    </button>
-                    <button type="button" onclick="syncToBlogger(${ep.id})" class="btn-mini" 
-                            style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px;">
-                        <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
-                    </button>
-                    <button type="button" onclick="deleteEpisode(${ep.id})" class="btn-mini" style="background:#ef4444; color:white; padding:4px 8px; border-radius:4px;">
-                        <i class="fa fa-trash"></i> حذف
-                    </button>
-                </div>
-            </div>
-        `).join('');
+
+            if (data.category === 'tv') {
+                // حالة المسلسل: عرض قائمة الحلقات التقليدية
+                epHeader.innerHTML = '<i class="fa fa-list-ol"></i> إدارة الحلقات';
+                addEpBtn.style.display = 'inline-block'; // إظهار زر إضافة حلقة
+
+                epList.innerHTML = data.episodes.map(ep => `
+                    <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--color-border);">
+                        <span>حلقة ${ep.episode_number} <small style="color:gray;">[${ep.identifier || 'بدون ID'}]</small></span>
+                        <div style="display:flex; gap:5px;">
+                            <button type="button" onclick="manageLinks(${ep.id})" class="btn-mini" style="background:var(--color-primary); color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;">
+                                <i class="fa fa-link"></i> السيرفرات
+                            </button>
+                            <button type="button" onclick="syncToBlogger(${ep.id})" class="btn-mini" 
+                                    style="background:${ep.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;">
+                                <i class="fa fa-share-square"></i> ${ep.is_synced ? 'منشور' : 'نشر'}
+                            </button>
+                            <button type="button" onclick="deleteEpisode(${ep.id})" class="btn-mini" style="background:#ef4444; color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;">
+                                <i class="fa fa-trash"></i> حذف
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                // حالة الفيلم: عرض زر واحد للسيرفرات (كأنه حلقة واحدة)
+                epHeader.innerHTML = '<i class="fa fa-film"></i> سيرفرات الفيلم';
+                addEpBtn.style.display = 'none'; // إخفاء زر "إضافة حلقة" لأن الفيلم هو حلقة واحدة
+
+                if (data.episodes && data.episodes.length > 0) {
+                    const movieEp = data.episodes[0];
+                    epList.innerHTML = `
+                        <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:rgba(255,255,255,0.05); border-radius:8px;">
+                            <span style="font-weight:bold;">الروابط الأساسية للفيلم</span>
+                            <div style="display:flex; gap:10px;">
+                                <button type="button" onclick="manageLinks(${movieEp.id})" class="btn-primary" style="padding:10px 20px; border-radius:5px; cursor:pointer; background:var(--color-primary); color:white; border:none;">
+                                    <i class="fa fa-link"></i> إدارة سيرفرات المشاهدة
+                                </button>
+                                <button type="button" onclick="syncToBlogger(${movieEp.id})" 
+                                        style="background:${movieEp.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:10px 20px; border-radius:5px; border:none; cursor:pointer;">
+                                    <i class="fa fa-share-square"></i> ${movieEp.is_synced ? 'تحديث النشر' : 'نشر الفيلم'}
+                                </button>
+                            </div>
+                        </div>`;
+                } else {
+                    // إذا لم يتم إنشاء "حلقة" للفيلم بعد (الحالة الافتراضية للوحش)
+                    epList.innerHTML = `
+                        <div style="text-align:center; padding:20px;">
+                            <p style="color:gray; margin-bottom:10px;">لا توجد بيانات سيرفرات لهذا الفيلم بعد</p>
+                            <button type="button" onclick="createMovieEpisode(${data.id})" class="btn-add" style="background:#e67e22; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer;">
+                                <i class="fa fa-plus-circle"></i> إنشاء مشغل الفيلم
+                            </button>
+                        </div>`;
+                }
+            }
         } else {
             epSection.style.display = 'none';
         }
@@ -435,7 +475,14 @@ window.deleteLink = async function (linkId) {
     await fetch(`/api/links/${linkId}/delete`, { method: 'POST' });
     manageLinks(currentEpisodeId); // إعادة تحميل القائمة
 };
-
+window.createMovieEpisode = async function (mediaId) {
+    const response = await fetch(`/api/media/${mediaId}/add-episode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `episode_number=1`
+    });
+    if (response.ok) { window.editMedia(mediaId); }
+};
 
 window.closeLinksModal = function () {
     const modal = document.getElementById('linksModal');
