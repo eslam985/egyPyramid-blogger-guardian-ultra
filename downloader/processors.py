@@ -253,11 +253,11 @@ def get_movie_data(name):
             if genres:
                 labels = ", ".join([g["name"] for g in genres])
 
-        return title, story, poster, labels, duration, rating, runtime_str, release_year
+        return tmdb_final_id, title, story, poster, labels, duration, rating, runtime_str, release_year
 
     except Exception as e:
         print(f"⚠️ خطأ في الخوارزمية المزدوجة: {e}")
-        return title, story, poster, labels, duration, rating, runtime_str, release_year
+        return tmdb_final_id, title, story, poster, labels, duration, rating, runtime_str, release_year
 
 
 def upload_poster_to_cloudinary(image_url):

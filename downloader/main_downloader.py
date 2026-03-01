@@ -60,23 +60,26 @@ def save_to_supabase(
     identifier,
     archive_url,
     meta_data=None,
+    tmdb_id=None,
+    labels=None,
+    runtime=None,
+    duration_iso=None,
 ):
     try:
         # نسحب كل البيانات من الاسم الأصلي الخام لضمان وجود رقم الحلقة والفئة
         c_title, c_cat, actual_ep_no = get_clean_media_data(original_task_name)
 
         media_payload = {
-            "tmdb_id": (
-                str(meta_data.get("id"))
-                if (meta_data and isinstance(meta_data, dict))
-                else None
-            ),
+            "tmdb_id": str(tmdb_id) if tmdb_id else None,
             "title": c_title,
             "story": meta_story,
             "poster_url": raw_poster,
             "category": c_cat,
             "year": str(meta_year),
             "rating": str(meta_rating),
+            "labels": labels,          # العمود الجديد
+            "runtime": runtime,        # العمود الجديد
+            "duration_iso": duration_iso # العمود الجديد (الوحش)
         }
 
         # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
@@ -216,6 +219,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # ابحث عن هذا الجزء (حوالي السطر 200) واستبدله بهذا:
     (
+        tmdb_id_fetched,  # القيمة الجديدة
         display_title,
         meta_story,
         raw_poster,
@@ -300,12 +304,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         display_title,
         original_task_name,
         meta_story,
-        final_poster,    # تم التعديل
+        final_poster,
         meta_year,
         meta_rating,
         temp_id,
         "Pending",
-        current_meta,
+        tmdb_id=tmdb_id_fetched,   # إرسال ID
+        labels=meta_labels,         # إرسال التصنيفات
+        runtime=meta_runtime,       # إرسال مدة العرض
+        duration_iso=meta_duration  # إرسال ISO
     )
 
     if not e_id:
@@ -720,12 +727,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     display_title,
                     original_task_name,
                     meta_story,
-                    final_poster, # تأكد أنها final_poster وليست raw_poster
+                    final_poster,
                     meta_year,
                     meta_rating,
                     identifier,
                     archive_url,
-                    current_meta,
+                    tmdb_id=tmdb_id_fetched,   # أضف هذا
+                    labels=meta_labels,         # أضف هذا
+                    runtime=meta_runtime,       # أضف هذا
+                    duration_iso=meta_duration  # أضف هذا
                 )
             except Exception as e:
                 print(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
