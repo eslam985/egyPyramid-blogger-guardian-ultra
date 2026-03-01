@@ -55,6 +55,24 @@ HTML_TEMPLATE = r"""
 }
 </script>
 <style>
+  :root {
+    --poster-url: url('{{POSTER_URL}}');
+  }
+
+  /* إجبار الحارس على إظهار البوستر بوضوح */
+  .pyramid-lock-box {
+    background-image: var(--poster-url) !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-color: #000 !important;
+  }
+
+  /* إضافة تأثير ضبابي خفيف خلف نص "إضغط لتنشيط المشاهدة" ليصبح أوضح */
+  .pyramid-lock-box div[style*="background:rgba(0,0,0,0.5)"] {
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
   .post-body h1 {
     color: #e74c3c;
     text-align: center;
@@ -759,7 +777,7 @@ HTML_TEMPLATE = r"""
     </div>
     <div style="display:none;">{{EPISODES_BUTTONS}}</div>
 
-<div class="server-buttons" id="dynamic-servers-container">
+    <div class="server-buttons" id="dynamic-servers-container">
     </div>
 
 
@@ -783,7 +801,7 @@ HTML_TEMPLATE = r"""
     </div>
   </div>
 
-
+  <input type="hidden" id="poster-source" value="{{POSTER_URL}}">
   <script>
     let currentEpNum = 1; // للفيلم نعتبره حلقة 1 دائماً
     let blogPostId = "{{POST_ID}}";
@@ -896,7 +914,12 @@ HTML_TEMPLATE = r"""
       }
 
       // إظهار أنيميشن "جاري التحميل" فوراً
-      newFrame.style.background = "#000 url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\" viewBox=\"0 0 50 50\"><circle cx=\"25\" cy=\"25\" r=\"20\" fill=\"none\" stroke=\"%23e0a800\" stroke-width=\"5\" stroke-dasharray=\"95\" stroke-dashoffset=\"0\"><animateTransform attributeName=\"transform\" type=\"rotate\" from=\"0 25 25\" to=\"360 25 25\" dur=\"1s\" repeatCount=\"indefinite\"/></circle></svg>') no-repeat center center";
+      // إظهار أنيميشن "جاري التحميل" فوق البوستر
+      newFrame.style.backgroundColor = "#000";
+      newFrame.style.backgroundImage = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="%23e0a800" stroke-width="5" stroke-dasharray="95" stroke-dashoffset="0"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg>'), url('{{POSTER_URL}}')`;
+      newFrame.style.backgroundRepeat = "no-repeat, no-repeat";
+      newFrame.style.backgroundPosition = "center center, center center";
+      newFrame.style.backgroundSize = "40px, cover";
 
       if (isUnlocked) {
         // تشغيل فوري إذا كان الزائر قد تخطى الروابط المختصرة سابقاً
@@ -905,6 +928,7 @@ HTML_TEMPLATE = r"""
         newFrame.classList.add('pyramid-unlocked');
       } else {
         newFrame.src = "about:blank";
+        newFrame.style.background = "url('{{POSTER_URL}}') center center / cover no-repeat #000";
         newFrame.classList.remove('pyramid-unlocked');
       }
 
@@ -1000,6 +1024,8 @@ HTML_TEMPLATE = r"""
         videoContainer.style.zIndex = '1';
       }
     }
+
+
   </script>
   """
 
