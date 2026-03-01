@@ -139,18 +139,27 @@ window.editMedia = async function (mediaId) {
                 if (data.episodes && data.episodes.length > 0) {
                     const movieEp = data.episodes[0];
                     epList.innerHTML = `
-                        <div class="ep-admin-item" style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:rgba(255,255,255,0.05); border-radius:8px;">
-                            <span style="font-weight:bold;">الروابط الأساسية للفيلم</span>
-                            <div style="display:flex; gap:10px;">
-                                <button type="button" onclick="manageLinks(${movieEp.id})" class="btn-primary" style="padding:10px 20px; border-radius:5px; cursor:pointer; background:var(--color-primary); color:white; border:none;">
-                                    <i class="fa fa-link"></i> إدارة سيرفرات المشاهدة
-                                </button>
-                                <button type="button" onclick="syncToBlogger(${movieEp.id})" 
-                                        style="background:${movieEp.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:10px 20px; border-radius:5px; border:none; cursor:pointer;">
-                                    <i class="fa fa-share-square"></i> ${movieEp.is_synced ? 'تحديث النشر' : 'نشر الفيلم'}
-                                </button>
-                            </div>
-                        </div>`;
+                        <div class="ep-admin-item" style="
+                        display: flex;
+                        flex-direction: column;
+                        gap: 16px;
+                        justify-content: center;
+                        align-items: center;
+                        padding: 15px;
+                        background: rgba(255, 255, 255, 0.05);
+                        border-radius: 8px;">
+                        <span style="font-weight:bold;">الروابط الأساسية للفيلم</span>
+                        <div style="display:flex; gap:10px;">
+                            <button type="button" onclick="manageLinks(${movieEp.id})" class="btn-primary"
+                                style="padding:10px 20px; border-radius:5px; cursor:pointer; background:var(--color-primary); color:white; border:none;">
+                                <i class="fa fa-link"></i> إدارة سيرفرات المشاهدة
+                            </button>
+                            <button type="button" onclick="syncToBlogger(${movieEp.id})"
+                                style="background:${movieEp.is_synced ? '#10b981' : '#f59e0b'}; color:white; padding:10px 20px; border-radius:5px; border:none; cursor:pointer;">
+                                <i class="fa fa-share-square"></i> ${movieEp.is_synced ? 'تحديث النشر' : 'نشر الفيلم'}
+                            </button>
+                        </div>
+                    </div>`;
                 } else {
                     // إذا لم يتم إنشاء "حلقة" للفيلم بعد (الحالة الافتراضية للوحش)
                     epList.innerHTML = `
