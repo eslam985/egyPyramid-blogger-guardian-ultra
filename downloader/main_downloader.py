@@ -317,26 +317,16 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # --- التعديل البرمجي الجديد لجعل الوحش يتخفى كمتصفح حقيقي بناءً على مصدر الرابط ---
 
     # التعديل البرمجي لفك تشفير الروابط العنيدة
-    # التعديل النهائي باستخدام نظام الهوية المزدوجة (Headers + Cookies)
-    from urllib.parse import urlparse
-
-    domain = urlparse(url).netloc
-    referer_url = f"https://{domain}/"
-
-    # مسار ملف الكوكيز (تأكد أن الملف موجود في هذا المسار)
-    # 1. تعريف مسار الكوكيز أولاً (هذا هو السطر الذي كان ناقصاً وتسبب في الخطأ)
-    cookies_path = os.path.join(BASE_DIR, "cookies.txt")
-
-    # 2. استخراج الدومين الفعلي للسيرفر
-    from urllib.parse import urlparse
-
+    # 1. استخراج الدومين الفعلي للسيرفر لضبط الهوية بدقة
     domain = urlparse(url).netloc
     server_origin = f"https://{domain}"
 
+    # 2. بناء أمر الوحش (هوية أندرويد + لغة + استراتيجية النفس الطويل)
     cmd = [
         "yt-dlp",
         "-v",
         "--no-playlist",
+        # هوية أندرويد لتجاوز أسهل للحماية
         "--user-agent",
         "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36",
         "--add-header",
@@ -348,36 +338,24 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "--add-header",
         "Accept-Language: en-US,en;q=0.9",
         "--no-check-certificate",
+        "--hls-prefer-native",  # استخدام المحرك الداخلي لثبات الـ m3u8
+        "--fragment-retries",
+        "infinite",  # محاولات لا نهائية لو فصل السيرفر
+        "--concurrent-fragments",
+        "1",  # تحميل قطعة واحدة للتمويه (هام جداً!)
+        "--socket-timeout",
+        "30",
+        "--geo-bypass",
+        "-f",
+        "best",
+        f"{url}",
+        "-o",
+        download_path_template,
+        "--newline",
+        "--progress-template",
+        "download:[%(progress._percent_str)s]",
     ]
 
-    # 3. الآن يمكنك استخدام cookies_path بأمان
-    if os.path.exists(cookies_path):
-        cmd.extend(["--cookies", cookies_path])
-        print("🍪 تم دمج ملف الكوكيز بنجاح.")
-
-    # 4. بقية الأوامر الاستراتيجية
-    cmd.extend(
-        [
-            "--hls-prefer-native",
-            "--fragment-retries",
-            "infinite",
-            "--concurrent-fragments",
-            "1",
-            "--socket-timeout",
-            "30",
-            "-f",
-            "best",
-            f"{url}",
-            "-o",
-            download_path_template,
-            "--newline",
-            "--progress-template",
-            "download:[%(progress._percent_str)s]",
-        ]
-    )
-
-    # أضف -v لإظهار تفاصيل المنع الحقيقية
-    cmd.insert(1, "-v")
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
