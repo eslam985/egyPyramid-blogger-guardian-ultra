@@ -24,7 +24,12 @@ from .processors import (
 
 # 2. استيراد المحرك
 from .engine import *
-from .engine import upload_to_telegram_only, ensure_dependencies, ProgressStream, send_to_telegram
+from .engine import (
+    upload_to_telegram_only,
+    ensure_dependencies,
+    ProgressStream,
+    send_to_telegram,
+)
 
 # 3. تنظيف استيراد سوبابيز
 try:
@@ -97,13 +102,16 @@ def save_to_supabase(
                     .execute()
                 )
 
+                # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
                 if existing_media.data:
                     m_id = existing_media.data[0]["id"]
                     # تحديث البيانات الحالية (لو غيرت الاسم أو البوستر يلحق يغيرهم)
-                    supabase.table("medias").update(media_payload).eq("id", m_id).execute()
+                    supabase.table("medias").update(media_payload).eq(
+                        "id", m_id
+                    ).execute()
                 else:
-                    # لو مش موجود بالاسم.. جرب الـ upsert بالـ tmdb_id كخط دفاع أخير
-                    # هذا السطر هو الذي سيمنع خطأ 23505 نهائياً
+                    # بفضل تفعيل "Is Unique" في سوبابيز، الـ upsert سيعمل الآن بسلاسة
+                    # لو الـ tmdb_id موجود، سيقوم بالتحديث. لو مش موجود، سيقوم بالإدخال.
                     media_res = (
                         supabase.table("medias")
                         .upsert(media_payload, on_conflict="tmdb_id")
@@ -767,7 +775,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح.")
             except Exception as e:
                 print(f"⚠️ فشل كولاب في إرسال التمبلت: {e}")
-                
+
             # حذف الملف بعد التأكد من انتهاء كل العمليات
             if os.path.exists(vid_path):
                 try:
