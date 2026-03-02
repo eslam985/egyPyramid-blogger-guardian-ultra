@@ -156,4 +156,6 @@ def send_to_discord(row, content_type, action_text, post_url, lang_val="لغة �
 
 
 # اجعل المتغير يشير للدالة الحقيقية مباشرة
+# اجعل المتغير يشير للدالة الحقيقية مباشرة
 send_telegram_update = send_to_discord
+send_to_telegram = send_to_discord  # <--- هذا السطر هو الذي سيحل الـ ImportError فوراً
