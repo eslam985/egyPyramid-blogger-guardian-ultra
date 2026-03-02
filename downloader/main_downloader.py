@@ -77,9 +77,9 @@ def save_to_supabase(
             "category": c_cat,
             "year": str(meta_year),
             "rating": str(meta_rating),
-            "labels": labels,          # العمود الجديد
-            "runtime": runtime,        # العمود الجديد
-            "duration_iso": duration_iso # العمود الجديد (الوحش)
+            "labels": labels,  # العمود الجديد
+            "runtime": runtime,  # العمود الجديد
+            "duration_iso": duration_iso,  # العمود الجديد (الوحش)
         }
 
         # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
@@ -230,13 +230,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_year,
     ) = get_movie_data(name)
 
-    # --- الإصلاح الجوهري هنا ---
     # معالجة البوستر فوراً قبل أي استدعاء لسوبابيز
     final_poster = upload_poster_to_cloudinary(raw_poster) if raw_poster else raw_poster
-    # افترضنا أن دالة get_movie_data تعيد الـ ID أيضاً أو القاموس الكامل
-    # إذا كانت get_movie_data تعيد بيانات فقط، سنقوم ببناء قاموس وهمي لـ meta_data
-    current_meta = {"id": None}  # يمكنك تطوير هذا لاحقاً لجلب الـ ID الحقيقي
-
     # تعديل جوهري: إذا كان الاسم المجلوب من API لا يشبه اسمك الأصلي، أو جاء بأرقام غريبة، ارجع لاسمك الأصلي
     if (
         not display_title
@@ -309,10 +304,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_rating,
         temp_id,
         "Pending",
-        tmdb_id=tmdb_id_fetched,   # إرسال ID
-        labels=meta_labels,         # إرسال التصنيفات
-        runtime=meta_runtime,       # إرسال مدة العرض
-        duration_iso=meta_duration  # إرسال ISO
+        tmdb_id=tmdb_id_fetched,  # إرسال ID
+        labels=meta_labels,  # إرسال التصنيفات
+        runtime=meta_runtime,  # إرسال مدة العرض
+        duration_iso=meta_duration,  # إرسال ISO
     )
 
     if not e_id:
@@ -672,7 +667,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     meta_rating,
                     identifier,
                     archive_url,
-                    current_meta,
+                    tmdb_id=tmdb_id_fetched,
+                    labels=meta_labels,
+                    runtime=meta_runtime,
+                    duration_iso=meta_duration,
                 )
             except Exception as e:
                 print(f"⚠️ فشل تحديث ساب باز الأولي: {e}")
@@ -732,10 +730,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     meta_rating,
                     identifier,
                     archive_url,
-                    tmdb_id=tmdb_id_fetched,   # أضف هذا
-                    labels=meta_labels,         # أضف هذا
-                    runtime=meta_runtime,       # أضف هذا
-                    duration_iso=meta_duration  # أضف هذا
+                    tmdb_id=tmdb_id_fetched,  # أضف هذا
+                    labels=meta_labels,  # أضف هذا
+                    runtime=meta_runtime,  # أضف هذا
+                    duration_iso=meta_duration,  # أضف هذا
                 )
             except Exception as e:
                 print(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
