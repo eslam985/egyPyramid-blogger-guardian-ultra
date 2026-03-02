@@ -71,8 +71,8 @@ def save_to_supabase(
     duration_iso=None,
 ):
     try:
-        # نسحب كل البيانات من الاسم الأصلي الخام لضمان وجود رقم الحلقة والفئة
-        c_title, c_cat, actual_ep_no = get_clean_media_data(original_task_name)
+        # نستخدم الاسم النظيف المجلوب من API (display_title) لضمان عدم تسجيل روابط
+        c_title, c_cat, actual_ep_no = get_clean_media_data(display_title)
 
         media_payload = {
             "tmdb_id": str(tmdb_id) if tmdb_id else None,
@@ -246,14 +246,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_year,
     ) = get_movie_data(name)
 
-    # تعديل جوهري: إذا كان الاسم المجلوب من API لا يشبه اسمك الأصلي، أو جاء بأرقام غريبة، ارجع لاسمك الأصلي
-    if (
-        not display_title
-        or any(char.isdigit() for char in display_title)
-        and len(display_title) < 10
-    ):
+    # --- التعديل الجذري لمنع عودة الروابط كأرقام ---
+    is_original_a_link = "http" in original_task_name
+    
+    if not display_title:
         display_title = original_task_name
-        print(f"⚠️ تم استعادة الاسم الأصلي من التاسك لضمان الدقة: {display_title}")
+    
+    # لو الاسم المجلوب فيه أرقام وقصير، بس الاسم الأصلي "رابط"، نرفض الاستعادة
+    if any(char.isdigit() for char in display_title) and len(display_title) < 10:
+        if is_original_a_link:
+            print(f"✅ تم الإبقاء على الاسم المجلوب {display_title} لأن البديل رابط مشوه.")
+        else:
+            display_title = original_task_name
+            print(f"⚠️ تم استعادة الاسم الأصلي من التاسك: {display_title}")
 
     # تأكد أن display_title لا يضيع منه رقم الحلقة
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
