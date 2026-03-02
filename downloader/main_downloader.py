@@ -332,7 +332,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         .strip()
         .replace(" ", "_")
     )
-
+    
     # أولاً: تعريف وإنشاء المجلد الفريد
     # التعديل لضمان أن المجلد ينشأ في مكان مسموح
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
@@ -490,7 +490,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         for idx, vid_path in enumerate(videos, 1):
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
-            file_name = os.path.basename(vid_path)
+            file_name = f"{clean_name}.mp4"
             episode_label = (
                 f"{display_title}"
                 if len(videos) == 1
@@ -526,9 +526,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 )
                 # استبدل سطر إنشاء ProgressStream بـ:
                 stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
+                # التعديل: نضمن أن اسم الملف داخل الأرشيف هو اسم الفيلم وليس الرابط أو اسم عشوائي
+                final_file_name = f"{clean_name}.mp4" 
+
                 archive_upload(
                     identifier,
-                    files={os.path.basename(vid_path): stream},
+                    files={final_file_name: stream}, # هنا السر!
                     metadata={"title": episode_label, "mediatype": "movies"},
                     access_key=ARCHIVE_ACCESS_KEY,
                     secret_key=ARCHIVE_SECRET_KEY,

@@ -61,7 +61,7 @@ def get_movie_data(name):
         # استخراج الاسم من الرابط مباشرة
         fallback_title = search_query.split("/")[-1].replace("-", " ").title()
         return (
-            None, # ID
+            None,  # ID
             fallback_title,
             "وصف تلقائي (DramaBox Archive)",
             "https://via.placeholder.com/600x900?text=Egy+Pyramid",
@@ -163,10 +163,14 @@ def get_movie_data(name):
                 if search_first_word in omdb_title:
                     raw_story = res_o.get("Plot", "")
                     try:
-                        story = translator.translate(raw_story) if raw_story != "N/A" else "لا يوجد وصف"
+                        story = (
+                            translator.translate(raw_story)
+                            if raw_story != "N/A"
+                            else "لا يوجد وصف"
+                        )
                     except:
                         story = raw_story
-                    
+
                     # --- التعديل هنا: رفع بوستر OMDb قبل الخروج ---
                     omdb_poster = res_o.get("Poster")
                     if omdb_poster and omdb_poster != "N/A":
@@ -174,15 +178,15 @@ def get_movie_data(name):
                         omdb_poster = upload_poster_to_cloudinary(omdb_poster)
 
                     return (
-                        res_o.get("imdbID"),      # ID
-                        res_o.get("Title"),       # Title
-                        story,                    # Story
-                        omdb_poster,              # Poster المرفوع
-                        "أفلام",                  # Labels
-                        "PT02H00M",               # Duration ISO
+                        res_o.get("imdbID"),  # ID
+                        res_o.get("Title"),  # Title
+                        story,  # Story
+                        omdb_poster,  # Poster المرفوع
+                        "أفلام",  # Labels
+                        "PT02H00M",  # Duration ISO
                         res_o.get("imdbRating"),  # Rating
-                        res_o.get("Runtime"),     # Runtime String
-                        res_o.get("Year"),        # Year
+                        res_o.get("Runtime"),  # Runtime String
+                        res_o.get("Year"),  # Year
                     )
                 else:
                     print(
@@ -190,19 +194,32 @@ def get_movie_data(name):
                     )
 
         # --- المرحلة الثالثة: الصرامة المطلقة (بديل البحث المرن والـ AI) ---
-        # --- المرحلة الثالثة: الصرامة المطلقة ---
         if not tmdb_final_id:
             print(f"🛑 لم يتم العثور على تطابق رسمي لـ '{search_query}'.")
+
+            # تنظيف ذكي جداً للاسم حتى لو فشل البحث تماماً
+            display_name = search_query
+            if "http" in str(search_query) or "/" in str(search_query):
+                # استخراج آخر جزء من الرابط وتنظيفه
+                display_name = str(search_query).split("/")[-1].split("?")[0]
+                display_name = display_name.replace("-", " ").replace("_", " ").title()
+                # حذف أي أرقام تعريفية في بداية الاسم (مثل 123-movie-name)
+                display_name = re.sub(r"^\d+-", "", display_name).strip()
+
+            # إذا ظل الاسم فارغاً لأي سبب، نضع الاسم الأصلي
+            if not display_name:
+                display_name = search_query
+
             return (
-                None,             # ID
-                search_query,      # Title
-                "جاري تحديث القصة...", # Story
-                "",                # Poster
-                "أفلام",           # Labels
-                "PT01H30M",        # Duration ISO
-                "N/A",             # Rating
-                "غير محدد",         # Runtime String
-                year or "2026",    # Year
+                None,
+                display_name,  # الآن نضمن أنه ليس رابطاً مشوهاً
+                "جاري تحديث القصة...",
+                "https://via.placeholder.com/600x900?text=No+Poster",
+                "أفلام",
+                "PT01H30M",
+                "N/A",
+                "غير محدد",
+                year or "2026",
             )
 
         if tmdb_final_id:
@@ -214,7 +231,12 @@ def get_movie_data(name):
             en_data = requests.get(en_url).json()
 
             # في المسلسلات الاسم يكون 'name' وفي الأفلام 'title'
-            title = en_data.get("title") or en_data.get("name") or title
+            # الأولوية لاسم الفيلم أو المسلسل الرسمي من API
+            title = en_data.get("title") or en_data.get("name")
+
+            # لو الـ API مجابش اسم (نادر جداً)، ننظف الرابط
+            if not title:
+                title = search_query.split("/")[-1].replace("-", " ").title()
 
             # تاريخ الإصدار يختلف أيضاً بين الفيلم والمسلسل
             tmdb_date = (
@@ -245,7 +267,7 @@ def get_movie_data(name):
                     else f"{runtime} دقيقة"
                 )
             else:
-                duration = "PT01H30M" # قيمة افتراضية لو مفيش runtime
+                duration = "PT01H30M"  # قيمة افتراضية لو مفيش runtime
 
             # 2. جلب البيانات بالعربي
             ar_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}&language=ar"
@@ -277,7 +299,7 @@ def get_movie_data(name):
             tmdb_final_id,
             title,
             story,
-            final_poster, # الرابط المرفوع (Cloudinary)
+            final_poster,  # الرابط المرفوع (Cloudinary)
             labels,
             duration,
             rating,
