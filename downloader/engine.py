@@ -149,23 +149,41 @@ class ProgressStream:
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     print(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
 
-    # التحقق الذكي من وجود المفاتيح وصحتها
-    if not TELE_ID_RAW or not TELE_HASH_RAW:
-        print("❌ خطأ: مفاتيح Telegram (API_ID/HASH) غير موجودة في الـ Secrets.")
-        return None
-
+    # 1. جلب المفاتيح الخام وتحويل الـ API_ID لرقم
     try:
-        final_api_id = int(TELE_ID_RAW)
-        final_api_hash = TELE_HASH_RAW
-    except ValueError:
-        print("❌ خطأ: TELEGRAM_API_ID يجب أن يكون رقماً فقط.")
+        f_api_id = int(TELE_ID_RAW) if TELE_ID_RAW else None
+        f_api_hash = TELE_HASH_RAW
+    except (ValueError, TypeError):
+        print("❌ خطأ: TELEGRAM_API_ID يجب أن يكون رقماً صحيحاً.")
         return None
 
+    if not f_api_id or not f_api_hash:
+        print("❌ خطأ: مفاتيح Telegram (API_ID/HASH) مفقودة.")
+        return None
+
+    # 2. جلب كود الجلسة (String Session)
+    tele_string = os.getenv("TELEGRAM_STRING_SESSION")
+
+    # محاولة الجلب من نظام Secrets الخاص بكولاب إذا فشل os.getenv
+    if not tele_string:
+        try:
+            from google.colab import userdata
+
+            tele_string = userdata.get("TELEGRAM_STRING_SESSION")
+        except (ImportError, Exception):
+            pass
+
+    if not tele_string:
+        print("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود في الـ Secrets!")
+        return None
+
+    # 3. الوحش يدخل الآن "In-Memory"
     async with Client(
-        "egy_pyramid_user",
-        api_id=final_api_id,
-        api_hash=final_api_hash,
-        in_memory=False,
+        "egy_pyramid_session",
+        session_string=tele_string,
+        api_id=f_api_id,
+        api_hash=f_api_hash,
+        in_memory=True,
     ) as app:
 
         # 1. الرفع للمخزن (أول وجهة في القائمة)
@@ -234,5 +252,5 @@ def get_topcinema_data(name):
         res = requests.get(search_url, headers=headers, timeout=10)
         # إذا نجح السحب سنقوم بمعالجة النص هنا (هذه الدالة للبحث فقط حالياً)
         return None
-    except:
+    except (ImportError, Exception):
         return None
