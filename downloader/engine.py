@@ -53,8 +53,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # إنشاء العميل فقط إذا كان المفتاح موجوداً لتجنب انهيار الاستيراد
 client_groq = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# التعديل ليتوافق مع أسماء المتغيرات في خلية الحقن
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_DESTINATION") or os.getenv("DESTINATIONS")
 
 # استدعاء المفاتيح من ملف .env
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -415,10 +416,13 @@ def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة 
         response = requests.post(url, json=payload, timeout=20)
         if response.status_code == 200:
             print(f"✈️ تم إرسال 'بوست الفيسبوك' إلى تليجرام بنجاح!")
+            return True
         else:
             print(f"⚠️ تليجرام رفض: {response.text}")
+            return False
     except Exception as e:
         print(f"⚠️ فشل إرسال بوست الفيسبوك لتليجرام: {e}")
+        return False
 
 
 # اجعل المتغير يشير للدالة الحقيقية مباشرة

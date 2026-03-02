@@ -163,18 +163,21 @@ def get_movie_data(name):
                 if search_first_word in omdb_title:
                     raw_story = res_o.get("Plot", "")
                     try:
-                        story = (
-                            translator.translate(raw_story)
-                            if raw_story != "N/A"
-                            else "لا يوجد وصف"
-                        )
+                        story = translator.translate(raw_story) if raw_story != "N/A" else "لا يوجد وصف"
                     except:
                         story = raw_story
+                    
+                    # --- التعديل هنا: رفع بوستر OMDb قبل الخروج ---
+                    omdb_poster = res_o.get("Poster")
+                    if omdb_poster and omdb_poster != "N/A":
+                        print(f"☁️ جاري رفع بوستر OMDb لكلاود ناري...")
+                        omdb_poster = upload_poster_to_cloudinary(omdb_poster)
+
                     return (
                         res_o.get("imdbID"),      # ID
                         res_o.get("Title"),       # Title
                         story,                    # Story
-                        res_o.get("Poster"),      # Poster
+                        omdb_poster,              # Poster المرفوع
                         "أفلام",                  # Labels
                         "PT02H00M",               # Duration ISO
                         res_o.get("imdbRating"),  # Rating
@@ -265,11 +268,16 @@ def get_movie_data(name):
             if genres:
                 labels = ", ".join([g["name"] for g in genres])
 
+        # --- المرحلة النهائية: رفع البوستر لكلاود ناري قبل العودة بالنتائج ---
+        # --- المرحلة النهائية: تخص TMDB فقط (لأن OMDb خرج بـ return خاص به أعلاه) ---
+        print(f"☁️ جاري معالجة بوستر TMDB ورفعه لكلاود ناري...")
+        final_poster = upload_poster_to_cloudinary(poster)
+
         return (
             tmdb_final_id,
             title,
             story,
-            poster,
+            final_poster, # الرابط المرفوع (Cloudinary)
             labels,
             duration,
             rating,

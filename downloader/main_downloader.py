@@ -99,8 +99,16 @@ def save_to_supabase(
 
                 if existing_media.data:
                     m_id = existing_media.data[0]["id"]
+                    # تحديث البيانات الحالية (لو غيرت الاسم أو البوستر يلحق يغيرهم)
+                    supabase.table("medias").update(media_payload).eq("id", m_id).execute()
                 else:
-                    media_res = supabase.table("medias").insert(media_payload).execute()
+                    # لو مش موجود بالاسم.. جرب الـ upsert بالـ tmdb_id كخط دفاع أخير
+                    # هذا السطر هو الذي سيمنع خطأ 23505 نهائياً
+                    media_res = (
+                        supabase.table("medias")
+                        .upsert(media_payload, on_conflict="tmdb_id")
+                        .execute()
+                    )
                     m_id = media_res.data[0]["id"]
 
                 # 2. إنشاء أو تحديث الحلقة (Episode)
@@ -222,7 +230,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         tmdb_id_fetched,  # القيمة الجديدة
         display_title,
         meta_story,
-        raw_poster,
+        final_poster,
         meta_labels,
         meta_duration,
         meta_rating,
@@ -230,8 +238,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_year,
     ) = get_movie_data(name)
 
-    # معالجة البوستر فوراً قبل أي استدعاء لسوبابيز
-    final_poster = upload_poster_to_cloudinary(raw_poster) if raw_poster else raw_poster
     # تعديل جوهري: إذا كان الاسم المجلوب من API لا يشبه اسمك الأصلي، أو جاء بأرقام غريبة، ارجع لاسمك الأصلي
     if (
         not display_title
@@ -742,7 +748,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             # قبله مباشرة، أضف هذا الجزء:
 
             try:
-                # تجهيز بيانات الصف لمحاكاة ما يفعله الناشر
                 row_data = {
                     "title": display_title,
                     "story": meta_story,
@@ -750,18 +755,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     "labels": meta_labels,
                 }
 
-                # استدعاء دالة الإرسال (التي نقلناها للبروسيسور)
-                # ملاحظة: post_url هنا يمكننا محاكاته أو تركه "Pending" لو لم يكن المقال نُشر بعد
-                send_to_telegram(
+                # التعديل: جعل الإرسال يرجع نتيجة حقيقية
+                status = send_to_telegram(
                     row=row_data,
                     content_type="MOVIE" if "فيلم" in display_title else "SERIES",
                     action_text="المشاهدة",
                     post_url="سيتم النشر قريباً على الموقع الرسمي",
                     lang_val="مترجم",
                 )
-                print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح قبل إنهاء المهمة.")
+                if status:
+                    print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح.")
             except Exception as e:
                 print(f"⚠️ فشل كولاب في إرسال التمبلت: {e}")
+                
             # حذف الملف بعد التأكد من انتهاء كل العمليات
             if os.path.exists(vid_path):
                 try:
