@@ -18,7 +18,7 @@ from .utils import (
     generate_seo_tags,
     format_duration_iso,
 )
-from .notifiers import send_to_telegram, generate_facebook_template
+
 
 # 3. استدعاء القوالب
 from .templates_store import HTML_TEMPLATE_SERIES, HTML_TEMPLATE_MOVIE
@@ -175,9 +175,7 @@ def prepare_content(row, is_series_by_title):
     return content_type, episodes_list, ep_buttons_html, f_voe, f_vid, f_ok, f_vk
 
 
-def update_series_post(
-    service, post_id, row, send_telegram_update, lang_val="لغة أصلية", ep_no=None
-):
+def update_series_post(service, post_id, row, lang_val="لغة أصلية", ep_no=None):
     # واحذف أسطر الـ re.search الخاصة بالـ ep_match
     # واستخدم ep_no الممرر مباشرة
     try:
@@ -276,21 +274,6 @@ def update_series_post(
         updated_post_obj = (
             service.posts().patch(blogId=BLOG_ID, postId=post_id, body=post).execute()
         )
-
-        # 8. إرسال إشعار تليجرام
-        row_clean = {
-            k: (str(v) if v is not None and str(v).lower() != "nan" else "")
-            for k, v in row.items()
-        }
-        # التعديل: إرسال الـ row بالكامل لتوليد بوست الفيسبوك آلياً
-        send_to_telegram(
-            row=row_clean,
-            content_type="SERIES",
-            action_text=f"الحلقة {ep_no}",
-            post_url=updated_post_obj.get("url"),
-            lang_val=lang_val,
-        )
-
         print(f"✅ تم حقن الحلقة {ep_no} بنجاح في بلوجر وساب باز.")
         return True
 
@@ -496,16 +479,7 @@ def start_publishing_from_supabase():
                     .execute()
                 )
                 new_id = post_result.get("id")
-                # إرسال إشعار للفيلم الجديد أو المسلسل الجديد
-                # التعديل: إرسال الـ row بالكامل لتوليد بوست الفيسبوك آلياً
-                send_to_telegram(
-                    row=row,
-                    content_type=content_type,
-                    action_text="مشاهدة الآن",
-                    post_url=post_result.get("url"),
-                    lang_val=lang_work,
-                )
-                print(f"✈️ تم إرسال إشعار تليجرام للنشر الجديد: {title}")
+
                 # تحديث ساب باز برقم البوست الجديد فوراً
                 supabase.table("medias").update({"blogger_post_id": new_id}).eq(
                     "id", m_id

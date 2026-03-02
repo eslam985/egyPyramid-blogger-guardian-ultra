@@ -24,7 +24,7 @@ from .processors import (
 
 # 2. استيراد المحرك
 from .engine import *
-from .engine import upload_to_telegram_only, ensure_dependencies, ProgressStream
+from .engine import upload_to_telegram_only, ensure_dependencies, ProgressStream, send_to_telegram
 
 # 3. تنظيف استيراد سوبابيز
 try:
@@ -738,6 +738,30 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             except Exception as e:
                 print(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
 
+            # ابحث عن السطر الذي يقوم بمسح الملف المحلي (os.remove)
+            # قبله مباشرة، أضف هذا الجزء:
+
+            try:
+                # تجهيز بيانات الصف لمحاكاة ما يفعله الناشر
+                row_data = {
+                    "title": display_title,
+                    "story": meta_story,
+                    "poster_url": final_poster,
+                    "labels": meta_labels,
+                }
+
+                # استدعاء دالة الإرسال (التي نقلناها للبروسيسور)
+                # ملاحظة: post_url هنا يمكننا محاكاته أو تركه "Pending" لو لم يكن المقال نُشر بعد
+                send_to_telegram(
+                    row=row_data,
+                    content_type="MOVIE" if "فيلم" in display_title else "SERIES",
+                    action_text="المشاهدة",
+                    post_url="سيتم النشر قريباً على الموقع الرسمي",
+                    lang_val="مترجم",
+                )
+                print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح قبل إنهاء المهمة.")
+            except Exception as e:
+                print(f"⚠️ فشل كولاب في إرسال التمبلت: {e}")
             # حذف الملف بعد التأكد من انتهاء كل العمليات
             if os.path.exists(vid_path):
                 try:

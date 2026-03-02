@@ -34,7 +34,7 @@ from services.blogger_api import BloggerService
 
 # 3. استدعاء الأدوات ومحرك النشر من مجلد publisher (مكانهم الحالي حسب الـ ls)
 from publisher.utils import generate_ai_seo_description, generate_clean_slug
-from publisher.notifiers import send_to_telegram
+
 from publisher.main_publisher import start_publishing_from_supabase
 
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
