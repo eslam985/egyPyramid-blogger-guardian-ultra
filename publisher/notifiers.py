@@ -116,54 +116,44 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     return final_output
 
 
-def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة أصلية"):
-    """
-    هذه الدالة الآن تأخذ البيانات الخام، تولد قالب الفيسبوك، وترسله لتليجرام
-    """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ خطأ: مفاتيح تليجرام غير موجودة")
+def send_to_discord(row, content_type, action_text, post_url, lang_val="لغة أصلية"):
+    DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")  # ضعه في الـ Secrets
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️ خطأ: رابط ديسكورد ويب هوك غير موجود")
         return
 
-    # 1. توليد التاريخ الحالي بشكل جميل
     human_date = datetime.now().strftime("%Y-%m-%d")
-
-    # 2. استدعاء توليد القالب (البوست اللي هتاخده كوبي للفيس)
     facebook_post = generate_facebook_template(
         row, human_date, content_type, action_text, lang_val
     )
 
-    # 3. تجهيز بيانات الإرسال
     photo_url = row.get("poster") or row.get("poster_url")
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
 
-    # تأمين طول النص (تليجرام بحد أقصى 1024 حرف للصور)
-    safe_caption = (
-        facebook_post if len(facebook_post) < 1024 else facebook_post[:1000] + "..."
-    )
-
+    # تجهيز البيانات لديسكورد (Embeds ليكون الشكل احترافي)
+    # التعديل لضمان العمل على أي Webhook بدون أخطاء
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "photo": photo_url,
-        "caption": safe_caption,
-        "reply_markup": json.dumps(
+        "content": "🚀 **بوست فيسبوك جاهز للنسخ!**",
+        "embeds": [
             {
-                "inline_keyboard": [
-                    [{"text": "🍿 مشاهدة الآن (المقال الرسمي)", "url": post_url}]
-                ]
+                "title": f"🎬 {row.get('title')}",
+                # دمجنا الرابط جوه الوصف عشان تضمن إنه يظهر شغال 100%
+                "description": f"{facebook_post}\n\n🔗 **رابط المقال المباشر:** {post_url}",
+                "color": 15844367,  # لون ذهبي
+                "image": {"url": photo_url},
+                "footer": {"text": "EgyPyramid Guardian Ultra"},
             }
-        ),
+        ],
     }
 
     try:
-        # إضافة إمكانية إعادة المحاولة لو حصل DNS Error زي اللي ظهر في الـ Log
-        response = requests.post(url, json=payload, timeout=20)
-        if response.status_code == 200:
-            print(f"✈️ تم إرسال 'بوست الفيسبوك' إلى تليجرام بنجاح!")
+        res = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=20)
+        if res.status_code in [200, 204]:
+            print("✅ تم إرسال قالب الفيسبوك لديسكورد بنجاح!")
         else:
-            print(f"⚠️ تليجرام رفض: {response.text}")
+            print(f"⚠️ ديسكورد رفض: {res.text}")
     except Exception as e:
-        print(f"⚠️ فشل إرسال بوست الفيسبوك لتليجرام: {e}")
+        print(f"❌ فشل إرسال ديسكورد: {e}")
 
 
 # اجعل المتغير يشير للدالة الحقيقية مباشرة
-send_telegram_update = send_to_telegram
+send_telegram_update = send_to_discord
