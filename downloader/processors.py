@@ -226,23 +226,36 @@ def get_movie_data(name):
             # استخدام النوع المستخرج (movie أو tv) لطلب البيانات بشكل صحيح
             media_type = content_kind if "content_kind" in locals() else "movie"
 
-            # 1. جلب البيانات بالإنجليزي
+            # 1. جلب البيانات بالإنجليزي (للحصول على الاسم الرسمي الأصلي)
             en_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}"
             en_data = requests.get(en_url).json()
 
-            # في المسلسلات الاسم يكون 'name' وفي الأفلام 'title'
-            # الأولوية لاسم الفيلم أو المسلسل الرسمي من API
-            title = en_data.get("title") or en_data.get("name")
+            # --- التعديل الجوهري هنا ---
+            # جلب البيانات بالعربي (لأننا نفضل الاسم العربي في تليجرام وسوبابيز)
+            ar_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}&language=ar"
+            ar_data = requests.get(ar_url).json()
 
-            # لو الـ API مجابش اسم (نادر جداً)، ننظف الرابط
-            if not title:
+            # القاعدة: الأولوية للاسم العربي، لو مش موجود نأخذ الإنجليزي، لو مش موجود ننظف الرابط
+            title = (
+                ar_data.get("title")
+                or ar_data.get("name")
+                or en_data.get("title")
+                or en_data.get("name")
+            )
+
+            if not title or "http" in str(title):
                 title = search_query.split("/")[-1].replace("-", " ").title()
+                title = re.sub(r"^\d+-", "", title).strip()
 
-            # تاريخ الإصدار يختلف أيضاً بين الفيلم والمسلسل
+            print(f"✅ تم العثور على الاسم الرسمي: {title}")
+            # --------------------------
+
+            # استكمال باقي البيانات (تاريخ، تقييم، بوستر)
             tmdb_date = (
                 en_data.get("release_date") or en_data.get("first_air_date") or "0000"
             )
             release_year = tmdb_date[:4]
+            # ... باقي الكود كما هو ...
 
             raw_rating = en_data.get("vote_average", 0.0)
             rating = str(round(raw_rating, 1)) if raw_rating > 0 else "N/A"
