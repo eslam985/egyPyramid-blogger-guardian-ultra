@@ -398,6 +398,11 @@ def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة 
         facebook_post if len(facebook_post) < 1024 else facebook_post[:1000] + "..."
     )
 
+    # صمام أمان: التأكد أن post_url رابط حقيقي وليس نص عربي
+    final_url = (
+        post_url if str(post_url).startswith("http") else "https://egy-pyramid-drama.blogspot.com/"
+    )
+
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "photo": photo_url,
@@ -405,7 +410,7 @@ def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة 
         "reply_markup": json.dumps(
             {
                 "inline_keyboard": [
-                    [{"text": "🍿 مشاهدة الآن (المقال الرسمي)", "url": post_url}]
+                    [{"text": "🍿 مشاهدة الآن (المقال الرسمي)", "url": final_url}]
                 ]
             }
         ),

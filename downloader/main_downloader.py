@@ -332,7 +332,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         .strip()
         .replace(" ", "_")
     )
-    
+
     # أولاً: تعريف وإنشاء المجلد الفريد
     # التعديل لضمان أن المجلد ينشأ في مكان مسموح
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
@@ -527,11 +527,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 # استبدل سطر إنشاء ProgressStream بـ:
                 stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
                 # التعديل: نضمن أن اسم الملف داخل الأرشيف هو اسم الفيلم وليس الرابط أو اسم عشوائي
-                final_file_name = f"{clean_name}.mp4" 
+                final_file_name = f"{clean_name}.mp4"
 
                 archive_upload(
                     identifier,
-                    files={final_file_name: stream}, # هنا السر!
+                    files={final_file_name: stream},  # هنا السر!
                     metadata={"title": episode_label, "mediatype": "movies"},
                     access_key=ARCHIVE_ACCESS_KEY,
                     secret_key=ARCHIVE_SECRET_KEY,
@@ -767,12 +767,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 }
 
                 # التعديل: جعل الإرسال يرجع نتيجة حقيقية
+                # التعديل: إرسال رابط حقيقي بدلاً من النص العربي لتجنب رفض تليجرام
                 status = send_to_telegram(
                     row=row_data,
                     content_type="MOVIE" if "فيلم" in display_title else "SERIES",
                     action_text="المشاهدة",
-                    post_url="سيتم النشر قريباً على الموقع الرسمي",
-                    lang_val="مترجم",
+                    post_url="https://egy-pyramid-drama.blogspot.com/",  # تم تغيير النص العربي لرابط حقيقي
+                    lang_val="مترجم / مدبلج",
                 )
                 if status:
                     print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح.")
