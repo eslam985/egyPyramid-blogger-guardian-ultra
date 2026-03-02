@@ -50,7 +50,8 @@ DESTINATIONS = [d.strip() for d in dest_raw.split(",") if d.strip()]
 # تعريف العميل باستخدام المفتاح الموجود في ملف .env
 # هذا السطر هو الذي سيحل خطأ Undefined name "client_groq"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-client_groq = Groq(api_key=GROQ_API_KEY)
+# إنشاء العميل فقط إذا كان المفتاح موجوداً لتجنب انهيار الاستيراد
+client_groq = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
