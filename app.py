@@ -553,7 +553,13 @@ async def index(request: Request):
     except Exception as e:
         # هذا السطر سيطبع لك الخطأ الحقيقي في الـ Logs بوضوح
         print(f"🔥 CRITICAL ERROR in Index: {str(e)}")
-        return f"<h1>Error 500: {str(e)}</h1>"
+        if templates:
+            # الحقيقة الصارمة: يجب تمرير كل المتغيرات التي يتوقعها ملف HTML
+            return templates.TemplateResponse("index.html", {
+                "request": request, 
+                "medias": data,
+                "current_page": "home"  # هذا هو السطر المنقذ
+            })
 
 
 # حذف رابط معين
