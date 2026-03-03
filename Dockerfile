@@ -17,7 +17,7 @@ COPY ./requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir -r /code/requirements.txt
 
 # تثبيت بيانات NLTK
-RUN python -m nltk.downloader punkt punkt_tab
+
 
 COPY . .
 
