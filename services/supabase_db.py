@@ -20,11 +20,12 @@ class SupabaseService:
             print(f"❌ Supabase Connection Error: {str(e)}")
 
     @staticmethod
-    def get_media(
-        search_query: str = None, category: str = None, only_pending: bool = False
-    ):
-        # نستخدم SupabaseService.client دائماً
-
+    def get_media(search_query: str = None, category: str = None, only_pending: bool = False):
+        # الحقيقة الصارمة: إذا لم يكن الكلاينت موجوداً، أرجع قائمة فارغة بدل الانهيار
+        if SupabaseService.client is None:
+            print("⚠️ Attempted to fetch media but Supabase Client is None!")
+            return []
+            
         query = SupabaseService.client.table("medias").select("*, episodes(*)")
 
         if search_query:

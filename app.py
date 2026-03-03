@@ -82,10 +82,20 @@ app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # تعديل ربط الملفات الثابتة والقوالب
-app.mount(
-    "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
-)
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+# الحقيقة الصارمة: تأكد أن المجلدات موجودة قبل ربطها لمنع خطأ 500 عند التشغيل
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+else:
+    print("⚠️ Warning: 'static' directory not found!")
+
+if os.path.exists(TEMPLATES_DIR):
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
+else:
+    print("⚠️ Warning: 'templates' directory not found!")
+    templates = None  # لمنع انهيار الدوال التي تستخدم القوالب
 
 # 3. الإعدادات الأخرى
 security = HTTPBasic()
