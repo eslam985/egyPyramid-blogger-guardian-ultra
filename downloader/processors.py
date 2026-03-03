@@ -212,9 +212,9 @@ def get_movie_data(name):
 
             return (
                 None,
-                display_name,  # الآن نضمن أنه ليس رابطاً مشوهاً
-                "جاري تحديث القصة...",
-                "https://via.placeholder.com/600x900?text=No+Poster",
+                display_name,
+                None,  # خليه يرجع None عشان سوبابيز ما يمسحش القصة القديمة
+                None,  # خليه يرجع None عشان ما يمسحش البوستر القديم
                 "أفلام",
                 "PT01H30M",
                 "N/A",
@@ -400,16 +400,22 @@ def upload_to_vk_local(title, file_path):
             files = {"video_file": (os.path.basename(file_path), stream, "video/mp4")}
             # تعديل: إضافة Session لثبات الاتصال ومحاولة الرفع مع التعامل مع أخطاء SSL
             session = requests.Session()
-            adapter = requests.adapters.HTTPAdapter(max_retries=3) # محاولة الرفع 3 مرات في حال الفشل
+            adapter = requests.adapters.HTTPAdapter(
+                max_retries=3
+            )  # محاولة الرفع 3 مرات في حال الفشل
             session.mount("https://", adapter)
-            
+
             try:
                 # أضفنا timeout معقول بدلاً من None لمنع التعليق اللانهائي
                 # verify=True للتأكد من شهادة الأمان، وإذا استمر الخطأ جرب تحويلها لـ False (كحل أخير)
-                response = session.post(upload_url, files=files, timeout=600, verify=True)
+                response = session.post(
+                    upload_url, files=files, timeout=600, verify=True
+                )
             except requests.exceptions.SSLError:
                 print("⚠️ فشل SSL، محاولة الرفع بدون تحقق (Insecure Mode)...")
-                response = session.post(upload_url, files=files, timeout=600, verify=False)
+                response = session.post(
+                    upload_url, files=files, timeout=600, verify=False
+                )
 
             pbar_vk.close()
             stream.close()

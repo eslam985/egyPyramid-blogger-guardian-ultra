@@ -86,7 +86,10 @@ def save_to_supabase(
             "runtime": runtime,  # العمود الجديد
             "duration_iso": duration_iso,  # العمود الجديد (الوحش)
         }
-
+        # تنظيف الـ payload من القيم الفارغة عشان ما يمسحش البيانات القديمة في الـ update
+        media_payload = {
+            k: v for k, v in media_payload.items() if v is not None and v != ""
+        }
         # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
         # --- بداية الجزء المحصن ضد أخطاء 502 ---
         m_id = None
@@ -105,13 +108,20 @@ def save_to_supabase(
                 # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
                 if existing_media.data:
                     m_id = existing_media.data[0]["id"]
-                    # تحديث البيانات الحالية (لو غيرت الاسم أو البوستر يلحق يغيرهم)
-                    supabase.table("medias").update(media_payload).eq(
+                    # ✅ التعديل: نحدث فقط البيانات التي قد تتغير أو تنقص، ونترك البوستر والقصة
+                    # سنكتفي بتحديث الـ tmdb_id والـ runtime لو أردت، أو لا نحدث شيئاً
+                    update_payload = {
+                        "tmdb_id": (
+                            str(tmdb_id)
+                            if tmdb_id
+                            else existing_media.data[0].get("tmdb_id")
+                        )
+                    }
+                    supabase.table("medias").update(update_payload).eq(
                         "id", m_id
                     ).execute()
                 else:
-                    # بفضل تفعيل "Is Unique" في سوبابيز، الـ upsert سيعمل الآن بسلاسة
-                    # لو الـ tmdb_id موجود، سيقوم بالتحديث. لو مش موجود، سيقوم بالإدخال.
+                    # لو المسلسل مش موجود أصلاً، ننشئه بالبيانات كاملة
                     media_res = (
                         supabase.table("medias")
                         .upsert(media_payload, on_conflict="tmdb_id")
