@@ -531,36 +531,43 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
 
 # الصفحة الرئيسية (محمية بكلمة سر)
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, q: str = None, cat: str = None):
+async def index(
+    request: Request,
+    search: str = None,
+    cat: str = None,
+    status: str = None,
+    page: int = 1,
+):
     try:
-        # 1. جلب البيانات (مع دعم البحث والتصنيف إذا وجدا)
+        # 1. جلب البيانات من سوبابيز
         data = []
         if SupabaseService.client:
             try:
-                data = SupabaseService.get_media(search_query=q, category=cat)
+                # نستخدم search و cat المأخوذين من الـ URL
+                data = SupabaseService.get_media(search_query=search, category=cat)
             except Exception as e:
                 print(f"❌ DB Fetch Error: {e}")
 
-        # 2. رندر القالب مع تمرير كافة المتغيرات "المحتملة" لتجنب Undefined Error
+        # 2. الحقيقة الصارمة: مطابقة المتغيرات مع ملف index.html
+        context = {
+            "request": request,
+            "media_list": data,  # الـ HTML يطلب media_list وليس medias
+            "search": search or "",  # الـ HTML يطلب search وليس search_query
+            "current_cat": cat or "",  # الـ HTML يطلب current_cat
+            "current_status": status or "",  # الـ HTML يطلب current_status
+            "current_page": int(page),  # تحويل لـ int لضمان عمل مقارنة الـ < و >
+            "total_pages": 1,  # قيمة مبدئية لمنع الانهيار
+        }
+
         if templates:
-            return templates.TemplateResponse(
-                "index.html",
-                {
-                    "request": request,
-                    "medias": data,
-                    "current_page": "home",
-                    "search_query": q or "",
-                    "category": cat or "",
-                },
-            )
+            return templates.TemplateResponse("index.html", context)
         else:
             return HTMLResponse(
                 content="<h1>Templates directory not found!</h1>", status_code=500
             )
 
     except Exception as e:
-        print(f"🔥 CRITICAL ERROR in Index: {str(e)}")
-        # إذا حدث خطأ في الرندر، سنعرض الخطأ نفسه على الشاشة لنعرف المتغير الناقص
+        print(f"🔥 Render Error: {str(e)}")
         return HTMLResponse(content=f"<h1>Render Error: {str(e)}</h1>", status_code=500)
 
 
