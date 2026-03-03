@@ -31,7 +31,13 @@ from bs4 import BeautifulSoup
 # 2. استدعاء الخدمات المركزية
 # 2. استدعاء الخدمات المركزية
 from services.supabase_db import SupabaseService
-from services.blogger_api import BloggerService
+
+# استيراد آمن لخدمة بلوجر لمنع انهيار السيرفر
+try:
+    from services.blogger_api import BloggerService
+except ImportError as e:
+    print(f"⚠️ Blogger Service libraries missing: {e}")
+    BloggerService = None
 
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
