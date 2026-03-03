@@ -42,13 +42,13 @@ except ImportError as e:
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-# التعديل لضمان عدم الانهيار
-supabase = getattr(SupabaseService, "client", None)
+# الحقيقة الصارمة: نربط مباشرة بـ client الموجود داخل SupabaseService
+supabase = SupabaseService.client
 
 if supabase:
-    print("✅ Supabase Connected Successfully")
+    print("✅ Connection Verified: Supabase is Ready")
 else:
-    print("❌ Supabase Connection Failed: Check your Secrets!")
+    print("❌ Connection Critical: Supabase Client is None")
 
 
 # ثم بقية الاستدعاءات

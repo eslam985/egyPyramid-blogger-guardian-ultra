@@ -1,24 +1,30 @@
-from supabase import create_client, Client
 import os
+from supabase import create_client, Client
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+# جلب القيم وتنظيفها فوراً
+RAW_URL = os.getenv("SUPABASE_URL")
+RAW_KEY = os.getenv("SUPABASE_KEY")
 
 
 class SupabaseService:
-    # الحقيقة الصارمة: لا تنشئ الكلاينت إلا إذا كانت المفاتيح موجودة فعلاً
     client: Client = None
-    if SUPABASE_URL and SUPABASE_KEY:
+
+    # محاولة إنشاء الكلاينت مرة واحدة فقط بشكل سليم
+    if RAW_URL and RAW_KEY:
         try:
-            client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            client = create_client(RAW_URL.strip(), RAW_KEY.strip())
+            print(
+                f"✅ Supabase Initialized. URL: {RAW_URL[:15]}... KEY: {RAW_KEY[:10]}..."
+            )
         except Exception as e:
-            print(f"❌ Critical: Supabase Init Failed: {e}")
+            print(f"❌ Supabase Connection Error: {str(e)}")
 
     @staticmethod
     def get_media(
         search_query: str = None, category: str = None, only_pending: bool = False
     ):
         # نستخدم SupabaseService.client دائماً
+
         query = SupabaseService.client.table("medias").select("*, episodes(*)")
 
         if search_query:
