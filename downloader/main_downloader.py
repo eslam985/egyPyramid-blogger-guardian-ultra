@@ -117,33 +117,36 @@ def save_to_supabase(
                 )
 
                 # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
-                if existing_media.data:
-                    # 🛡️ حماية البيانات: المسلسل موجود، خذ الـ ID فقط ولا ترسل أي أمر Update
-                    m_id = existing_media.data[0]["id"]
-                    print(
-                        f"♻️ [Media Exist]: تم العثور على '{c_title}'، لن يتم تحديث البيانات الأساسية."
-                    )
-                else:
-                    # ✨ إنشاء جديد: المسلسل غير موجود، سجل بياناته لأول مرة
-                    media_res = (
+                # 1. البحث عن الميديا (بالاسم "أو" بالـ ID) لضمان عدم التكرار
+                m_id = None
+
+                # محاولة البحث بالاسم النظيف
+                query = (
+                    supabase.table("medias").select("id").eq("title", c_title).execute()
+                )
+
+                if not query.data and tmdb_id:
+                    # لو منفعش بالاسم ومعانا ID، نجرب بالـ ID
+                    query = (
                         supabase.table("medias")
-                        .upsert(media_payload, on_conflict="tmdb_id")
+                        .select("id")
+                        .eq("tmdb_id", str(tmdb_id))
                         .execute()
                     )
-                    m_id = media_res.data[0]["id"]
-                # 2. إنشاء أو تحديث الحلقة (Episode)
-                ep_payload = {
-                    "media_id": m_id,
-                    "episode_number": actual_ep_no,
-                    "identifier": identifier,
-                    "is_synced": False,
-                }
-                ep_res = (
-                    supabase.table("episodes")
-                    .upsert(ep_payload, on_conflict="media_id, episode_number")
-                    .execute()
-                )
-                e_id = ep_res.data[0]["id"]
+
+                if query.data:
+                    # ✅ وجدناه! خذ الـ ID واهرب.. ملمسش أي بيانات تانية
+                    m_id = query.data[0]["id"]
+                    print(
+                        f"🛡️ [حماية]: تم العثور على '{c_title}' (ID: {m_id})، لن يتم لمس البيانات القديمة."
+                    )
+                else:
+                    # ✨ مش موجود خالص؟ إذن أنشئه "مرة واحدة فقط"
+                    print(f"🆕 [إنشاء]: سجل جديد لـ '{c_title}'...")
+                    # هنا نستخدم insert وليس upsert ليكون أكثر أماناً
+                    new_media = supabase.table("medias").insert(media_payload).execute()
+                    if new_media.data:
+                        m_id = new_media.data[0]["id"]
 
                 break  # إذا وصلنا هنا بنجاح، نخرج من حلقة المحاولات
             except Exception as e:
