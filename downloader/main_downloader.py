@@ -248,14 +248,16 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # --- التعديل الجذري لمنع عودة الروابط كأرقام ---
     is_original_a_link = "http" in original_task_name
-    
+
     if not display_title:
         display_title = original_task_name
-    
+
     # لو الاسم المجلوب فيه أرقام وقصير، بس الاسم الأصلي "رابط"، نرفض الاستعادة
     if any(char.isdigit() for char in display_title) and len(display_title) < 10:
         if is_original_a_link:
-            print(f"✅ تم الإبقاء على الاسم المجلوب {display_title} لأن البديل رابط مشوه.")
+            print(
+                f"✅ تم الإبقاء على الاسم المجلوب {display_title} لأن البديل رابط مشوه."
+            )
         else:
             display_title = original_task_name
             print(f"⚠️ تم استعادة الاسم الأصلي من التاسك: {display_title}")
@@ -603,41 +605,54 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 continue  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
 
             # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
+            # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
             if identifier:
-                # تحديث التسمية لتشمل Lulu
                 print(
-                    f"🚀 البدء في الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu)..."
+                    f"🚀 البدء في الرفع المتوازي الخماسي (VK + Voe + Dood + Tape + Lulu)..."
                 )
 
                 if e_id:
                     supabase.table("episodes").update(
                         {
-                            "status_message": "🚀 جاري الرفع المتوازي لـ 4 سيرفرات مشاهدة...",
+                            "status_message": "🚀 جاري ضخ الملف لـ VK والرفع المتوازي للبقية...",
                             "progress_percent": 90,
-                            "download_speed": "Parallel Uploading...",
                         }
                     ).eq("id", e_id).execute()
 
-                # 1. تحضير المهام مع فواصل زمنية (تجنب زحمة الطلبات)
+                # 1. تحضير مهام الريموت (تستهلك طلبات HTTP فقط)
                 task_voe = upload_to_voe_api(vid_path, identifier)
-
-                await asyncio.sleep(8)  # تقليل الفجوة قليلاً لتوفير الوقت
+                await asyncio.sleep(2)
                 task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
-
-                await asyncio.sleep(8)
+                await asyncio.sleep(2)
                 task_tape = upload_to_streamtape(
                     st_login, st_key, identifier, file_name
                 )
-
-                await asyncio.sleep(8)
+                await asyncio.sleep(2)
                 task_lulu = upload_to_lulustream(lu_key, identifier, file_name)
 
-                # 2. إطلاق الصواريخ الأربعة معاً
-                file_id, d_url, s_url, lu_url = await asyncio.gather(
-                    task_voe, task_dood, task_tape, task_lulu
+                # 2. تحضير مهمة VK (رفع محلي ثقيل) - تشغيلها في Thread منفصل لعدم تعطيل الـ Event Loop
+                loop = asyncio.get_event_loop()
+                task_vk = loop.run_in_executor(
+                    None, upload_to_vk_local, episode_label, vid_path
                 )
 
+                # 3. إطلاق الصواريخ الخمسة معاً وانتظار الجميع
+                # الترتيب مهم جداً لاستلام النتائج بشكل صحيح
+                vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
+                    task_vk, task_voe, task_dood, task_tape, task_lulu
+                )
+
+                # تعيين رابط VK المستخرج
+                vk_url = vk_result if vk_result else "Failed"
+
                 # --- 6. معالجة النتائج وحفظها ---
+                # نتائج VK (إضافة الحفظ لسوبابيز)
+                if vk_url != "Failed":
+                    supabase.table("links").upsert(
+                        {"episode_id": e_id, "server_name": "vk", "url": vk_url},
+                        on_conflict="episode_id, server_name",
+                    ).execute()
+                    print(f"✅ VK Link Saved to Supabase!")
 
                 # نتائج Voe
                 voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
@@ -696,25 +711,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 )
             except Exception as e:
                 print(f"⚠️ فشل تحديث ساب باز الأولي: {e}")
-
-            # 6. الرفع لـ VK (المرحلة الثانية - محلياً لضمان الاستقرار)
-            # 6. الرفع لـ VK
-            print(f"🚀 جاري نقل النسخة لـ VK...")
-            if e_id:
-                supabase.table("episodes").update(
-                    {
-                        "status_message": "🎬 جاري الرفع والمعالجة على VK...",
-                        "progress_percent": 95,
-                        "download_speed": "Finalizing...",
-                    }
-                ).eq("id", e_id).execute()
-            vk_url = "Failed"
-            try:
-                vk_result = upload_to_vk_local(episode_label, vid_path)
-                if vk_result:
-                    vk_url = vk_result
-            except Exception as e:
-                print(f"⚠️ فشل VK: {e}")
 
             # --- 9. الرفع لـ MixDrop (ضع الكود الجديد هنا) ---
             try:

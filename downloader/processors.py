@@ -398,7 +398,18 @@ def upload_to_vk_local(title, file_path):
             )
             # requests will set the correct Content-Type for multipart/form-data automatically
             files = {"video_file": (os.path.basename(file_path), stream, "video/mp4")}
-            response = requests.post(upload_url, files=files, timeout=None)
+            # تعديل: إضافة Session لثبات الاتصال ومحاولة الرفع مع التعامل مع أخطاء SSL
+            session = requests.Session()
+            adapter = requests.adapters.HTTPAdapter(max_retries=3) # محاولة الرفع 3 مرات في حال الفشل
+            session.mount("https://", adapter)
+            
+            try:
+                # أضفنا timeout معقول بدلاً من None لمنع التعليق اللانهائي
+                # verify=True للتأكد من شهادة الأمان، وإذا استمر الخطأ جرب تحويلها لـ False (كحل أخير)
+                response = session.post(upload_url, files=files, timeout=600, verify=True)
+            except requests.exceptions.SSLError:
+                print("⚠️ فشل SSL، محاولة الرفع بدون تحقق (Insecure Mode)...")
+                response = session.post(upload_url, files=files, timeout=600, verify=False)
 
             pbar_vk.close()
             stream.close()
