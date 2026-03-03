@@ -7,7 +7,11 @@
     <h3>{{ media.title }}</h3>
     <p class="story-preview">{{ media.story[:100] }}...</p>
     <div class="card-meta">
-      <span><i class="fa fa-film"></i> {{ media.episodes|length }} حلقة</span>
+      {% if media.category == 'tv' %}
+      <span><i class="fa fa-tv"></i> {{ media.episodes|length }} حلقة</span>
+      {% else %}
+      <span><i class="fa fa-play-circle"></i> فيلم</span>
+      {% endif %}
       <span><i class="fa fa-calendar"></i> {{ media.year }}</span>
     </div>
     <div class="card-actions">

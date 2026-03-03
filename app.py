@@ -508,8 +508,8 @@ async def index(
     page_size = 12
     offset = (page - 1) * page_size
 
-    # بناء الاستعلام يدوياً لدعم الترقيم والفلترة
-    query = SupabaseService.client.table("medias").select("*", count="exact")
+    # التعديل: نطلب "*" (كل أعمدة الميديا) و "episodes(*)" (كل الحلقات التابعة لها)
+    query = SupabaseService.client.table("medias").select("*, episodes(*)", count="exact")
 
     if search:
         query = query.ilike("title", f"%{search}%")
