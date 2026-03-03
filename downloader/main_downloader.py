@@ -86,9 +86,20 @@ def save_to_supabase(
             "runtime": runtime,  # العمود الجديد
             "duration_iso": duration_iso,  # العمود الجديد (الوحش)
         }
-        # تنظيف الـ payload من القيم الفارغة عشان ما يمسحش البيانات القديمة في الـ update
+        # تنظيف ذكي: يحذف القيمة لو كانت None أو نص بيدل على الفشل أو رابط Placeholder
+        useless_values = [
+            None,
+            "",
+            "لا يوجد وصف",
+            "جاري تحديث القصة...",
+            "N/A",
+            "غير محدد",
+        ]
+
         media_payload = {
-            k: v for k, v in media_payload.items() if v is not None and v != ""
+            k: v
+            for k, v in media_payload.items()
+            if v not in useless_values and "via.placeholder.com" not in str(v)
         }
         # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
         # --- بداية الجزء المحصن ضد أخطاء 502 ---
@@ -107,28 +118,19 @@ def save_to_supabase(
 
                 # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
                 if existing_media.data:
+                    # 🛡️ حماية البيانات: المسلسل موجود، خذ الـ ID فقط ولا ترسل أي أمر Update
                     m_id = existing_media.data[0]["id"]
-                    # ✅ التعديل: نحدث فقط البيانات التي قد تتغير أو تنقص، ونترك البوستر والقصة
-                    # سنكتفي بتحديث الـ tmdb_id والـ runtime لو أردت، أو لا نحدث شيئاً
-                    update_payload = {
-                        "tmdb_id": (
-                            str(tmdb_id)
-                            if tmdb_id
-                            else existing_media.data[0].get("tmdb_id")
-                        )
-                    }
-                    supabase.table("medias").update(update_payload).eq(
-                        "id", m_id
-                    ).execute()
+                    print(
+                        f"♻️ [Media Exist]: تم العثور على '{c_title}'، لن يتم تحديث البيانات الأساسية."
+                    )
                 else:
-                    # لو المسلسل مش موجود أصلاً، ننشئه بالبيانات كاملة
+                    # ✨ إنشاء جديد: المسلسل غير موجود، سجل بياناته لأول مرة
                     media_res = (
                         supabase.table("medias")
                         .upsert(media_payload, on_conflict="tmdb_id")
                         .execute()
                     )
                     m_id = media_res.data[0]["id"]
-
                 # 2. إنشاء أو تحديث الحلقة (Episode)
                 ep_payload = {
                     "media_id": m_id,
