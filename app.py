@@ -42,13 +42,19 @@ except ImportError as e:
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-# الحقيقة الصارمة: نربط مباشرة بـ client الموجود داخل SupabaseService
-supabase = SupabaseService.client
+# 1. تعريف التطبيق أولاً وقبل كل شيء لضمان استجابة السيرفر
+app = FastAPI()
 
-if supabase:
-    print("✅ Connection Verified: Supabase is Ready")
-else:
-    print("❌ Connection Critical: Supabase Client is None")
+# 2. الآن نربط الخدمات
+supabase = getattr(SupabaseService, "client", None)
+
+
+@app.on_event("startup")
+async def startup_event():
+    if supabase:
+        print("✅ Connection Verified: Supabase is Ready")
+    else:
+        print("❌ Connection Critical: Supabase Client is None")
 
 
 # ثم بقية الاستدعاءات
