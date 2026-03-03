@@ -8,7 +8,7 @@
     <p class="story-preview">{{ (media.story[:100] if media.story else 'لا يوجد وصف') }}...</p>
     <div class="card-meta">
       {% if media.category == 'tv' %}
-      <span><i class="fa fa-tv"></i> {{ media.episodes|length }} حلقة</span>
+      <span><i class="fa fa-tv"></i> {{ (media.episodes | default([])) | length }} حلقة</span>
       {% else %}
       <span><i class="fa fa-play-circle"></i> فيلم</span>
       {% endif %}

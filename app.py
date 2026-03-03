@@ -535,13 +535,24 @@ async def index(
 ):
     try:
         # 1. جلب البيانات من سوبابيز
+        # 1. جلب البيانات من سوبابيز
         data = []
         if SupabaseService.client:
             try:
-                # نستخدم search و cat المأخوذين من الـ URL
                 data = SupabaseService.get_media(search_query=search, category=cat)
+                # الحقيقة الصارمة: تأمين البيانات لمنع الـ NoneType Error
+                if data is None:
+                    data = []
+                else:
+                    # نمر على كل عنصر لنتأكد أن الحقول الأساسية ليست None
+                    for item in data:
+                        if item.get("episodes") is None:
+                            item["episodes"] = []
+                        if item.get("story") is None:
+                            item["story"] = ""
             except Exception as e:
                 print(f"❌ DB Fetch Error: {e}")
+                data = []
 
         # 2. الحقيقة الصارمة: مطابقة المتغيرات مع ملف index.html
         context = {
