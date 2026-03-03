@@ -531,35 +531,37 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
 
 # الصفحة الرئيسية (محمية بكلمة سر)
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    # الحقيقة الصارمة: سنختبر هل العيب في سوبابيز أم في القوالب
+async def index(request: Request, q: str = None, cat: str = None):
     try:
-        # 1. اختبار قاعدة البيانات
+        # 1. جلب البيانات (مع دعم البحث والتصنيف إذا وجدا)
         data = []
         if SupabaseService.client:
             try:
-                data = SupabaseService.get_media()
+                data = SupabaseService.get_media(search_query=q, category=cat)
             except Exception as e:
                 print(f"❌ DB Fetch Error: {e}")
 
-        # 2. اختبار القوالب
+        # 2. رندر القالب مع تمرير كافة المتغيرات "المحتملة" لتجنب Undefined Error
         if templates:
             return templates.TemplateResponse(
-                "index.html", {"request": request, "medias": data}
+                "index.html",
+                {
+                    "request": request,
+                    "medias": data,
+                    "current_page": "home",
+                    "search_query": q or "",
+                    "category": cat or "",
+                },
             )
         else:
-            return "<h1>Template folder missing!</h1>"
+            return HTMLResponse(
+                content="<h1>Templates directory not found!</h1>", status_code=500
+            )
 
     except Exception as e:
-        # هذا السطر سيطبع لك الخطأ الحقيقي في الـ Logs بوضوح
         print(f"🔥 CRITICAL ERROR in Index: {str(e)}")
-        if templates:
-            # الحقيقة الصارمة: يجب تمرير كل المتغيرات التي يتوقعها ملف HTML
-            return templates.TemplateResponse("index.html", {
-                "request": request, 
-                "medias": data,
-                "current_page": "home"  # هذا هو السطر المنقذ
-            })
+        # إذا حدث خطأ في الرندر، سنعرض الخطأ نفسه على الشاشة لنعرف المتغير الناقص
+        return HTMLResponse(content=f"<h1>Render Error: {str(e)}</h1>", status_code=500)
 
 
 # حذف رابط معين
