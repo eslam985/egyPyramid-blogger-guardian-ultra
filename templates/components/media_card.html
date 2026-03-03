@@ -5,7 +5,7 @@
   </div>
   <div class="card-content">
     <h3>{{ media.title }}</h3>
-    <p class="story-preview">{{ media.story[:100] }}...</p>
+    <p class="story-preview">{{ (media.story[:100] if media.story else 'لا يوجد وصف') }}...</p>
     <div class="card-meta">
       {% if media.category == 'tv' %}
       <span><i class="fa fa-tv"></i> {{ media.episodes|length }} حلقة</span>

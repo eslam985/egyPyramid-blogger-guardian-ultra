@@ -72,11 +72,6 @@ try:
 except Exception as e:
     print(f"⚠️ Blogger Service failed to load: {e}")
 
-
-# 1. تعريف التطبيق والإعدادات الأساسية
-# 1. تعريف التطبيق
-app = FastAPI()
-
 # ده السطر اللي هيريحك من قصة الـ HTTP/HTTPS
 # الحصول على المسار الحالي للملف
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -558,7 +553,7 @@ async def index(
             "current_page": int(page),  # تحويل لـ int لضمان عمل مقارنة الـ < و >
             "total_pages": 1,  # قيمة مبدئية لمنع الانهيار
         }
-    
+
         if templates:
             return templates.TemplateResponse("index.html", context)
         else:
