@@ -558,7 +558,7 @@ async def index(
             "current_page": int(page),  # تحويل لـ int لضمان عمل مقارنة الـ < و >
             "total_pages": 1,  # قيمة مبدئية لمنع الانهيار
         }
-
+    
         if templates:
             return templates.TemplateResponse("index.html", context)
         else:
