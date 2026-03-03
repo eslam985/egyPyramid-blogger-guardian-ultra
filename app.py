@@ -29,19 +29,20 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from bs4 import BeautifulSoup
 
 # 2. استدعاء الخدمات المركزية
+# 2. استدعاء الخدمات المركزية
 from services.supabase_db import SupabaseService
 from services.blogger_api import BloggerService
 
-
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-# ثم قم بتعريف المتغير الذي يشتكي منه الكود:
-supabase = None
-try:
-    supabase = SupabaseService.client
+
+# التعديل لضمان عدم الانهيار
+supabase = getattr(SupabaseService, "client", None)
+
+if supabase:
     print("✅ Supabase Connected Successfully")
-except Exception as e:
-    print(f"❌ Supabase Connection Failed: {e}")
+else:
+    print("❌ Supabase Connection Failed: Check your Secrets!")
 
 
 # ثم بقية الاستدعاءات

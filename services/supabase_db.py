@@ -6,8 +6,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 
 class SupabaseService:
-    # إنشاء الكلاينت مرة واحدة فقط داخل الكلاس
-    client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    # الحقيقة الصارمة: لا تنشئ الكلاينت إلا إذا كانت المفاتيح موجودة فعلاً
+    client: Client = None
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        except Exception as e:
+            print(f"❌ Critical: Supabase Init Failed: {e}")
 
     @staticmethod
     def get_media(
