@@ -531,55 +531,29 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
 
 # الصفحة الرئيسية (محمية بكلمة سر)
 @app.get("/", response_class=HTMLResponse)
-@app.get("/", response_class=HTMLResponse)
-async def index(
-    request: Request,
-    page: int = 1,  # أضفنا هذا
-    search: str = None,
-    cat: str = None,
-    status: str = None,  # أضفنا هذا
-    user: str = Depends(authenticate),
-):
-    page_size = 12
-    offset = (page - 1) * page_size
+async def index(request: Request):
+    # الحقيقة الصارمة: سنختبر هل العيب في سوبابيز أم في القوالب
+    try:
+        # 1. اختبار قاعدة البيانات
+        data = []
+        if SupabaseService.client:
+            try:
+                data = SupabaseService.get_media()
+            except Exception as e:
+                print(f"❌ DB Fetch Error: {e}")
 
-    # التعديل: نطلب "*" (كل أعمدة الميديا) و "episodes(*)" (كل الحلقات التابعة لها)
-    query = SupabaseService.client.table("medias").select(
-        "*, episodes(*)", count="exact"
-    )
+        # 2. اختبار القوالب
+        if templates:
+            return templates.TemplateResponse(
+                "index.html", {"request": request, "medias": data}
+            )
+        else:
+            return "<h1>Template folder missing!</h1>"
 
-    if search:
-        query = query.ilike("title", f"%{search}%")
-    if cat:
-        query = query.eq("category", cat)
-    if status == "not_published":
-        query = query.is_("blogger_post_id", "null")
-    elif status == "published":
-        query = query.not_.is_("blogger_post_id", "null")
-
-    # تنفيذ الاستعلام
-    res = (
-        query.order("created_at", desc=True)
-        .range(offset, offset + page_size - 1)
-        .execute()
-    )
-
-    # حساب الترقيم
-    total_count = res.count if res.count is not None else 0
-    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
-
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "media_list": res.data,
-            "search": search or "",
-            "current_page": page,  # هذا سيحل خطأ Jinja2
-            "total_pages": total_pages,  # وهذا أيضاً
-            "current_cat": cat or "",
-            "current_status": status or "",
-        },
-    )
+    except Exception as e:
+        # هذا السطر سيطبع لك الخطأ الحقيقي في الـ Logs بوضوح
+        print(f"🔥 CRITICAL ERROR in Index: {str(e)}")
+        return f"<h1>Error 500: {str(e)}</h1>"
 
 
 # حذف رابط معين
