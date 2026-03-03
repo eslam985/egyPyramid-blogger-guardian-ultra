@@ -36,7 +36,12 @@ from services.blogger_api import BloggerService
 # إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # ثم قم بتعريف المتغير الذي يشتكي منه الكود:
-supabase = SupabaseService.client
+supabase = None
+try:
+    supabase = SupabaseService.client
+    print("✅ Supabase Connected Successfully")
+except Exception as e:
+    print(f"❌ Supabase Connection Failed: {e}")
 
 
 # ثم بقية الاستدعاءات
