@@ -5,12 +5,13 @@ import subprocess
 import requests
 import time
 import asyncio
+import json
+
 from pyrogram import Client
 from internetarchive import upload as archive_upload
 from supabase import create_client, Client as SupabaseClient
 from functools import partial  # استيراد واحد يكفي
 from datetime import datetime
-import json
 from groq import Groq
 
 
@@ -325,9 +326,11 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     except Exception as e:
         print(f"⚠️ Groq Hook Error: {e}")
     # -------------------------------------------------------
+    # --- [إعادة المتغيرات المحذوفة] ---
+    # 1. إزالة النجوم (Markdown)
+    clean_title_no_stars = clean_title.replace("*", "")
 
-    type_label = "🎞️ فيلم" if content_type == "MOVIE" else "🌟 مسلسل"
-
+    # 2. توليد الهاشتاجات الذكية من الـ labels
     raw_labels = str(row.get("labels", "")).replace("،", ",")
     labels_list = [
         l.strip().replace(" ", "_").replace("(", "").replace(")", "")
@@ -336,19 +339,43 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     ]
     smart_hashtags = " ".join([f"#{tag}" for tag in labels_list[:3]])
 
-    # 1. إزالة النجوم (Markdown) لأن فيسبوك لا يدعمها وتظهر كرموز مزعجة
-    clean_title_no_stars = clean_title.replace("*", "")
-
-    # 2. تحسين الهاشتاجات لتكون أكثر رواجاً
+    # 3. الهاشتاجات الثابتة
     trending_hashtags = f"#سينما #افلام_جديدة #EgyPyramid"
-    # تنظيف عنوان العمل لاستخدامه كهاشتاج (حذف الأقواس، النقط، والرموز)
-    hashtag_title = re.sub(r"[^\w\s]", "", clean_title_no_stars).replace("-", " ").replace("  ", " ").strip().replace(" ", "_")
-    # إذا كان العنوان يحتوي على "مدبلج"، نحدث اللغة تلقائياً
-    if "مدبلج" in raw_title:
+    # -----------------------------------
+
+    # 1. ذكاء تحديد النوع (فيلم أم مسلسل) ... يكمل باقي الكود كما هو
+    # 1. ذكاء تحديد النوع (فيلم أم مسلسل)
+    all_text_to_check = (raw_title + " " + str(row.get("labels", ""))).lower()
+    is_movie = (
+        "فيلم" in all_text_to_check
+        or "movie" in all_text_to_check
+        or content_type == "MOVIE"
+    )
+
+    # تصحيح النوع لو العنوان فيه كلمة "مسلسل" بشكل صريح
+    if "مسلسل" in all_text_to_check or "series" in all_text_to_check:
+        is_movie = False
+
+    type_label = "🎞️ فيلم" if is_movie else "🌟 مسلسل"
+    display_type = "أفلام" if is_movie else "مسلسلات"
+
+    # 2. ذكاء تحديد اللغة
+    if "مدبلج" in all_text_to_check:
         lang_val = "دبلجة عربية احترافية 🎙️"
     else:
         lang_val = "لغة أصلية (مترجم) 📝"
-    # التمبلت النهائي
+
+    # 3. تنظيف الهاشتاج الاحترافي (منع الالتصاق)
+    # نحول الشرطات لمسافات أولاً، ثم نمسح الرموز، ثم نوحد المسافات، ثم نضع الشرطة التحتية
+    hashtag_raw = (
+        clean_title_no_stars.replace("-", " ").replace("(", " ").replace(")", " ")
+    )
+    hashtag_title = re.sub(r"[^\w\s]", "", hashtag_raw)  # حذف الرموز فقط
+    hashtag_title = re.sub(
+        r"\s+", "_", hashtag_title.strip()
+    )  # تحويل كل الفراغات لـ _ واحدة
+
+    # 4. التمبلت النهائي (تأكد من استخدام display_type و lang_val المحدثين)
     final_output = f"""
 🎬 {hook_text} 🎬
 
@@ -361,7 +388,7 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
 ---
 📌 التفاصيل:
 📅 التاريخ: {human_date}
-🎭 النوع: {row.get('labels')}
+🎭 النوع: {display_type}
 🔊 اللغة: {lang_val}
 
 🍿 رابط {action_text} المباشر تجدونه في أول تعليق! 👇
