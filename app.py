@@ -542,8 +542,13 @@ async def index(
         if SupabaseService.client:
             try:
                 # نرسل الصفحة والـ limit للسيرفيس
+                # التعديل: تمرير المتغير status للدالة
                 data, total_count = SupabaseService.get_media(
-                    search_query=search, category=cat, page=page, limit=limit
+                    search_query=search,
+                    category=cat,
+                    status=status,  # أضف هذا السطر
+                    page=page,
+                    limit=limit,
                 )
 
                 if data is None:

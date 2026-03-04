@@ -21,16 +21,18 @@ class SupabaseService:
 
     @staticmethod
     def get_media(
-        search_query: str = None, category: str = None, page: int = 1, limit: int = 12
+        search_query: str = None,
+        category: str = None,
+        status: str = None,
+        page: int = 1,
+        limit: int = 12,
     ):
         if SupabaseService.client is None:
             return [], 0
 
-        # الحقيقة الصارمة: نحسب البداية والنهاية بناءً على الصفحة
         start = (page - 1) * limit
         end = start + limit - 1
 
-        # نستخدم select("*", count="exact") لجلب البيانات والعدد الإجمالي معاً
         query = SupabaseService.client.table("medias").select(
             "*, episodes(*)", count="exact"
         )
@@ -40,12 +42,16 @@ class SupabaseService:
         if category:
             query = query.eq("category", category)
 
-        # التعديل: إضافة الترتيب والنطاق (Range)
+        # --- الحقيقة الصارمة: إضافة فلتر الحالة هنا ---
+        if status:
+            if status == "published":
+                query = query.eq("blogger_status", "published")
+            elif status == "not_published":
+                # نجلب كل ما هو ليس 'published' (سواء كان draft أو NULL)
+                query = query.neq("blogger_status", "published")
+
         result = query.order("created_at", desc=True).range(start, end).execute()
-
-        # نرجع البيانات والعدد الكلي (Count)
         return result.data, (result.count if result.count else 0)
-
 
     @staticmethod
     def add_media(data: dict):

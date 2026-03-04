@@ -3,216 +3,224 @@
 <html lang="ar" dir="rtl">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guardian Ultra | مركز التحكم</title>
-  <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Guardian Ultra | مركز التحكم</title>
+ <link rel="stylesheet" href="/static/css/style.css">
+ <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+ <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
-  <!-- Navigation -->
-  <nav class="main-nav">
-    <div class="logo"> EgyPyramid_Guardian Ultra 🚀</div>
-    <div class="search-bar">
-      <form action="/" method="get">
-        <input type="text" name="search" placeholder="ابحث عن مسلسل أو فيلم..." value="{{ search or '' }}">
-        <button type="submit"><i class="fa fa-search"></i></button>
-      </form>
-    </div>
-    <div class="nav-actions">
-      <button onclick="openAddModal()" class="btn-add"><i class="fa fa-plus"></i> إضافة عمل</button>
-      <button onclick="triggerPublisher()" id="publishBtn">
-        🚀 تشغيل محرك النشر
-      </button>
-      <button onclick="document.getElementById('downloadTaskModal').style.display='block'" class="btn-add"
-        style="background: #e67e22;">
-        <i class="fa fa-download"></i> مهمة سحب
-      </button>
-    </div>
-  </nav>
-  <!-- Main Content -->
-  <main class="container">
-    <!-- Dashboard Header -->
-    <header class="dashboard-header">
-      <h2>إدارة المحتوى ({{ media_list|length }})</h2>
-      <div class="filters">
-        <a href="/" class="filter-tag">الكل</a>
-        <a href="/?cat=tv" class="filter-tag">مسلسلات</a>
-        <a href="/?cat=movie" class="filter-tag">أفلام</a>
-      </div>
-    </header>
-    <!-- Dashboard Controls -->
-    <div class="dashboard-controls">
-      <div class="filters-bar">
-        <a href="/?status=published" class="btn-filter {{ 'active' if current_status == 'published' }}">✅ منشور</a>
-        <a href="/?status=not_published" class="btn-filter {{ 'active' if current_status == 'not_published' }}">⏳ غير
-          منشور</a>
-        <select onchange="location.href='/?cat='+this.value">
-          <option value="">كل الأنواع</option>
-          <option value="tv" {{ 'selected' if current_cat=='tv' }}>مسلسلات</option>
-          <option value="movie" {{ 'selected' if current_cat=='movie' }}>أفلام</option>
-        </select>
-      </div>
-    </div>
-    <!-- Media Grid -->
-    <div class="media-grid">
-      {% for media in media_list %}
-      {% include 'components/media_card.html' %}
-      {% endfor %}
-    </div>
-    <!-- Pagination Controls -->
-    <div class="pagination">
-      {% if current_page > 1 %}
-      <a href="/?page={{ current_page - 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}"
-        class="btn-page">السابق</a>
-      {% endif %}
-
-      <span class="page-info">صفحة {{ current_page }} من {{ total_pages }}</span>
-
-      {% if current_page < total_pages %} <a
-        href="/?page={{ current_page + 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}"
-        class="btn-page">التالي</a>
-        {% endif %}
-    </div>
-  </main>
-  <!-- Modal for adding/editing media -->
-  <div id="mediaModal" class="modal">
-    <div class="modal-content">
-      <!-- Modal Header -->
-      <div class="modal-header">
-        <h2 id="modalTitle">إضافة عمل جديد</h2>
-        <span class="close-btn" onclick="closeModal()">&times;</span>
-      </div>
-      <!-- Modal Form -->
-      <form id="mediaForm">
-        <input type="hidden" id="media_id" name="media_id">
-        <!-- Form Fields -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-          <div class="form-group">
-            <label>عنوان العمل</label>
-            <input type="text" id="title" name="title" required placeholder="مثلاً: المداح">
-          </div>
-
-          <div class="form-group">
-            <label>TMDB ID</label>
-            <input type="text" id="tmdb_id" name="tmdb_id" placeholder="مثال: 12345">
-          </div>
-
-          <div class="form-group">
-            <label>النوع</label>
-            <select id="category" name="category">
-              <option value="tv">مسلسل</option>
-              <option value="movie">فيلم</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>سنة الإنتاج</label>
-            <input type="text" id="year" name="year" placeholder="2026">
-          </div>
-
-          <div class="form-group">
-            <label>التقييم (Rating)</label>
-            <input type="text" id="rating" name="rating" placeholder="8.5">
-          </div>
-
-          <div class="form-group">
-            <label>مدة العرض (Runtime)</label>
-            <input type="text" id="runtime" name="runtime" placeholder="45 min / 2h">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>التصنيفات (Labels)</label>
-          <input type="text" id="labels" name="labels" placeholder="دراما, غموض, رعب (افصل بفاصلة)">
-        </div>
-
-        <div class="form-group">
-          <label>رابط البوستر</label>
-          <input type="url" id="poster_url" name="poster_url" required placeholder="https://...">
-        </div>
-
-        <div class="form-group">
-          <label>قصة العمل</label>
-          <textarea id="story" name="story" rows="4" required></textarea>
-        </div>
-        <div class="form-group">
-          <label>مدة العرض (ISO Format)</label>
-          <input type="text" id="duration_iso" name="duration_iso" placeholder="PT45M">
-        </div>
-
-        <div class="form-group" id="sourceUrlGroup">
-          <label>رابط المصدر (للرفع التلقائي)</label>
-          <input type="url" id="source_url" name="source_url" placeholder="ضع رابط الفيديو هنا ليقوم الوحش بسحبه">
-        </div>
-        <hr>
-        <!-- Episodes Section -->
-        <div id="episodesSection" style="display: none;">
-          <div class="episodes-header">
-            <h3><i class="fa fa-list-ol"></i> إدارة الحلقات</h3>
-            <button type="button" onclick="addNewEpisodeRow()" class="btn-add-episode">
-              <i class="fa fa-plus-circle"></i> إضافة حلقة
-            </button>
-          </div>
-          <div id="episodesList" class="episodes-admin-list">
-          </div>
-        </div>
-        <!-- Modal Footer -->
-        <div class="modal-footer">
-          <button type="submit" id="saveBtn" class="btn-primary">حفظ البيانات</button>
-          <button type="button" class="btn-secondary" onclick="closeModal()">إلغاء</button>
-        </div>
-      </form>
-    </div>
+ <!-- Navigation -->
+ <nav class="main-nav">
+  <div class="logo"> EgyPyramid_Guardian Ultra 🚀</div>
+  <div class="search-bar">
+   <form action="/" method="get">
+    <input type="text" name="search" placeholder="ابحث عن مسلسل أو فيلم..." value="{{ search or '' }}">
+    <button type="submit"><i class="fa fa-search"></i></button>
+   </form>
   </div>
-  <!-- Modal for managing links -->
-  <div id="linksModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>إدارة سيرفرات الحلقة</h3>
-        <span class="close-btn" onclick="closeLinksModal()">&times;</span>
-      </div>
-      <div id="linksList" class="episodes-admin-list" style="margin-bottom:15px; min-height:100px;">
-      </div>
-      <button type="button" onclick="addNewLink()" class="btn-add-episode" style="width:100%; justify-content:center;">
-        <i class="fa fa-plus-circle"></i> إضافة سيرفر جديد
-      </button>
-    </div>
+  <div class="nav-actions">
+   <button onclick="openAddModal()" class="btn-add"><i class="fa fa-plus"></i> إضافة عمل</button>
+   <button onclick="triggerPublisher()" id="publishBtn">
+    🚀 تشغيل محرك النشر
+   </button>
+   <button onclick="document.getElementById('downloadTaskModal').style.display='block'" class="btn-add"
+    style="background: #e67e22;">
+    <i class="fa fa-download"></i> مهمة سحب
+   </button>
   </div>
+ </nav>
+ <!-- Main Content -->
+ <main class="container">
+  <!-- Dashboard Header -->
+  <header class="dashboard-header">
+   <h2>إدارة المحتوى ({{ media_list|length }})</h2>
+   <div class="filters">
+    <a href="/" class="filter-tag">الكل</a>
+    <a href="/?cat=tv" class="filter-tag">مسلسلات</a>
+    <a href="/?cat=movie" class="filter-tag">أفلام</a>
+   </div>
+  </header>
+  <!-- Dashboard Controls -->
+  <div class="dashboard-controls">
+   <div class="filters-bar">
+    <a href="/?status=published" class="btn-filter {{ 'active' if current_status == 'published' }}">✅ منشور</a>
+    <a href="/?status=not_published" class="btn-filter {{ 'active' if current_status == 'not_published' }}">⏳ غير
+     منشور</a>
+    <select onchange="location.href='/?cat='+this.value">
+     <option value="">كل الأنواع</option>
+     <option value="tv" {{ 'selected' if current_cat=='tv' }}>مسلسلات</option>
+     <option value="movie" {{ 'selected' if current_cat=='movie' }}>أفلام</option>
+    </select>
+   </div>
+  </div>
+  <!-- Media Grid -->
+  <div class="media-grid">
+   {% for media in media_list %}
+   {% include 'components/media_card.html' %}
+   {% else %}
+   <div
+    style="grid-column: 1/-1; text-align: center; padding: 50px; background: rgba(0,0,0,0.05); border-radius: 10px; color: gray;">
+    <i class="fa fa-search" style="font-size: 3rem; display: block; margin-bottom: 15px;"></i>
+    <p style="font-size: 1.2rem;">لا توجد أعمال تطابق هذا الفلتر حالياً.</p>
+    <a href="/" style="color: var(--color-primary); text-decoration: underline;">عرض كل الأعمال</a>
+   </div>
+   {% endfor %}
+  </div>
+  <!-- Pagination Controls -->
+  <div class="pagination">
+   {% if current_page > 1 %}
+   <a
+    href="/?page={{ current_page - 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}&search={{ search or '' }}"
+    class="btn-page">السابق</a>
+   {% endif %}
 
-  <!-- Modal for downloading tasks -->
-  <div id="downloadTaskModal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>🚀 إضافة مهمة سحب جديدة</h2>
-        <span class="close-btn"
-          onclick="document.getElementById('downloadTaskModal').style.display='none'">&times;</span>
-      </div>
-      <form id="downloadForm">
-        <div class="form-group">
-          <label>رابط المصدر (Link)</label>
-          <input type="url" name="url" id="taskUrl" required placeholder="https://vidtube.one/e/...">
-        </div>
-        <div class="form-group">
-          <label>اسم العمل (كما سيظهر في ساب باز)</label>
-          <input type="text" name="name" id="taskName" required placeholder="مثلاً: المداح الحلقة 1">
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn-primary">ابدأ السحب والمعالجة</button>
-        </div>
-      </form>
-    </div>
+   <span class="page-info">صفحة {{ current_page }} من {{ total_pages }}</span>
+
+   {% if current_page < total_pages %} <a
+    href="/?page={{ current_page + 1 }}&cat={{ current_cat or '' }}&status={{ current_status or '' }}&search={{ search or '' }}"
+    class="btn-page">
+    التالي</a>
+    {% endif %}
   </div>
-  <!-- Progress Bar -->
-  <div id="progress-container" class="download-progress-fixed" style="display: none;"></div>
-  <!-- Theme Toggle -->
-  <button id="theme-toggle" class="theme-toggle-btn">
-    <i class="fa fa-moon"></i>
-  </button>
-  <!-- JavaScript -->
-  <script src="/static/js/main.js"></script>
+ </main>
+ <!-- Modal for adding/editing media -->
+ <div id="mediaModal" class="modal">
+  <div class="modal-content">
+   <!-- Modal Header -->
+   <div class="modal-header">
+    <h2 id="modalTitle">إضافة عمل جديد</h2>
+    <span class="close-btn" onclick="closeModal()">&times;</span>
+   </div>
+   <!-- Modal Form -->
+   <form id="mediaForm">
+    <input type="hidden" id="media_id" name="media_id">
+    <!-- Form Fields -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+     <div class="form-group">
+      <label>عنوان العمل</label>
+      <input type="text" id="title" name="title" required placeholder="مثلاً: المداح">
+     </div>
+
+     <div class="form-group">
+      <label>TMDB ID</label>
+      <input type="text" id="tmdb_id" name="tmdb_id" placeholder="مثال: 12345">
+     </div>
+
+     <div class="form-group">
+      <label>النوع</label>
+      <select id="category" name="category">
+       <option value="tv">مسلسل</option>
+       <option value="movie">فيلم</option>
+      </select>
+     </div>
+
+     <div class="form-group">
+      <label>سنة الإنتاج</label>
+      <input type="text" id="year" name="year" placeholder="2026">
+     </div>
+
+     <div class="form-group">
+      <label>التقييم (Rating)</label>
+      <input type="text" id="rating" name="rating" placeholder="8.5">
+     </div>
+
+     <div class="form-group">
+      <label>مدة العرض (Runtime)</label>
+      <input type="text" id="runtime" name="runtime" placeholder="45 min / 2h">
+     </div>
+    </div>
+
+    <div class="form-group">
+     <label>التصنيفات (Labels)</label>
+     <input type="text" id="labels" name="labels" placeholder="دراما, غموض, رعب (افصل بفاصلة)">
+    </div>
+
+    <div class="form-group">
+     <label>رابط البوستر</label>
+     <input type="url" id="poster_url" name="poster_url" required placeholder="https://...">
+    </div>
+
+    <div class="form-group">
+     <label>قصة العمل</label>
+     <textarea id="story" name="story" rows="4" required></textarea>
+    </div>
+    <div class="form-group">
+     <label>مدة العرض (ISO Format)</label>
+     <input type="text" id="duration_iso" name="duration_iso" placeholder="PT45M">
+    </div>
+
+    <div class="form-group" id="sourceUrlGroup">
+     <label>رابط المصدر (للرفع التلقائي)</label>
+     <input type="url" id="source_url" name="source_url" placeholder="ضع رابط الفيديو هنا ليقوم الوحش بسحبه">
+    </div>
+    <hr>
+    <!-- Episodes Section -->
+    <div id="episodesSection" style="display: none;">
+     <div class="episodes-header">
+      <h3><i class="fa fa-list-ol"></i> إدارة الحلقات</h3>
+      <button type="button" onclick="addNewEpisodeRow()" class="btn-add-episode">
+       <i class="fa fa-plus-circle"></i> إضافة حلقة
+      </button>
+     </div>
+     <div id="episodesList" class="episodes-admin-list">
+     </div>
+    </div>
+    <!-- Modal Footer -->
+    <div class="modal-footer">
+     <button type="submit" id="saveBtn" class="btn-primary">حفظ البيانات</button>
+     <button type="button" class="btn-secondary" onclick="closeModal()">إلغاء</button>
+    </div>
+   </form>
+  </div>
+ </div>
+ <!-- Modal for managing links -->
+ <div id="linksModal" class="modal">
+  <div class="modal-content">
+   <div class="modal-header">
+    <h3>إدارة سيرفرات الحلقة</h3>
+    <span class="close-btn" onclick="closeLinksModal()">&times;</span>
+   </div>
+   <div id="linksList" class="episodes-admin-list" style="margin-bottom:15px; min-height:100px;">
+   </div>
+   <button type="button" onclick="addNewLink()" class="btn-add-episode" style="width:100%; justify-content:center;">
+    <i class="fa fa-plus-circle"></i> إضافة سيرفر جديد
+   </button>
+  </div>
+ </div>
+
+ <!-- Modal for downloading tasks -->
+ <div id="downloadTaskModal" class="modal" style="display: none;">
+  <div class="modal-content">
+   <div class="modal-header">
+    <h2>🚀 إضافة مهمة سحب جديدة</h2>
+    <span class="close-btn" onclick="document.getElementById('downloadTaskModal').style.display='none'">&times;</span>
+   </div>
+   <form id="downloadForm">
+    <div class="form-group">
+     <label>رابط المصدر (Link)</label>
+     <input type="url" name="url" id="taskUrl" required placeholder="https://vidtube.one/e/...">
+    </div>
+    <div class="form-group">
+     <label>اسم العمل (كما سيظهر في ساب باز)</label>
+     <input type="text" name="name" id="taskName" required placeholder="مثلاً: المداح الحلقة 1">
+    </div>
+    <div class="modal-footer">
+     <button type="submit" class="btn-primary">ابدأ السحب والمعالجة</button>
+    </div>
+   </form>
+  </div>
+ </div>
+ <!-- Progress Bar -->
+ <div id="progress-container" class="download-progress-fixed" style="display: none;"></div>
+ <!-- Theme Toggle -->
+ <button id="theme-toggle" class="theme-toggle-btn">
+  <i class="fa fa-moon"></i>
+ </button>
+ <!-- JavaScript -->
+ <script src="/static/js/main.js"></script>
 </body>
 
 </html>
