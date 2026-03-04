@@ -1,6 +1,6 @@
 <div class="media-card" id="media-{{ media.id }}">
   <div class="card-image">
-    <img src="{{ media.poster_url if media.poster_url else '/static/css/placeholder.jpg' }}" alt="{{ media.title }}">
+    <img src="{{ media.poster_url if media.poster_url else 'https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_80,h_80,c_fill/blogger/logo.webp' }}" alt="{{ media.title }}">
     <span class="category-badge">{{ 'مسلسل' if media.category == 'tv' else 'فيلم' }}</span>
   </div>
   <div class="card-content">
