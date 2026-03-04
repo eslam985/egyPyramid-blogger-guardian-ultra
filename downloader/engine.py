@@ -342,7 +342,7 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     # 2. تحسين الهاشتاجات لتكون أكثر رواجاً
     trending_hashtags = f"#سينما #افلام_جديدة #EgyPyramid"
     # تنظيف عنوان العمل لاستخدامه كهاشتاج (حذف الأقواس، النقط، والرموز)
-    hashtag_title = re.sub(r"[^\w\s]", "", clean_title_no_stars).replace(" ", "_")
+    hashtag_title = re.sub(r"[^\w\s]", "", clean_title_no_stars).replace("-", "").replace("  ", " ").strip().replace(" ", "_")
     # إذا كان العنوان يحتوي على "مدبلج"، نحدث اللغة تلقائياً
     if "مدبلج" in raw_title:
         lang_val = "دبلجة عربية احترافية 🎙️"

@@ -796,31 +796,29 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             except Exception as e:
                 print(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
 
-            # ابحث عن السطر الذي يقوم بمسح الملف المحلي (os.remove)
-            # قبله مباشرة، أضف هذا الجزء:
+            # التعديل: تأكد أننا نرسل رابط البوستر الصحيح من بيانات الميديا (parent_media)
+            # ابحث عن استدعاء الدالة واستبدله بهذا المنطق:
 
+            # --- تعديل بلوك الإرسال لضمان استخدام البيانات الحية ---
             try:
-                row_data = {
-                    "title": display_title or "عنوان غير معروف",
-                    "story": (
-                        meta_story if meta_story else "لا يوجد وصف متاح حالياً."
-                    ),  # حماية من الـ None
-                    "poster_url": final_poster or "",
-                    "labels": meta_labels or "عام",
+                # نقوم بتحديث row_data يدوياً من المتغيرات الموجودة في الذاكرة
+                row_data_for_tg = {
+                    "title": display_title,
+                    "story": meta_story if meta_story else "لا يوجد وصف متاح حالياً.",
+                    "poster_url": final_poster,
+                    "labels": meta_labels,
+                    "year": meta_year,
                 }
-                # تأكد أن الدالة لا تحاول عمل len() على قيمة None بالداخل
 
-                # التعديل: جعل الإرسال يرجع نتيجة حقيقية
-                # التعديل: إرسال رابط حقيقي بدلاً من النص العربي لتجنب رفض تليجرام
                 status = send_to_telegram(
-                    row=row_data,
+                    row=row_data_for_tg,  # نرسل القاموس الجديد اللي ملأناه
                     content_type="MOVIE" if "فيلم" in display_title else "SERIES",
                     action_text="المشاهدة",
-                    post_url="https://egy-pyramid-drama.blogspot.com/",  # تم تغيير النص العربي لرابط حقيقي
+                    post_url="https://egy-pyramid-drama.blogspot.com/",
                     lang_val="مترجم / مدبلج",
                 )
                 if status:
-                    print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح.")
+                    print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح مع البوستر والقصة.")
             except Exception as e:
                 print(f"⚠️ فشل كولاب في إرسال التمبلت: {e}")
 
