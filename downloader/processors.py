@@ -429,7 +429,7 @@ def upload_to_vk_local(title, file_path):
                 )
 
                 # محاولة جلب الرابط 3 مرات بفاصل 15 ثانية بين كل محاولة
-                for attempt in range(3):
+                for attempt in range(30):
                     time.sleep(15)
                     get_api_url = "https://api.vk.com/method/video.get"
                     get_params = {
@@ -595,9 +595,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         print(f"🔍 DoodStream Task ID: {f_code}")
 
         # محاولات الفحص (نزيد الوقت قليلاً لضمان عدم الحظر)
-        for i in range(1, 101):
+        for i in range(1, 81):
             await asyncio.sleep(15)  # 15 ثانية وقت مثالي للملفات الصغيرة
-            print(f"🔄 DoodStream Polling Attempt {i}/101...")
+            print(f"🔄 DoodStream Polling Attempt {i}/81...")
 
             for domain in api_domains:
                 try:
@@ -678,9 +678,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
                 target = clean_it(file_name.split(".")[0])
 
-                for i in range(1, 101):
+                for i in range(1, 81):
                     await asyncio.sleep(15)
-                    print(f"🔄 Streamtape Polling Attempt {i}/101...")
+                    print(f"🔄 Streamtape Polling Attempt {i}/81...")
 
                     # 1. الفحص المباشر عبر الـ ID (الأولوية القصوى حسب الديكومنتيشن)
                     try:
