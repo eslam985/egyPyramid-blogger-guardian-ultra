@@ -7,6 +7,7 @@ import requests
 from dotenv import load_dotenv
 import sys
 import os
+import math
 
 # إضافة المسار الحالي لمسارات بايثون لضمان رؤية مجلد services و publisher
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -533,18 +534,21 @@ async def index(
     status: str = None,
     page: int = 1,
 ):
+    limit = 12  # عدد الكروت في كل صفحة
     try:
-        # 1. جلب البيانات من سوبابيز
-        # 1. جلب البيانات من سوبابيز
         data = []
+        total_count = 0
+
         if SupabaseService.client:
             try:
-                data = SupabaseService.get_media(search_query=search, category=cat)
-                # الحقيقة الصارمة: تأمين البيانات لمنع الـ NoneType Error
+                # نرسل الصفحة والـ limit للسيرفيس
+                data, total_count = SupabaseService.get_media(
+                    search_query=search, category=cat, page=page, limit=limit
+                )
+
                 if data is None:
                     data = []
                 else:
-                    # نمر على كل عنصر لنتأكد أن الحقول الأساسية ليست None
                     for item in data:
                         if item.get("episodes") is None:
                             item["episodes"] = []
@@ -552,29 +556,26 @@ async def index(
                             item["story"] = ""
             except Exception as e:
                 print(f"❌ DB Fetch Error: {e}")
-                data = []
 
-        # 2. الحقيقة الصارمة: مطابقة المتغيرات مع ملف index.html
+        total_pages = math.ceil(total_count / limit) if total_count > 0 else 1
+
         context = {
             "request": request,
-            "media_list": data,  # الـ HTML يطلب media_list وليس medias
-            "search": search or "",  # الـ HTML يطلب search وليس search_query
-            "current_cat": cat or "",  # الـ HTML يطلب current_cat
-            "current_status": status or "",  # الـ HTML يطلب current_status
-            "current_page": int(page),  # تحويل لـ int لضمان عمل مقارنة الـ < و >
-            "total_pages": 1,  # قيمة مبدئية لمنع الانهيار
+            "media_list": data,
+            "search": search or "",
+            "current_cat": cat or "",
+            "current_status": status or "",
+            "current_page": int(page),
+            "total_pages": total_pages,  # الآن القيمة ديناميكية وليست 1
         }
 
         if templates:
             return templates.TemplateResponse("index.html", context)
-        else:
-            return HTMLResponse(
-                content="<h1>Templates directory not found!</h1>", status_code=500
-            )
+        return HTMLResponse(content="Templates missing", status_code=500)
 
     except Exception as e:
         print(f"🔥 Render Error: {str(e)}")
-        return HTMLResponse(content=f"<h1>Render Error: {str(e)}</h1>", status_code=500)
+        return HTMLResponse(content=f"Error: {str(e)}", status_code=500)
 
 
 # حذف رابط معين

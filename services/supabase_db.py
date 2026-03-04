@@ -21,32 +21,31 @@ class SupabaseService:
 
     @staticmethod
     def get_media(
-        search_query: str = None, category: str = None, only_pending: bool = False
+        search_query: str = None, category: str = None, page: int = 1, limit: int = 12
     ):
-        # الحقيقة الصارمة: إذا لم يكن الكلاينت موجوداً، أرجع قائمة فارغة بدل الانهيار
         if SupabaseService.client is None:
-            print("⚠️ Attempted to fetch media but Supabase Client is None!")
-            return []
+            return [], 0
 
-        query = SupabaseService.client.table("medias").select("*, episodes(*)")
+        # الحقيقة الصارمة: نحسب البداية والنهاية بناءً على الصفحة
+        start = (page - 1) * limit
+        end = start + limit - 1
+
+        # نستخدم select("*", count="exact") لجلب البيانات والعدد الإجمالي معاً
+        query = SupabaseService.client.table("medias").select(
+            "*, episodes(*)", count="exact"
+        )
 
         if search_query:
             query = query.ilike("title", f"%{search_query}%")
-
         if category:
             query = query.eq("category", category)
 
-        result = query.order("created_at", desc=True).execute()
-        data = result.data
+        # التعديل: إضافة الترتيب والنطاق (Range)
+        result = query.order("created_at", desc=True).range(start, end).execute()
 
-        if only_pending:
-            data = [
-                item
-                for item in data
-                if any(not ep["is_synced"] for ep in item["episodes"])
-            ]
+        # نرجع البيانات والعدد الكلي (Count)
+        return result.data, (result.count if result.count else 0)
 
-        return data
 
     @staticmethod
     def add_media(data: dict):
