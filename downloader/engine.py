@@ -330,15 +330,6 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     # 1. إزالة النجوم (Markdown)
     clean_title_no_stars = clean_title.replace("*", "")
 
-    # 2. توليد الهاشتاجات الذكية من الـ labels
-    raw_labels = str(row.get("labels", "")).replace("،", ",")
-    labels_list = [
-        l.strip().replace(" ", "_").replace("(", "").replace(")", "")
-        for l in raw_labels.split(",")
-        if l.strip()
-    ]
-    smart_hashtags = " ".join([f"#{tag}" for tag in labels_list[:3]])
-    # 1. ذكاء تحديد النوع (فيلم أم مسلسل) ... يكمل باقي الكود كما هو
     # 1. ذكاء تحديد النوع (فيلم أم مسلسل)
     all_text_to_check = (raw_title + " " + str(row.get("labels", ""))).lower()
     is_movie = (
@@ -359,16 +350,42 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
         trending_hashtags = "#سينما #افلام_جديدة #EgyPyramid"
     else:
         trending_hashtags = "#دراما #دراما_2026 #EgyPyramid"
-    # -----------------------------------
+    # 2. توليد الهاشتاجات الذكية مع تنظيفها من النوع المعاكس
+    raw_labels = str(row.get("labels", "")).replace("،", ",")
+    labels_list = [
+        l.strip().replace(" ", "_").replace("(", "").replace(")", "")
+        for l in raw_labels.split(",")
+        if l.strip()
+    ]
 
-    # 2. ذكاء تحديد اللغة
-    if "مدبلج" in all_text_to_check:
-        lang_val = "دبلجة عربية احترافية 🎙️"
+    # فلترة ذكية: لو مسلسل، امسح أي تاق فيه "أفلام" أو "فيلم" والعكس
+    if is_movie:
+        filtered_labels = [t for t in labels_list if "مسلسل" not in t.lower()]
     else:
+        filtered_labels = [
+            t for t in labels_list if "فيلم" not in t.lower() and "أفلام" not in t
+        ]
+
+    smart_hashtags = " ".join([f"#{tag}" for tag in filtered_labels[:3]])
+    # 2. ذكاء تحديد اللغة
+    # 2. ذكاء تحديد اللغة (منطق: عربي أصلي، مدبلج، أو مترجم)
+    all_text_to_check = (raw_title + " " + str(row.get("labels", ""))).lower()
+
+    # هل العنوان يحتوي على حروف عربية فقط (بدون حروف إنجليزية)؟
+    has_english = bool(re.search(r"[a-zA-Z]", raw_title))
+
+    if "مدبلج" in all_text_to_check or "dubbed" in all_text_to_check:
+        lang_val = "دبلجة عربية احترافية 🎙️"
+    elif "مترجم" in all_text_to_check or "subtitled" in all_text_to_check:
+        lang_val = "لغة أصلية (مترجم) 📝"
+    elif not has_english:
+        # لو العنوان عربي خالص وما فيش كلمة "مترجم"، يبقى عمل عربي أصلي
+        lang_val = "لغة عربية (أصلية) 🇪🇬"
+    else:
+        # لو العنوان إنجليزي (أو فيه إنجليزي) وما فيش علامة دبلجة، يبقى مترجم افتراضياً
         lang_val = "لغة أصلية (مترجم) 📝"
 
     # 3. تنظيف الهاشتاج الاحترافي (منع الالتصاق)
-    # نحول الشرطات لمسافات أولاً، ثم نمسح الرموز، ثم نوحد المسافات، ثم نضع الشرطة التحتية
     hashtag_raw = (
         clean_title_no_stars.replace("-", " ").replace("(", " ").replace(")", " ")
     )
@@ -376,10 +393,6 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     hashtag_title = re.sub(
         r"\s+", "_", hashtag_title.strip()
     )  # تحويل كل الفراغات لـ _ واحدة
-
-    # 4. التمبلت النهائي (تأكد من استخدام display_type و lang_val المحدثين)
-    # ... (باقي الكود اللي فوق زي ما هو)
-
     # 4. تجميع الهاشتاجات ومنع التكرار
     all_tags = f"#{hashtag_title} {smart_hashtags} {trending_hashtags}"
     unique_hashtags = " ".join(dict.fromkeys(all_tags.split()))
