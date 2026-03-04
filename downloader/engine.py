@@ -373,60 +373,68 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
 
 
 def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة أصلية"):
-    """
-    هذه الدالة الآن تأخذ البيانات الخام، تولد قالب الفيسبوك، وترسله لتليجرام
-    """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️ خطأ: مفاتيح تليجرام غير موجودة")
         return
 
-    # 1. توليد التاريخ الحالي بشكل جميل
     human_date = datetime.now().strftime("%Y-%m-%d")
-
-    # 2. استدعاء توليد القالب (البوست اللي هتاخده كوبي للفيس)
     facebook_post = generate_facebook_template(
         row, human_date, content_type, action_text, lang_val
     )
 
-    # 3. تجهيز بيانات الإرسال
-    photo_url = row.get("poster") or row.get("poster_url")
-    # استبدله بهذا (استخدام بروكسي وسيط يفك حظر البيئات السحابية):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    # محاولة جلب الرابط من كافة المفاتيح المحتملة
+    photo_url = row.get("poster_url") or row.get("poster") or row.get("image")
 
-    # تأمين طول النص (تليجرام بحد أقصى 1024 حرف للصور)
+    # تأمين النص (1024 للصورة، 4000 للنص العادي)
+    limit = 1024 if photo_url else 4000
     safe_caption = (
-        facebook_post if len(facebook_post) < 1024 else facebook_post[:1000] + "..."
+        facebook_post
+        if len(facebook_post) < limit
+        else facebook_post[: limit - 50] + "..."
     )
 
-    # صمام أمان: التأكد أن post_url رابط حقيقي وليس نص عربي
     final_url = (
-        post_url if str(post_url).startswith("http") else "https://egy-pyramid-drama.blogspot.com/"
+        post_url
+        if str(post_url).startswith("http")
+        else "https://egy-pyramid-drama.blogspot.com/"
     )
 
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "photo": photo_url,
-        "caption": safe_caption,
-        "reply_markup": json.dumps(
-            {
-                "inline_keyboard": [
-                    [{"text": "🍿 مشاهدة الآن (المقال الرسمي)", "url": final_url}]
-                ]
-            }
-        ),
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "🍿 مشاهدة الآن (المقال الرسمي)", "url": final_url}]
+        ]
     }
 
+    # التبديل التلقائي بين إرسال صورة أو نص
+    if photo_url and str(photo_url).startswith("http"):
+        method = "sendPhoto"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "photo": photo_url,
+            "caption": safe_caption,
+            "reply_markup": json.dumps(keyboard),
+        }
+    else:
+        print("⚠️ لم يتم العثور على بوستر، سيتم الإرسال كنص فقط.")
+        method = "sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": safe_caption,
+            "reply_markup": json.dumps(keyboard),
+        }
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
+
     try:
-        # إضافة إمكانية إعادة المحاولة لو حصل DNS Error زي اللي ظهر في الـ Log
         response = requests.post(url, json=payload, timeout=20)
         if response.status_code == 200:
-            print(f"✈️ تم إرسال 'بوست الفيسبوك' إلى تليجرام بنجاح!")
+            print(f"✈️ تم إرسال التحديث إلى تليجرام بنجاح!")
             return True
         else:
-            print(f"⚠️ تليجرام رفض: {response.text}")
+            print(f"⚠️ تليجرام رفض ({method}): {response.text}")
             return False
     except Exception as e:
-        print(f"⚠️ فشل إرسال بوست الفيسبوك لتليجرام: {e}")
+        print(f"⚠️ فشل إرسال التحديث: {e}")
         return False
 
 
