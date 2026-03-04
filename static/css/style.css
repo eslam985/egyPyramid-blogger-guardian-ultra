@@ -367,7 +367,7 @@ button {
     font-weight: 500;
 }
 
-select-filter {
+.select-filter {
     background-color: var(--color-surface);
     color: var(--color-text);
     padding: 0.5rem 1.2rem;
