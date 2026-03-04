@@ -807,54 +807,28 @@ async def upload_to_mixdrop(file_path, email, key):
 
 
 def get_clean_media_data(raw_name):
-    # دعم الأرقام العربية والإنجليزية (0-9 و ٠-٩)
-    num_pattern = r"[\d\u0660-\u0669]+"
+    # 1. البحث عن النمط الأجنبي (S01E05) أو العربي المختصر (ح 5)
+    # أضفنا [ح] للبحث عن حرف ح يليه رقم
+    pattern = re.search(r"(?:[sS](\d+)[eE]|[ح]\s*)(\d+)", raw_name)
 
-    # 1. محاولة صيد رقم الحلقة أولاً (الأولوية القصوى)
-    # يبحث عن: الحلقة 15، حلقة 15، ح 15، E15، ح15
-    ep_match = re.search(r"(?:الحلقة|حلقة|[حE])\s*(" + num_pattern + ")", raw_name)
+    # 2. البحث عن النمط العربي الطويل (الحلقة 5)
+    arabic_pattern = re.search(r"(?:الحلقة|حلقة)\s*(\d+)", raw_name)
 
-    # 2. محاولة صيد رقم الموسم (لو وجد)
-    # يبحث عن: الموسم 6، موسم 6، S06، M6
-    sea_match = re.search(r"(?:الموسم|موسم|[sS])\s*(" + num_pattern + ")", raw_name)
-
-    # تحويل الأرقام العربية إلى إنجليزية لو وجدت
-    def clean_num(n):
-        if not n:
-            return 1
-        arabic_digits = "٠١٢٣٤٥٦٧٨٩"
-        english_digits = "0123456789"
-        translation_table = str.maketrans(arabic_digits, english_digits)
-        return int(str(n).translate(translation_table))
-
-    ep_no = clean_num(ep_match.group(1)) if ep_match else 1
-
-    # تحديد التصنيف
-    is_tv = any(
-        word in raw_name
-        for word in [
-            "مسلسل",
-            "موسم",
-            "الموسم",
-            "الحلقة",
-            "حلقة",
-            " S",
-            " E",
-            " s",
-            " e",
-        ]
-    )
-    category = "tv" if is_tv else "movie"
-
-    # 3. تنظيف الاسم (الخدعة هنا: نمسح رقم الحلقة فقط ونترك اسم المسلسل والموسم)
-    # ده بيضمن إن "المداح الموسم السادس" يفضل اسمه كده وما يختلطش بـ "المداح الموسم الخامس"
-    clean_title = raw_name
-    # مسح جزء الحلقة وما بعدها
-    clean_title = re.sub(
-        r"[-–]?\s*(?:الحلقة|حلقة|[حE])\s*" + num_pattern + ".*", "", clean_title
-    )
-    # مسح كلمة "مسلسل" من البداية لتوحيد الأسماء
-    clean_title = re.sub(r"^مسلسل\s+", "", clean_title).strip()
+    if pattern:
+        category = "tv"
+        ep_no = int(pattern.group(2))
+        # تنظيف الاسم من النمط المكتشف
+        clean_title = re.sub(r"(?:[sS]\d+[eE]|[ح]\s*)\d+.*", "", raw_name).strip()
+    elif arabic_pattern or any(word in raw_name for word in ["مسلسل", "موسم"]):
+        category = "tv"
+        ep_no = int(arabic_pattern.group(1)) if arabic_pattern else 1
+        clean_title = re.sub(
+            r"[-–]?\s*(?:الحلقة|حلقة|الموسم|موسم)\s*\d+.*", "", raw_name
+        ).strip()
+    else:
+        category = "movie"
+        ep_no = 1
+        clean_title = raw_name.strip()
 
     return clean_title, category, ep_no
 
