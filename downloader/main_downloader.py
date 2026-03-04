@@ -159,24 +159,54 @@ def save_to_supabase(
                     raise e  # لو فشل تماماً بعد 3 مرات يرمي الخطأ للـ Except الكبيرة
         # --- نهاية الجزء المحصن ---
 
-        # 1. بناء القائمة أولاً
+        # --- [تعديل جوهري]: إنشاء أو تحديث الحلقة (Episode) قبل الروابط ---
+        actual_ep_no = actual_ep_no if actual_ep_no else 1
+        episode_payload = {
+            "media_id": m_id,
+            "episode_number": actual_ep_no,
+            "identifier": identifier,
+            "status_message": "Waiting...",
+            "progress_percent": 0,
+        }
+
+        # البحث عن الحلقة لإنشائها أو تحديث الـ identifier الخاص بها
+        existing_ep = (
+            supabase.table("episodes")
+            .select("id")
+            .eq("media_id", m_id)
+            .eq("episode_number", actual_ep_no)
+            .execute()
+        )
+
+        if existing_ep.data:
+            e_id = existing_ep.data[0]["id"]
+            supabase.table("episodes").update({"identifier": identifier}).eq(
+                "id", e_id
+            ).execute()
+        else:
+            new_ep = supabase.table("episodes").insert(episode_payload).execute()
+            if new_ep.data:
+                e_id = new_ep.data[0]["id"]
+
+        # 1. بناء القائمة الآن بعد التأكد من وجود e_id
         link_entries = []
-        if current_voe and current_voe != "Failed":
-            link_entries.append(
-                {"episode_id": e_id, "server_name": "voe", "url": current_voe}
-            )
-        if current_vk and current_vk != "Failed" and current_vk != "Pending":
-            link_entries.append(
-                {"episode_id": e_id, "server_name": "vk", "url": current_vk}
-            )
-        if archive_url and "Failed" not in archive_url:
-            link_entries.append(
-                {"episode_id": e_id, "server_name": "archive", "url": archive_url}
-            )
-        if current_down and current_down != "Failed":
-            link_entries.append(
-                {"episode_id": e_id, "server_name": "download", "url": current_down}
-            )
+        if e_id:  # تأكد أن الـ ID موجود
+            if current_voe and current_voe not in ["Failed", "Pending"]:
+                link_entries.append(
+                    {"episode_id": e_id, "server_name": "voe", "url": current_voe}
+                )
+            if current_vk and current_vk not in ["Failed", "Pending"]:
+                link_entries.append(
+                    {"episode_id": e_id, "server_name": "vk", "url": current_vk}
+                )
+            if archive_url and "Failed" not in archive_url and archive_url != "Pending":
+                link_entries.append(
+                    {"episode_id": e_id, "server_name": "archive", "url": archive_url}
+                )
+            if current_down and current_down != "Failed":
+                link_entries.append(
+                    {"episode_id": e_id, "server_name": "download", "url": current_down}
+                )
 
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط (تنفيذ الـ upsert لكل رابط في القائمة)
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط مع آلية إعادة المحاولة (Retry)
@@ -197,12 +227,7 @@ def save_to_supabase(
                         print(
                             f"❌ فشل تسجيل رابط {entry['server_name']} بعد 3 محاولات: {link_err}"
                         )
-
-        # ابحث عن السطر القديم واستبدله بهذا في ملف المحرك
-        print(
-            f"🚀 [Supabase]: تم مزامنة البيانات بنجاح | الرمز الفريد: {identifier} | العنوان: {display_title}"
-        )
-        return e_id  # أضف هذا السطر لكي نحصل على الرقم التعريفي
+        return e_id
     except Exception as e:
         print(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
         return None
@@ -776,11 +801,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             try:
                 row_data = {
-                    "title": display_title,
-                    "story": meta_story,
-                    "poster_url": final_poster,
-                    "labels": meta_labels,
+                    "title": display_title or "عنوان غير معروف",
+                    "story": (
+                        meta_story if meta_story else "لا يوجد وصف متاح حالياً."
+                    ),  # حماية من الـ None
+                    "poster_url": final_poster or "",
+                    "labels": meta_labels or "عام",
                 }
+                # تأكد أن الدالة لا تحاول عمل len() على قيمة None بالداخل
 
                 # التعديل: جعل الإرسال يرجع نتيجة حقيقية
                 # التعديل: إرسال رابط حقيقي بدلاً من النص العربي لتجنب رفض تليجرام

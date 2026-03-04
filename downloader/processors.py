@@ -424,45 +424,50 @@ def upload_to_vk_local(title, file_path):
             print(f"DEBUG: VK File Upload Response Text: {response.text}")
 
             if response.status_code == 200:
-                print(f"✅ VK Upload Success. Fetching Secure Embed Link...")
+                print(
+                    f"✅ VK Upload Success. Fetching Secure Embed Link (Retry Loop)..."
+                )
 
-                # ننتظر 20 ثوانٍ لضمان أن السيرفر قام بتسجيل الفيديو في قاعدة بياناته
-                time.sleep(20)
+                # محاولة جلب الرابط 3 مرات بفاصل 15 ثانية بين كل محاولة
+                for attempt in range(3):
+                    time.sleep(15)
+                    get_api_url = "https://api.vk.com/method/video.get"
+                    get_params = {
+                        "videos": f"{owner_id}_{video_id}",
+                        "access_token": VK_ACCESS_TOKEN,
+                        "v": "5.131",
+                    }
 
-                # استدعاء ميثود video.get للحصول على رابط الـ player (الإيفريم)
-                get_api_url = "https://api.vk.com/method/video.get"
-                get_params = {
-                    "videos": f"{owner_id}_{video_id}",
-                    "access_token": VK_ACCESS_TOKEN,
-                    "v": "5.131",
-                }
+                    try:
+                        res_get = requests.get(get_api_url, params=get_params).json()
+                        if "response" in res_get and res_get["response"].get("items"):
+                            video_data = res_get["response"]["items"][0]
+                            embed_url = video_data.get("player")
 
-                try:
-                    res_get = requests.get(get_api_url, params=get_params).json()
-                    if "response" in res_get and res_get["response"]["items"]:
-                        video_data = res_get["response"]["items"][0]
-                        # هذا هو الرابط الذي طلبه الدوكومنتيشن (video_ext.php)
-                        embed_url = video_data.get("player")
+                            if embed_url:
+                                embed_url = embed_url.replace("vk.com", "vkvideo.ru")
+                                connector = "&" if "?" in embed_url else "?"
+                                embed_url += f"{connector}hd=2&autoplay=0"
 
-                        if embed_url:
-                            # --- التعديل الجوهري هنا ---
-                            # 1. تحويل الدومين لضمان العمل بدون تسجيل دخول
-                            embed_url = embed_url.replace("vk.com", "vkvideo.ru")
+                                print(f"✅ VK Embed Captured & Fixed: {embed_url}")
+                                return embed_url
 
-                            # 2. إضافة بارامترات الجودة ومنع التعليق
-                            if "?" in embed_url:
-                                embed_url += "&hd=2&autoplay=0"
-                            else:
-                                embed_url += "?hd=2&autoplay=0"
+                        print(
+                            f"⚠️ محاولة {attempt+1}: الفيديو قيد المعالجة، إعادة المحاولة..."
+                        )
+                    except Exception as e:
+                        print(f"⚠️ خطأ في المحاولة {attempt+1}: {e}")
 
-                            print(f"✅ VK Embed Captured & Fixed: {embed_url}")
-                            return embed_url
-                except Exception as e:
-                    print(f"⚠️ فشل استخراج رابط الإيفريم، العودة للرابط العادي: {e}")
-
-                # رابط احتياطي في حال فشل استخراج الـ Embed
-                fallback_url = f"https://vk.com/video{owner_id}_{video_id}"
+                # بناء رابط Embed يدوي في حال فشل الـ API في إرجاع player
+                access_key = res_save["response"].get("access_key", "")
+                fallback_url = f"https://vkvideo.ru/video_ext.php?oid={owner_id}&id={video_id}&hash={access_key}&hd=2"
+                print(
+                    f"⚠️ فشل استخراج Embed بعد 3 محاولات، تم بناء رابط احتياطي: {fallback_url}"
+                )
                 return fallback_url
+            else:
+                print(f"❌ فشل رفع ملف VK: Status {response.status_code}")
+                return None
     except Exception as e:
         print(f"⚠️ فشل VK المحلي: {e}")
         return None
@@ -802,28 +807,54 @@ async def upload_to_mixdrop(file_path, email, key):
 
 
 def get_clean_media_data(raw_name):
-    # 1. البحث عن النمط الأجنبي (S01E05) أو العربي المختصر (ح 5)
-    # أضفنا [ح] للبحث عن حرف ح يليه رقم
-    pattern = re.search(r"(?:[sS](\d+)[eE]|[ح]\s*)(\d+)", raw_name)
+    # دعم الأرقام العربية والإنجليزية (0-9 و ٠-٩)
+    num_pattern = r"[\d\u0660-\u0669]+"
 
-    # 2. البحث عن النمط العربي الطويل (الحلقة 5)
-    arabic_pattern = re.search(r"(?:الحلقة|حلقة)\s*(\d+)", raw_name)
+    # 1. محاولة صيد رقم الحلقة أولاً (الأولوية القصوى)
+    # يبحث عن: الحلقة 15، حلقة 15، ح 15، E15، ح15
+    ep_match = re.search(r"(?:الحلقة|حلقة|[حE])\s*(" + num_pattern + ")", raw_name)
 
-    if pattern:
-        category = "tv"
-        ep_no = int(pattern.group(2))
-        # تنظيف الاسم من النمط المكتشف
-        clean_title = re.sub(r"(?:[sS]\d+[eE]|[ح]\s*)\d+.*", "", raw_name).strip()
-    elif arabic_pattern or any(word in raw_name for word in ["مسلسل", "موسم"]):
-        category = "tv"
-        ep_no = int(arabic_pattern.group(1)) if arabic_pattern else 1
-        clean_title = re.sub(
-            r"[-–]?\s*(?:الحلقة|حلقة|الموسم|موسم)\s*\d+.*", "", raw_name
-        ).strip()
-    else:
-        category = "movie"
-        ep_no = 1
-        clean_title = raw_name.strip()
+    # 2. محاولة صيد رقم الموسم (لو وجد)
+    # يبحث عن: الموسم 6، موسم 6، S06، M6
+    sea_match = re.search(r"(?:الموسم|موسم|[sS])\s*(" + num_pattern + ")", raw_name)
+
+    # تحويل الأرقام العربية إلى إنجليزية لو وجدت
+    def clean_num(n):
+        if not n:
+            return 1
+        arabic_digits = "٠١٢٣٤٥٦٧٨٩"
+        english_digits = "0123456789"
+        translation_table = str.maketrans(arabic_digits, english_digits)
+        return int(str(n).translate(translation_table))
+
+    ep_no = clean_num(ep_match.group(1)) if ep_match else 1
+
+    # تحديد التصنيف
+    is_tv = any(
+        word in raw_name
+        for word in [
+            "مسلسل",
+            "موسم",
+            "الموسم",
+            "الحلقة",
+            "حلقة",
+            " S",
+            " E",
+            " s",
+            " e",
+        ]
+    )
+    category = "tv" if is_tv else "movie"
+
+    # 3. تنظيف الاسم (الخدعة هنا: نمسح رقم الحلقة فقط ونترك اسم المسلسل والموسم)
+    # ده بيضمن إن "المداح الموسم السادس" يفضل اسمه كده وما يختلطش بـ "المداح الموسم الخامس"
+    clean_title = raw_name
+    # مسح جزء الحلقة وما بعدها
+    clean_title = re.sub(
+        r"[-–]?\s*(?:الحلقة|حلقة|[حE])\s*" + num_pattern + ".*", "", clean_title
+    )
+    # مسح كلمة "مسلسل" من البداية لتوحيد الأسماء
+    clean_title = re.sub(r"^مسلسل\s+", "", clean_title).strip()
 
     return clean_title, category, ep_no
 
