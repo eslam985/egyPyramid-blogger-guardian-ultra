@@ -228,7 +228,7 @@ window.addNewEpisodeRow = async function () {
         const response = await fetch(`/api/media/${mediaId}/add-episode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `episode_number=${epNum}`
+            body: `episode_number=${epNum}&identifier=m${mediaId}_ep${epNum}`
         });
 
         const result = await response.json();
