@@ -48,7 +48,7 @@
           <a href="/?status=published" class="btn-filter {{ 'active' if current_status == 'published' }}">✅ منشور</a>
           <a href="/?status=not_published" class="btn-filter {{ 'active' if current_status == 'not_published' }}">⏳ غير
             منشور</a>
-          <select onchange="location.href='/?cat='+this.value">
+          <select class="select-filter" onchange="location.href='/?cat='+this.value">
             <option value="">كل الأنواع</option>
             <option value="tv" {{ 'selected' if current_cat=='tv' }}>مسلسلات</option>
             <option value="movie" {{ 'selected' if current_cat=='movie' }}>أفلام</option>
