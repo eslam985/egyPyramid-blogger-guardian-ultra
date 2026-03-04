@@ -122,15 +122,17 @@ def save_to_supabase(
                 m_id = None
 
                 # محاولة البحث بالاسم النظيف
+                # بدلاً من select("id")
                 query = (
-                    supabase.table("medias").select("id").eq("title", c_title).execute()
+                    supabase.table("medias").select("*").eq("title", c_title).execute()
                 )
 
                 if not query.data and tmdb_id:
                     # لو منفعش بالاسم ومعانا ID، نجرب بالـ ID
+                    # بدلاً من select("id")
                     query = (
                         supabase.table("medias")
-                        .select("id")
+                        .select("*")
                         .eq("tmdb_id", str(tmdb_id))
                         .execute()
                     )
