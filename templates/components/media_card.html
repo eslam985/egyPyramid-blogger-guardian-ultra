@@ -1,6 +1,6 @@
 <div class="media-card" id="media-{{ media.id }}">
   <div class="card-image">
-    <img src="{{ media.poster_url }}" alt="{{ media.title }}">
+    <img src="{{ media.poster_url if media.poster_url else '/static/css/placeholder.jpg' }}" alt="{{ media.title }}">
     <span class="category-badge">{{ 'مسلسل' if media.category == 'tv' else 'فيلم' }}</span>
   </div>
   <div class="card-content">
@@ -16,11 +16,17 @@
     </div>
     <div class="card-actions">
       <button onclick="editMedia('{{ media.id }}')" class="btn-edit"><i class="fa fa-edit"></i></button>
+      {% if media.blogger_post_id and media.blogger_post_id != 'None' %}
       <button onclick="toggleBlogger('{{ media.blogger_post_id }}', event)"
         class="btn-blogger {{ 'is-live' if media.blogger_status == 'published' else 'is-draft' }}"
         id="btn-{{ media.blogger_post_id }}">
         <i class="fab fa-blogger"></i>
       </button>
+      {% else %}
+      <button class="btn-blogger is-draft" style="opacity: 0.5; cursor: not-allowed;" title="لا يوجد مقال مرتب">
+        <i class="fab fa-blogger"></i>
+      </button>
+      {% endif %}
       <button onclick="deleteMedia('{{ media.id }}')" class="btn-delete"><i class="fa fa-trash"></i></button>
     </div>
   </div>
