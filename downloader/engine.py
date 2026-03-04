@@ -308,7 +308,7 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
         completion = client_groq.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.6,  # خفض الـ temperature لـ 0.6 يضمن دقة لغوية أعلى
+            temperature=0.7,  # خفض الـ temperature لـ 0.6 يضمن دقة لغوية أعلى
             max_tokens=40,
         )
 
@@ -338,11 +338,6 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
         if l.strip()
     ]
     smart_hashtags = " ".join([f"#{tag}" for tag in labels_list[:3]])
-
-    # 3. الهاشتاجات الثابتة
-    trending_hashtags = f"#سينما #افلام_جديدة #EgyPyramid"
-    # -----------------------------------
-
     # 1. ذكاء تحديد النوع (فيلم أم مسلسل) ... يكمل باقي الكود كما هو
     # 1. ذكاء تحديد النوع (فيلم أم مسلسل)
     all_text_to_check = (raw_title + " " + str(row.get("labels", ""))).lower()
@@ -358,6 +353,13 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
 
     type_label = "🎞️ فيلم" if is_movie else "🌟 مسلسل"
     display_type = "أفلام" if is_movie else "مسلسلات"
+    # 3. الهاشتاجات الثابتة
+    # التعديل: اختيار الهاشتاجات الرائجة بناءً على نوع العمل
+    if is_movie:
+        trending_hashtags = "#سينما #افلام_جديدة #EgyPyramid"
+    else:
+        trending_hashtags = "#دراما #دراما_2026 #EgyPyramid"
+    # -----------------------------------
 
     # 2. ذكاء تحديد اللغة
     if "مدبلج" in all_text_to_check:
@@ -376,6 +378,13 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     )  # تحويل كل الفراغات لـ _ واحدة
 
     # 4. التمبلت النهائي (تأكد من استخدام display_type و lang_val المحدثين)
+    # ... (باقي الكود اللي فوق زي ما هو)
+
+    # 4. تجميع الهاشتاجات ومنع التكرار
+    all_tags = f"#{hashtag_title} {smart_hashtags} {trending_hashtags}"
+    unique_hashtags = " ".join(dict.fromkeys(all_tags.split()))
+
+    # 5. التمبلت النهائي المحدث
     final_output = f"""
 🎬 {hook_text} 🎬
 
@@ -393,9 +402,9 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
 
 🍿 رابط {action_text} المباشر تجدونه في أول تعليق! 👇
 ---
-#{hashtag_title} {smart_hashtags} {trending_hashtags}
+{unique_hashtags}
     """
-    print(f"📢 [Hook Generated]: {hook_text}")  # عشان تتابع الـ AI طلع إيه
+    print(f"📢 [Hook Generated]: {hook_text}")
     return final_output
 
 
