@@ -59,7 +59,7 @@ def save_to_supabase(
     display_title,
     original_task_name,
     meta_story,
-    raw_poster,
+    final_poster,  # أضفهم هنا كمعاملات عادية
     meta_year,
     meta_rating,
     identifier,
@@ -71,20 +71,21 @@ def save_to_supabase(
     duration_iso=None,
 ):
     try:
-        # نستخدم الاسم النظيف المجلوب من API (display_title) لضمان عدم تسجيل روابط
+
+        # نستخدم الاسم النظيف
         c_title, c_cat, actual_ep_no = get_clean_media_data(display_title)
 
         media_payload = {
             "tmdb_id": str(tmdb_id) if tmdb_id else None,
             "title": c_title,
             "story": meta_story,
-            "poster_url": raw_poster,
+            "poster_url": final_poster,  # استخدم المتغير الخارجي مباشرة
             "category": c_cat,
             "year": str(meta_year),
             "rating": str(meta_rating),
-            "labels": labels,  # العمود الجديد
-            "runtime": runtime,  # العمود الجديد
-            "duration_iso": duration_iso,  # العمود الجديد (الوحش)
+            "labels": labels,
+            "runtime": runtime,
+            "duration_iso": duration_iso,
         }
         # تنظيف ذكي: يحذف القيمة لو كانت None أو نص بيدل على الفشل أو رابط Placeholder
         useless_values = [
@@ -135,10 +136,20 @@ def save_to_supabase(
                     )
 
                 if query.data:
-                    # ✅ وجدناه! خذ الـ ID واهرب.. ملمسش أي بيانات تانية
+                    # ✅ وجدناه! خذ الـ ID
                     m_id = query.data[0]["id"]
+
+                    # --- التعديل: قراءة البيانات "لحساب" المتغيرات وليس للتعديل ---
+                    # بنسحب القصة والبوستر من سوبابيز عشان نستخدمهم في تليجرام صح
+                    existing_data = query.data[0]
+
+                    if existing_data.get("story"):
+                        meta_story = existing_data["story"]
+                    if existing_data.get("poster_url"):
+                        final_poster = existing_data["poster_url"]
+
                     print(
-                        f"🛡️ [حماية]: تم العثور على '{c_title}' (ID: {m_id})، لن يتم لمس البيانات القديمة."
+                        f"🛡️ [حماية]: تم العثور على '{c_title}' (ID: {m_id})، تم سحب البيانات للأرشفة دون تعديل."
                     )
                 else:
                     # ✨ مش موجود خالص؟ إذن أنشئه "مرة واحدة فقط"
@@ -227,10 +238,10 @@ def save_to_supabase(
                         print(
                             f"❌ فشل تسجيل رابط {entry['server_name']} بعد 3 محاولات: {link_err}"
                         )
-        return e_id
+        return e_id, meta_story, final_poster
     except Exception as e:
         print(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
-        return None
+        return None, meta_story, final_poster
 
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
@@ -353,7 +364,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # استدعاء الحفظ الأولي للحصول على e_id
     # استدعاء الحفظ الأولي للحصول على e_id
-    e_id = save_to_supabase(
+    # التعديل: استلام 3 قيم بدلاً من واحدة
+    e_id, meta_story, final_poster = save_to_supabase(
         None,
         None,
         "Pending",
@@ -365,10 +377,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_rating,
         temp_id,
         "Pending",
-        tmdb_id=tmdb_id_fetched,  # إرسال ID
-        labels=meta_labels,  # إرسال التصنيفات
-        runtime=meta_runtime,  # إرسال مدة العرض
-        duration_iso=meta_duration,  # إرسال ISO
+        tmdb_id=tmdb_id_fetched,
+        labels=meta_labels,
+        runtime=meta_runtime,
+        duration_iso=meta_duration,
     )
 
     if not e_id:
@@ -732,7 +744,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     print(f"✅ LuluStream Saved!")
 
             try:
-                save_to_supabase(
+                # التعديل: استلام 3 قيم لضمان تحديث الذاكرة بالقصة والبوستر من سوبابيز
+                e_id, meta_story, final_poster = save_to_supabase(
                     voe_watch,
                     voe_down,
                     "Pending",
@@ -776,7 +789,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             # --- التحديث النهائي الشامل لجدول الحلقات (خارج الـ try الخاص بـ دود ستريم) ---
             try:
-                save_to_supabase(
+                # التعديل: التحديث النهائي لآخر مرة قبل تليجرام
+                e_id, meta_story, final_poster = save_to_supabase(
                     voe_watch,
                     voe_down,
                     vk_url,
@@ -788,10 +802,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     meta_rating,
                     identifier,
                     archive_url,
-                    tmdb_id=tmdb_id_fetched,  # أضف هذا
-                    labels=meta_labels,  # أضف هذا
-                    runtime=meta_runtime,  # أضف هذا
-                    duration_iso=meta_duration,  # أضف هذا
+                    tmdb_id=tmdb_id_fetched,
+                    labels=meta_labels,
+                    runtime=meta_runtime,
+                    duration_iso=meta_duration,
                 )
             except Exception as e:
                 print(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
