@@ -768,23 +768,33 @@ async def upload_to_lulustream(key, identifier, file_name):
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
                 if file_code:
-                    # --- التعديل الجوهري المضمون ---
+                    # --- 1. الانتظار الإجباري (أهم خطوة) ---
+                    print(
+                        f"⏳ LuluStream: جاري الانتظار 20 ثوانٍ لاستقرار الملف في السيرفر..."
+                    )
+                    await asyncio.sleep(20)
+
+                    # --- 2. محاولة التعديل بنظام الـ Params الآمن ---
                     edit_api = "https://lulustream.com/api/file/edit"
                     params = {
                         "key": key,
                         "file_code": file_code,
-                        "file_title": file_name  # نرسل الاسم كما هو والمكتبة ستشفره صح
+                        "file_title": file_name,
                     }
 
                     try:
+                        # تأكيد الإرسال بدون quote يدوي (httpx هيقوم بالواجب)
                         edit_res = await client.get(edit_api, params=params)
                         edit_data = edit_res.json()
-                        if edit_data.get("status") == 200 or edit_data.get("result") == "true":
-                            print(f"✅ LuluStream: تم تحديث الاسم للعربية: {file_name}")
+
+                        if edit_data.get("status") == 200:
+                            print(f"✅ LuluStream: تم تأكيد التعديل من السيرفر بنجاح.")
                         else:
-                            print(f"⚠️ LuluStream: السيرفر رفض التسمية: {edit_data.get('msg')}")
+                            print(
+                                f"⚠️ LuluStream: السيرفر استلم الطلب ورفضه: {edit_data.get('msg')}"
+                            )
                     except Exception as e:
-                        print(f"⚠️ LuluStream: خطأ تقني أثناء التسمية: {e}")
+                        print(f"⚠️ LuluStream: فشل الاتصال بخدمة التعديل: {e}")
 
                     print(f"✅ LuluStream Success! Code: {file_code}")
                     return f"https://lulustream.com/e/{file_code}"
