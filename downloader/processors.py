@@ -768,16 +768,23 @@ async def upload_to_lulustream(key, identifier, file_name):
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
                 if file_code:
-                    # --- التعديل الجوهري: إجبار السيرفر على التسمية العربية ---
-                    safe_title = urllib.parse.quote(file_name)
-                    edit_url = f"https://lulustream.com/api/file/edit?key={key}&file_code={file_code}&file_title={safe_title}"
+                    # --- التعديل الجوهري المضمون ---
+                    edit_api = "https://lulustream.com/api/file/edit"
+                    params = {
+                        "key": key,
+                        "file_code": file_code,
+                        "file_title": file_name  # نرسل الاسم كما هو والمكتبة ستشفره صح
+                    }
 
-                    # إرسال طلب التعديل (Rename) فوراً
                     try:
-                        await client.get(edit_url)
-                        print(f"✅ LuluStream: تم تحديث الاسم للعربية بنجاح.")
-                    except:
-                        print(f"⚠️ LuluStream: فشل تحديث الاسم، سيظهر بالاسم الافتراضي.")
+                        edit_res = await client.get(edit_api, params=params)
+                        edit_data = edit_res.json()
+                        if edit_data.get("status") == 200 or edit_data.get("result") == "true":
+                            print(f"✅ LuluStream: تم تحديث الاسم للعربية: {file_name}")
+                        else:
+                            print(f"⚠️ LuluStream: السيرفر رفض التسمية: {edit_data.get('msg')}")
+                    except Exception as e:
+                        print(f"⚠️ LuluStream: خطأ تقني أثناء التسمية: {e}")
 
                     print(f"✅ LuluStream Success! Code: {file_code}")
                     return f"https://lulustream.com/e/{file_code}"
