@@ -768,33 +768,28 @@ async def upload_to_lulustream(key, identifier, file_name):
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
                 if file_code:
-                    # --- 1. الانتظار الإجباري (أهم خطوة) ---
-                    print(
-                        f"⏳ LuluStream: جاري الانتظار 20 ثوانٍ لاستقرار الملف في السيرفر..."
-                    )
-                    await asyncio.sleep(20)
+                    # --- الاستراتيجية الجديدة: التعديل بعد التأكد من الحالة ---
+                    print(f"⏳ LuluStream: تم بدء السحب. سأحاول التسمية بعد قليل...")
 
-                    # --- 2. محاولة التعديل بنظام الـ Params الآمن ---
-                    edit_api = "https://lulustream.com/api/file/edit"
-                    params = {
-                        "key": key,
-                        "file_code": file_code,
-                        "file_title": file_name,
-                    }
+                    # سنقوم بمحاولة التعديل، ثم نترك المهمة لسكريبت التصحيح الدوري
+                    # أو ننتظر هنا بشكل غير معطل (Background Task)
 
-                    try:
-                        # تأكيد الإرسال بدون quote يدوي (httpx هيقوم بالواجب)
-                        edit_res = await client.get(edit_api, params=params)
-                        edit_data = edit_res.json()
-
-                        if edit_data.get("status") == 200:
-                            print(f"✅ LuluStream: تم تأكيد التعديل من السيرفر بنجاح.")
-                        else:
+                    async def delayed_rename(code, title):
+                        # ننتظر دقيقة كاملة لضمان استلام السيرفر للملف
+                        await asyncio.sleep(120)
+                        edit_api = "https://lulustream.com/api/file/edit"
+                        params = {"key": key, "file_code": code, "file_title": title}
+                        try:
+                            async with httpx.AsyncClient() as c:
+                                await c.get(edit_api, params=params)
                             print(
-                                f"⚠️ LuluStream: السيرفر استلم الطلب ورفضه: {edit_data.get('msg')}"
+                                f"✅ LuluStream: تم إرسال التسمية المتأخرة للملف {code}"
                             )
-                    except Exception as e:
-                        print(f"⚠️ LuluStream: فشل الاتصال بخدمة التعديل: {e}")
+                        except:
+                            pass
+
+                    # تشغيل التسمية في الخلفية حتى لا نعطل بقية السكريبت
+                    asyncio.create_task(delayed_rename(file_code, file_name))
 
                     print(f"✅ LuluStream Success! Code: {file_code}")
                     return f"https://lulustream.com/e/{file_code}"
