@@ -574,9 +574,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         data = None
         for domain in api_domains:
             try:
-                add_url = (
-                    f"https://{domain}/api/upload/url?key={api_key}&url={remote_url}"
-                )
+                # نقوم بعمل encode للاسم لضمان وصوله للسيرفر بالحروف العربية
+                safe_title = urllib.parse.quote(file_name)
+                add_url = f"https://{domain}/api/upload/url?key={api_key}&url={remote_url}&new_title={safe_title}"
                 response = await client.get(add_url)
                 data = response.json()
                 if data.get("msg") == "OK":
@@ -641,12 +641,14 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                     l_res = await client.get(list_url)
                     files = l_res.json().get("result", {}).get("files", [])
                     # داخل دالة دود ستريم (جزء البحث بالاسم)
-                    search_term = file_name.lower().split(".")[
-                        0
-                    ]  # نأخذ الاسم بدون الامتداد فقط
+                    # البحث بالاسم العربي كما هو مسجل في السيرفر
+                    search_term = file_name.split(".")[0].strip()
                     for f in files:
-                        if search_term in f.get("title", "").lower():
-                            print(f"✅ DoodStream Found by Original Name Match!")
+                        server_title = f.get("title", "")
+                        if search_term in server_title:
+                            print(
+                                f"✅ DoodStream Found by Precise Arabic Name Match: {server_title}"
+                            )
                             return f"https://myvidplay.com/e/{f.get('file_code')}"
                 except:
                     pass
@@ -766,6 +768,17 @@ async def upload_to_lulustream(key, identifier, file_name):
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
                 if file_code:
+                    # --- التعديل الجوهري: إجبار السيرفر على التسمية العربية ---
+                    safe_title = urllib.parse.quote(file_name)
+                    edit_url = f"https://lulustream.com/api/file/edit?key={key}&file_code={file_code}&file_title={safe_title}"
+
+                    # إرسال طلب التعديل (Rename) فوراً
+                    try:
+                        await client.get(edit_url)
+                        print(f"✅ LuluStream: تم تحديث الاسم للعربية بنجاح.")
+                    except:
+                        print(f"⚠️ LuluStream: فشل تحديث الاسم، سيظهر بالاسم الافتراضي.")
+
                     print(f"✅ LuluStream Success! Code: {file_code}")
                     return f"https://lulustream.com/e/{file_code}"
 
