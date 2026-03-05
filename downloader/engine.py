@@ -183,13 +183,15 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     # 2. جلب كود الجلسة (String Session)
     tele_string = os.getenv("TELEGRAM_STRING_SESSION")
 
-    # محاولة الجلب من نظام Secrets الخاص بكولاب إذا فشل os.getenv
     if not tele_string:
         try:
             from google.colab import userdata
 
             tele_string = userdata.get("TELEGRAM_STRING_SESSION")
-        except (ImportError, Exception):
+            # حجر الزاوية: حقن المتغير في النظام لضمان استمراره
+            if tele_string:
+                os.environ["TELEGRAM_STRING_SESSION"] = tele_string
+        except Exception:
             pass
 
     if not tele_string:
