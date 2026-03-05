@@ -291,7 +291,7 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     )
     story = row.get("story", "")
     # التعديل الاختياري: لجعل القصة في المنشور تنتهي بكلمة كاملة أيضاً
-    short_story = story[:150].rsplit(" ", 1)[0] + "..." if len(story) > 150 else story
+    short_story = story[:160].rsplit(" ", 1)[0] + "..." if len(story) > 160 else story
 
     # --- الجزء الذكي: توليد "Hook" مشوق بواسطة الذكاء الاصطناعي ---
     hook_text = f"استمتع بمشاهدة {clean_title} بجودة عالية."  # نص احتياطي
