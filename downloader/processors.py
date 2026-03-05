@@ -676,9 +676,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
                 target = clean_it(file_name.split(".")[0])
 
-                for i in range(1, 101):
+                for i in range(1, 21):
                     await asyncio.sleep(20)
-                    print(f"🔄 Streamtape Polling Attempt {i}/100...")
+                    print(f"🔄 Streamtape Polling Attempt {i}/20...")
 
                     # 1. الفحص المباشر عبر الـ ID (الأولوية القصوى حسب الديكومنتيشن)
                     try:
