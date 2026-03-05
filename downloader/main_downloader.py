@@ -47,9 +47,12 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-ARCHIVE_ACCESS_KEY = "ufnS9MloPsaLYXSl"
-ARCHIVE_SECRET_KEY = "euu3u0Lm0bcMFyYB"
-lu_key = "244676va68ovreoinx1k42"
+
+# استدعاء المفاتيح من البيئة بدلاً من كتابتها يدوياً
+ARCHIVE_ACCESS_KEY = os.getenv("ARCHIVE_ACCESS_KEY")
+ARCHIVE_SECRET_KEY = os.getenv("ARCHIVE_SECRET_KEY")
+lu_key = os.getenv("LULUSTREAM_API_KEY")
+lu_key = os.getenv("LULUSTREAM_API_KEY")
 
 
 def save_to_supabase(
