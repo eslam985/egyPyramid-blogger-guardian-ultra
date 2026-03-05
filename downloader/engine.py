@@ -305,12 +305,12 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
         2. ابدأ مباشرة بالحدث المثير  من القصة.
         3. استخدم عامية مصرية بسيطة ومثيرة.
         4. إيموجي في نهاية الجملة معبره عن القصة.
-        5. لا تزد عن 15 كلمة."""
+        5. لا تزد عن 30 كلمة."""
 
         completion = client_groq.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,  # خفض الـ temperature لـ 0.6 يضمن دقة لغوية أعلى
+            temperature=0.8,  # خفض الـ temperature لـ 0.6 يضمن دقة لغوية أعلى
             max_tokens=40,
         )
 
