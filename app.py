@@ -586,16 +586,14 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
 # 8. المسار الأخير لتقديم Vue (الفول باك)
 # تعديل مسار الـ Vue App
 # 8. المسار الأخير لتقديم Vue (الفول باك)
+# المسار الصحيح بناءً على vite.config.js الخاص بك
+file_path = os.path.join(BASE_DIR, "static", "dist", "index.html")
+
 @app.get("/{rest_of_path:path}")
 async def serve_vue_app(rest_of_path: str):
-    # لا تقم بفلترة الـ api/ هنا إذا كنت تتأكد من المسار أدناه
-    # المسار الفعلي بعد الـ build في Dockerfile هو /code/dist/index.html
-    file_path = os.path.join(BASE_DIR, "dist", "index.html")
-    
+    # لا تقم بفلترة الـ api/ هنا إذا كنت تريد ضمان الوصول للـ Frontend
     if os.path.exists(file_path):
         return FileResponse(file_path)
-    
-    # رسالة تصحيحية لمعرفة أين يبحث السيرفر بالضبط
     return {"error": f"Frontend build not found at {file_path}"}
 
 
