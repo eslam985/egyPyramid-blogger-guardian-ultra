@@ -67,7 +67,9 @@ if os.path.exists(STATIC_DIR):
 @app.on_event("startup")
 async def startup_event():
     print(f"✅ System Initialized. BASE_DIR: {BASE_DIR}")
-    print(f"📂 Checking for index.html at: {os.path.join(BASE_DIR, 'dist', 'index.html')}")
+    print(
+        f"📂 Checking for index.html at: {os.path.join(BASE_DIR, 'dist', 'index.html')}"
+    )
 
 
 # 7. المسارات (الـ APIs توضع هنا...)
@@ -583,18 +585,22 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
         return {"error": str(e)}
 
 
-# 8. المسار الأخير لتقديم Vue (الفول باك)
-# تعديل مسار الـ Vue App
-# 8. المسار الأخير لتقديم Vue (الفول باك)
-# المسار الصحيح بناءً على vite.config.js الخاص بك
-file_path = os.path.join(BASE_DIR, "static", "dist", "index.html")
+# في app.py
+# نقدم مجلد static/dist عبر المسار /static/dist
+app.mount("/static/dist", StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist")), name="static")
 
 @app.get("/{rest_of_path:path}")
 async def serve_vue_app(rest_of_path: str):
-    # لا تقم بفلترة الـ api/ هنا إذا كنت تريد ضمان الوصول للـ Frontend
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return {"error": f"Frontend build not found at {file_path}"}
+    # تجاهل مسارات الـ API
+    if rest_of_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API route not found")
+        
+    index_path = os.path.join(BASE_DIR, "static", "dist", "index.html")
+    
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+        
+    return {"error": "Frontend build not found"}
 
 
 if __name__ == "__main__":
