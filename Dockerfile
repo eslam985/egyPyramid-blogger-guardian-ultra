@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /code
 
-# التعديل الجوهري: إضافة ffmpeg و unrar و الأداة file للكشف عن نوع الملفات
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
@@ -13,13 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PYTHONUNBUFFERED=1
 
-COPY ./requirements.txt /code/requirements.txt
-RUN pip install --no-cache-dir -r /code/requirements.txt
+# إضافة مستخدم غير root
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:${PATH}"
 
-# تثبيت بيانات NLTK
+COPY --chown=user ./requirements.txt /code/requirements.txt
+RUN pip install --no-cache-dir --user -r /code/requirements.txt
+
+COPY --chown=user . .
+
 RUN python -m nltk.downloader punkt punkt_tab
 
-COPY . .
-
-# ضبط الـ CMD ليكون أكثر استقراراً مع العمليات الطويلة
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+EXPOSE 7860
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

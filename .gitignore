@@ -5,3 +5,7 @@ token.json
 *creds.json
 static/downloads/
 extracted_*/
+node_modules/
+dist/
+
+venv/

@@ -39,16 +39,18 @@ class SupabaseService:
 
         if search_query:
             query = query.ilike("title", f"%{search_query}%")
-        if category:
+
+        # تصحيح فلتر الفئات (تجاهل 'all')
+        if category and category != "all":
             query = query.eq("category", category)
 
-        # --- الحقيقة الصارمة: إضافة فلتر الحالة هنا ---
+        # --- الحقيقة الصارمة: المعالجة الصحيحة للـ NULL ---
         if status:
             if status == "published":
                 query = query.eq("blogger_status", "published")
-            elif status == "not_published":
-                # نجلب كل ما هو ليس 'published' (سواء كان draft أو NULL)
-                query = query.neq("blogger_status", "published")
+            elif status == "draft":  # تم تغيير الاسم ليتوافق مع الفرونت إيند
+                # استخدام or للبحث عن الـ draft أو الـ NULL
+                query = query.or_("blogger_status.neq.published,blogger_status.is.null")
 
         result = query.order("created_at", desc=True).range(start, end).execute()
         return result.data, (result.count if result.count else 0)

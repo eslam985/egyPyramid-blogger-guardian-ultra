@@ -4,16 +4,12 @@ import json
 import re
 import html
 import requests
-from dotenv import load_dotenv
 import sys
 import os
 import math
+from dotenv import load_dotenv
 
-# إضافة المسار الحالي لمسارات بايثون لضمان رؤية مجلد services و publisher
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# 1. شحن المتغيرات فوراً قبل أي استدعاء آخر
-load_dotenv()
-
+# 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
     FastAPI,
     Request,
@@ -23,77 +19,68 @@ from fastapi import (
     status,
     BackgroundTasks,
 )
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from bs4 import BeautifulSoup
 
-# 2. استدعاء الخدمات المركزية
-# 2. استدعاء الخدمات المركزية
+# 2. إعداد المسارات والبيئة
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv()
+
+# 3. استيراد الخدمات الخاصة بك
 from services.supabase_db import SupabaseService
 
-# استيراد آمن لخدمة بلوجر لمنع انهيار السيرفر
 try:
     from services.blogger_api import BloggerService
-except ImportError as e:
-    print(f"⚠️ Blogger Service libraries missing: {e}")
+except ImportError:
     BloggerService = None
 
-# إخفاء لوجات uvicorn تماماً إلا في حالة الخطأ الشديد
+# 4. إعداد التطبيق واللوجات
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-
-# 1. تعريف التطبيق أولاً وقبل كل شيء لضمان استجابة السيرفر
 app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
 
-# 2. الآن نربط الخدمات
+
+# أضف هذا الجزء فوراً
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # السماح بالاتصال من الـ Frontend
+    allow_credentials=True,
+    allow_methods=["*"],  # السماح بجميع العمليات (GET, POST, etc.)
+    allow_headers=["*"],  # السماح بجميع الـ Headers
+)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BLOG_ID = os.getenv("BLOG_ID")
+
+# 5. تهيئة الخدمات
 supabase = getattr(SupabaseService, "client", None)
+blogger = BloggerService(blog_id=BLOG_ID) if (BloggerService and BLOG_ID) else None
+
+# 6. ربط المجلدات الثابتة (مرة واحدة فقط)
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.on_event("startup")
 async def startup_event():
-    if supabase:
-        print("✅ Connection Verified: Supabase is Ready")
-    else:
-        print("❌ Connection Critical: Supabase Client is None")
+    print("✅ System Initialized")
 
 
-# ثم بقية الاستدعاءات
+# 7. المسارات (الـ APIs توضع هنا...)
+# ... (ضع الـ @app.post والـ @app.get الخاصة بك هنا) ...
+@app.get("/api/media/list", include_in_schema=True)
+async def get_media_list(
+    search: str = None, cat: str = None, status: str = None, page: int = 1
+):
+    # جلب البيانات من Supabase
+    data, total_count = SupabaseService.get_media(
+        search_query=search, category=cat, status=status, page=page, limit=12
+    )
+    return {"data": data or [], "total_count": total_count}
 
-# التأكد من المفتاح
-# استبدل السطور من 44 لـ 48 بهذا الكود الآمن:
-blogger = None
-try:
-    BLOG_ID = os.getenv("BLOG_ID")
-    if BLOG_ID:
-        blogger = BloggerService(blog_id=BLOG_ID)
-        print("✅ Blogger Service Initialized")
-    else:
-        print("⚠️ BLOG_ID is missing!")
-except Exception as e:
-    print(f"⚠️ Blogger Service failed to load: {e}")
 
-# ده السطر اللي هيريحك من قصة الـ HTTP/HTTPS
-# الحصول على المسار الحالي للملف
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# تعديل ربط الملفات الثابتة والقوالب
-# الحقيقة الصارمة: تأكد أن المجلدات موجودة قبل ربطها لمنع خطأ 500 عند التشغيل
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
-
-if os.path.exists(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-else:
-    print("⚠️ Warning: 'static' directory not found!")
-
-if os.path.exists(TEMPLATES_DIR):
-    templates = Jinja2Templates(directory=TEMPLATES_DIR)
-else:
-    print("⚠️ Warning: 'templates' directory not found!")
-    templates = None  # لمنع انهيار الدوال التي تستخدم القوالب
-
-# 3. الإعدادات الأخرى
 security = HTTPBasic()
 
 
@@ -223,36 +210,6 @@ async def force_sync(ep_id: int, user: str = Depends(authenticate)):
             "id", ep_id
         ).execute()
         return {"status": "success"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/media/details/{media_id}")
-async def get_media_details(media_id: int, user: str = Depends(authenticate)):
-    try:
-        # جلب بيانات الميديا
-        media_res = (
-            SupabaseService.client.table("medias")
-            .select("*")
-            .eq("id", media_id)
-            .single()
-            .execute()
-        )
-        # جلب الحلقات المرتبطة بها مرتبة برقم الحلقة
-        episodes_res = (
-            SupabaseService.client.table("episodes")
-            .select("*")
-            .eq("media_id", media_id)
-            .order("episode_number")
-            .execute()
-        )
-
-        if not media_res.data:
-            return {"error": "العمل غير موجود"}
-
-        data = media_res.data
-        data["episodes"] = episodes_res.data if episodes_res.data else []
-        return data
     except Exception as e:
         return {"error": str(e)}
 
@@ -525,64 +482,6 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
         return {"status": "error", "error": str(e)}
 
 
-# الصفحة الرئيسية (محمية بكلمة سر)
-@app.get("/", response_class=HTMLResponse)
-async def index(
-    request: Request,
-    search: str = None,
-    cat: str = None,
-    status: str = None,
-    page: int = 1,
-):
-    limit = 12  # عدد الكروت في كل صفحة
-    try:
-        data = []
-        total_count = 0
-
-        if SupabaseService.client:
-            try:
-                # نرسل الصفحة والـ limit للسيرفيس
-                # التعديل: تمرير المتغير status للدالة
-                data, total_count = SupabaseService.get_media(
-                    search_query=search,
-                    category=cat,
-                    status=status,  # أضف هذا السطر
-                    page=page,
-                    limit=limit,
-                )
-
-                if data is None:
-                    data = []
-                else:
-                    for item in data:
-                        if item.get("episodes") is None:
-                            item["episodes"] = []
-                        if item.get("story") is None:
-                            item["story"] = ""
-            except Exception as e:
-                print(f"❌ DB Fetch Error: {e}")
-
-        total_pages = math.ceil(total_count / limit) if total_count > 0 else 1
-
-        context = {
-            "request": request,
-            "media_list": data,
-            "search": search or "",
-            "current_cat": cat or "",
-            "current_status": status or "",
-            "current_page": int(page),
-            "total_pages": total_pages,  # الآن القيمة ديناميكية وليست 1
-        }
-
-        if templates:
-            return templates.TemplateResponse("index.html", context)
-        return HTMLResponse(content="Templates missing", status_code=500)
-
-    except Exception as e:
-        print(f"🔥 Render Error: {str(e)}")
-        return HTMLResponse(content=f"Error: {str(e)}", status_code=500)
-
-
 # حذف رابط معين
 @app.post("/api/links/{link_id}/delete")
 async def delete_link_api(link_id: int, user: str = Depends(authenticate)):
@@ -650,6 +549,44 @@ async def get_all_progress(user: str = Depends(authenticate)):
     except Exception as e:
         print(f"❌ Error fetching progress: {e}")
         return []
+
+
+@app.get("/api/media/details/{media_id}")
+async def get_media_details(media_id: int):  # إزالة الـ Depends مؤقتاً للتأكد
+    try:
+        # جلب بيانات الميديا
+        media_res = (
+            SupabaseService.client.table("medias")
+            .select("*")
+            .eq("id", media_id)
+            .single()
+            .execute()
+        )
+        # جلب الحلقات المرتبطة بها مرتبة برقم الحلقة
+        episodes_res = (
+            SupabaseService.client.table("episodes")
+            .select("*")
+            .eq("media_id", media_id)
+            .order("episode_number")
+            .execute()
+        )
+
+        if not media_res.data:
+            return {"error": "العمل غير موجود"}
+
+        data = media_res.data
+        data["episodes"] = episodes_res.data if episodes_res.data else []
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# 8. المسار الأخير لتقديم Vue (الفول باك)
+@app.get("/{rest_of_path:path}")
+async def serve_vue_app(rest_of_path: str):
+    if rest_of_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API Not Found")
+    return FileResponse(os.path.join(STATIC_DIR, "dist/index.html"))
 
 
 if __name__ == "__main__":
