@@ -498,7 +498,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         print(f"❌ فشل yt-dlp في التحميل. الكود البرمجي للخطأ: {process.returncode}")
         # طباعة آخر سطر من الخطأ لفهم السبب
         print("💡 نصيحة: الرابط غالباً انتهت صلاحيته أو محمي بـ IP جهازك.")
-    pbar_dl.close()
+    pbar_dl.close()  # ابحث عن هذا السطر
+
+    # --- التعديل هنا ---
+    if task_id:
+        supabase.table("download_tasks").update(
+            {
+                "status_message": "⚙️ جاري فحص الملف وفك الضغط...",
+                "progress_percent": 91,  # كسر حاجز الـ 100% الوهمي
+                "download_speed": "Processing",
+            }
+        ).eq("id", task_id).execute()
+    # ------------------
 
     # جلب المسار الحقيقي للملف الذي تم تحميله داخل المجلد الفريد
     downloaded_files = [
@@ -567,9 +578,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             st_key = "8OmZOAWa2eHora2"
 
             # 3. الرفع للأرشيف (بالاسم النظيف)
+            # 3. الرفع للأرشيف
             print(f"📦 أرشفة النسخة الكاملة: {episode_label}")
-            archive_url = "Failed_Archive_Upload"  # Initialize with a failure state
+            archive_url = "Failed_Archive_Upload"
             try:
+                # --- أضف/عدل هذا الجزء هنا ---
+                if task_id:
+                    supabase.table("download_tasks").update(
+                        {
+                            "status_message": "☁️ جاري الأرشفة (النسخة الخام)...",
+                            "progress_percent": 92,
+                        }
+                    ).eq("id", task_id).execute()
+                # -------------------------
                 # تحديث الحالة للمتصفح: بدء الرفع للأرشيف
                 if e_id:
                     supabase.table("episodes").update(
@@ -664,6 +685,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
             # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
             if identifier:
+                # --- التعديل هنا (إظهار السيرفرات) ---
+                if task_id:
+                    supabase.table("download_tasks").update(
+                        {
+                            "status_message": "🚀 ضخ السيرفرات: VK, Voe, Dood, Tape, Lulu",
+                            "progress_percent": 95,
+                        }
+                    ).eq("id", task_id).execute()
+                # ------------------------------------
                 print(
                     f"🚀 البدء في الرفع المتوازي الخماسي (VK + Voe + Dood + Tape + Lulu)..."
                 )
@@ -837,7 +867,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     lang_val="مترجم / مدبلج",
                 )
                 if status:
-                    print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح مع البوستر والقصة.")
+                    print(f"✅ كولاب أرسل تمبلت الفيسبوك بنجاح")
+
+                    # --- التعديل النهائي للبشرى السعيدة ---
+                    if task_id:
+                        supabase.table("download_tasks").update(
+                            {
+                                "status_message": "✅ اكتملت جميع المراحل بنجاح!",
+                                "progress_percent": 100,
+                                "download_speed": "Done",
+                                "status": "completed",
+                            }
+                        ).eq("id", task_id).execute()
             except Exception as e:
                 print(f"⚠️ فشل كولاب في إرسال التمبلت: {e}")
 

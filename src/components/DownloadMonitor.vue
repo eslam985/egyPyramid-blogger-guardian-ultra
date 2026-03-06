@@ -22,13 +22,56 @@
         </div>
 
         <div id="progress-container" v-if="activeTasks.length > 0">
-            <div v-for="task in activeTasks" :key="task.id" class="progress-item">
-                {{ task.task_name }}: {{ task.status_message }} ({{ task.progress_percent }}%)
+            <div v-for="task in activeTasks" :key="task.id" class="progress-item"
+                :class="{ 'is-uploading': task.status_message.includes('جاري الرفع') }">
+
+                <span class="task-name">{{ task.task_name }}</span>:
+                <span class="status-text">{{ task.status_message }}</span>
+                <span class="percent">({{ task.progress_percent }}%)</span>
+
+                <div class="mini-progress-bar">
+                    <div class="fill" :style="{ width: task.progress_percent + '%' }"></div>
+                </div>
             </div>
         </div>
     </div>
 </template>
+<style scoped>
+.progress-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #1a1a1a 0%, #000 100%);
+    border: 1px solid #daa52033;
+    border-radius: 8px;
+    color: #daa520;
+}
 
+.is-uploading .status-text {
+    color: #00ffcc;
+    /* لون مختلف لمرحلة الرفع */
+    animation: blinker 1.5s linear infinite;
+}
+
+.mini-progress-bar {
+    height: 4px;
+    background: #333;
+    margin-top: 8px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.fill {
+    height: 100%;
+    background: #daa520;
+    transition: width 0.5s ease;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0.3;
+    }
+}
+</style>
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { supabaseClient } from '../services/supabase.js'

@@ -1111,9 +1111,16 @@ body.modal-open {
 /* التنسيقات المفقودة لدعم العناصر داخل حاوية التقدم */
 
 .progress-item {
+    font-size: 18px;
     margin-bottom: 15px;
     border-bottom: 1px solid #222;
-    padding-bottom: 10px;
+    background: linear-gradient(135deg, #8a8000 0, #000 80%);
+    color: #daa520;
+    letter-spacing: -.5px;
+    white-space: nowrap;
+    padding: 4px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px #0000004d, 0 2px 4px -1px #0000001a;
 }
 
 .d-flex {
