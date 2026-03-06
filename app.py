@@ -66,7 +66,8 @@ if os.path.exists(STATIC_DIR):
 
 @app.on_event("startup")
 async def startup_event():
-    print("✅ System Initialized")
+    print(f"✅ System Initialized. BASE_DIR: {BASE_DIR}")
+    print(f"📂 Checking for index.html at: {os.path.join(BASE_DIR, 'dist', 'index.html')}")
 
 
 # 7. المسارات (الـ APIs توضع هنا...)
@@ -584,13 +585,18 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
 
 # 8. المسار الأخير لتقديم Vue (الفول باك)
 # تعديل مسار الـ Vue App
+# 8. المسار الأخير لتقديم Vue (الفول باك)
 @app.get("/{rest_of_path:path}")
 async def serve_vue_app(rest_of_path: str):
-    # مسار ملف الـ build الخاص بـ Vite
+    # لا تقم بفلترة الـ api/ هنا إذا كنت تتأكد من المسار أدناه
+    # المسار الفعلي بعد الـ build في Dockerfile هو /code/dist/index.html
     file_path = os.path.join(BASE_DIR, "dist", "index.html")
+    
     if os.path.exists(file_path):
         return FileResponse(file_path)
-    return {"error": "Frontend build not found"}
+    
+    # رسالة تصحيحية لمعرفة أين يبحث السيرفر بالضبط
+    return {"error": f"Frontend build not found at {file_path}"}
 
 
 if __name__ == "__main__":
