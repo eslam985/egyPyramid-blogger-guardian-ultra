@@ -14,15 +14,20 @@ ENV PYTHONUNBUFFERED=1
 
 # إضافة مستخدم غير root
 RUN useradd -m -u 1000 user
+# ... (نفس البداية) ...
 USER user
 ENV PATH="/home/user/.local/bin:${PATH}"
 
-COPY --chown=user ./requirements.txt /code/requirements.txt
-RUN pip install --no-cache-dir --user -r /code/requirements.txt
+# أضف تثبيت Node.js لبناء الـ Vue
+RUN apt-get update && apt-get install -y nodejs npm && apt-get clean
 
 COPY --chown=user . .
 
-RUN python -m nltk.downloader punkt punkt_tab
+# بناء الـ Vue
+RUN npm install && npm run build
+
+# تثبيت متطلبات Python
+RUN pip install --no-cache-dir --user -r /code/requirements.txt
 
 EXPOSE 7860
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]

@@ -43,12 +43,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 # أضف هذا الجزء فوراً
+# اجعل الـ CORS مرناً للـ Production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # السماح بالاتصال من الـ Frontend
+    allow_origins=["*"],  # للنشر في Hugging Face، استخدم "*" مؤقتاً
     allow_credentials=True,
-    allow_methods=["*"],  # السماح بجميع العمليات (GET, POST, etc.)
-    allow_headers=["*"],  # السماح بجميع الـ Headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BLOG_ID = os.getenv("BLOG_ID")
@@ -582,11 +583,14 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
 
 
 # 8. المسار الأخير لتقديم Vue (الفول باك)
+# تعديل مسار الـ Vue App
 @app.get("/{rest_of_path:path}")
 async def serve_vue_app(rest_of_path: str):
-    if rest_of_path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="API Not Found")
-    return FileResponse(os.path.join(STATIC_DIR, "dist/index.html"))
+    # مسار ملف الـ build الخاص بـ Vite
+    file_path = os.path.join(BASE_DIR, "dist", "index.html")
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {"error": "Frontend build not found"}
 
 
 if __name__ == "__main__":
