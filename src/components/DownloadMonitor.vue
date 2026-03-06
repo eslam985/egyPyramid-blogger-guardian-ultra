@@ -1,6 +1,11 @@
 <template>
     <div>
-        <button @click="showModal = true" class="btn-add">➕ مهمة تحميل جديدة</button>
+
+            <div class="download-monitor-container">
+                <button @click="showModal = true" class="btn-add">➕ مهمة تحميل جديدة</button>
+
+            </div>
+
 
         <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
             <div class="modal-content">
@@ -37,6 +42,27 @@
     </div>
 </template>
 <style scoped>
+/* اجعل الحاوية عائمة في الأسفل على اليمين */
+.download-monitor-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    z-index: 9999;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.progress-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #1a1a1a;
+    border: 1px solid #daa520;
+    border-radius: 8px;
+    color: #daa520;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
 .progress-item {
     padding: 12px;
     margin-bottom: 8px;

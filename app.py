@@ -8,6 +8,7 @@ import sys
 import os
 import math
 from dotenv import load_dotenv
+from fastapi import Body  # تأكد من استيراد Body
 
 # 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
@@ -119,46 +120,26 @@ async def run_publisher(
     return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
 
 
-# إضافة عمل جديد
 @app.post("/api/media/add")
 async def add_new_work(
     user: str = Depends(authenticate),
-    title: str = Form(...),
-    category: str = Form(...),
-    story: str = Form(...),
-    year: str = Form(None),  # تغيير من int لـ str لتوافق قاعدة البيانات
-    rating: str = Form(None),
-    tmdb_id: str = Form(None),
-    labels: str = Form(None),
-    runtime: str = Form(None),
-    duration_iso: str = Form(None),  # أضف هذا السطر
-    poster_url: str = Form(...),
+    # استخدم Body بدلاً من Form لاستقبال JSON
+    payload: dict = Body(...),
 ):
-    payload = {
-        "title": title,
-        "category": category,
-        "story": story,
-        "year": year,
-        "rating": rating,
-        "tmdb_id": tmdb_id,
-        "labels": labels,
-        "runtime": runtime,
-        "duration_iso": duration_iso,  # أضف هذا السطر
-        "poster_url": poster_url,
-    }
+    # الآن payload هو القاموس (dictionary) القادم من Vue مباشرة
+    # لا حاجة لاستخراج كل حقل على حدة
     new_media = SupabaseService.add_media(payload)
 
     if new_media:
         media_id = new_media["id"]
-        # 2. إنشاء مسودة في بلوجر فوراً لهذا العمل الجديد
+        # إنشاء مسودة في بلوجر
         blogger_res = blogger.create_post(
-            title=title,
-            content=f"<p>{story}</p>",
-            is_draft=True,  # ينشر كمسودة كما تفضل
+            title=payload.get("title"),
+            content=f"<p>{payload.get('story')}</p>",
+            is_draft=True,
         )
 
-        # 3. حفظ الـ Blogger ID الناتج في ساب باز داخل العمل نفسه
-        if "id" in blogger_res:
+        if blogger_res and "id" in blogger_res:
             SupabaseService.update_media(
                 media_id, {"blogger_post_id": blogger_res["id"]}
             )
@@ -587,19 +568,24 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
 
 # في app.py
 # نقدم مجلد static/dist عبر المسار /static/dist
-app.mount("/static/dist", StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist")), name="static")
+app.mount(
+    "/static/dist",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist")),
+    name="static",
+)
+
 
 @app.get("/{rest_of_path:path}")
 async def serve_vue_app(rest_of_path: str):
     # تجاهل مسارات الـ API
     if rest_of_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="API route not found")
-        
+
     index_path = os.path.join(BASE_DIR, "static", "dist", "index.html")
-    
+
     if os.path.exists(index_path):
         return FileResponse(index_path)
-        
+
     return {"error": "Frontend build not found"}
 
 
