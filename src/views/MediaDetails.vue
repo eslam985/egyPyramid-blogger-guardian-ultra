@@ -127,6 +127,7 @@ const mediaData = ref({});
 const links = ref([]);
 const showLinksModal = ref(false);
 const selectedEpisodeId = ref(null);
+const props = defineProps(['search', 'id']);
 
 const loadMedia = async () => {
     try {

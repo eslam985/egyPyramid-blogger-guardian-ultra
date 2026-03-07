@@ -68,8 +68,10 @@ if os.path.exists(STATIC_DIR):
 @app.on_event("startup")
 async def startup_event():
     print(f"✅ System Initialized. BASE_DIR: {BASE_DIR}")
+    # أضف هذا السطر:
+    print(f"🔍 DEBUG - BLOG_ID value: {os.getenv('BLOG_ID')}")
     print(
-        f"📂 Checking for index.html at: {os.path.join(BASE_DIR, 'dist', 'index.html')}"
+        f"📂 Checking for index.html at: {os.path.join(BASE_DIR, 'static', 'dist', 'index.html')}"
     )
 
 
@@ -319,6 +321,13 @@ async def sync_episode_to_blogger(
     ep_id: int, background_tasks: BackgroundTasks, user: str = Depends(authenticate)
 ):
     try:
+        # إضافة حماية: التأكد من وجود الخدمة
+        if blogger is None:
+            print("❌ Error: Blogger instance is None. Check BLOG_ID in .env")
+            return {
+                "status": "error",
+                "error": "خدمة Blogger غير مهيأة (Check BLOG_ID)",
+            }
         # 1. جلب بيانات الحلقة والعمل المرتبط بها
         ep_res = (
             supabase.table("episodes")
@@ -388,7 +397,13 @@ async def sync_episode_to_blogger(
 
         # --- [2] جلب المحتوى وبدء المعالجة بـ BeautifulSoup ---
         # --- [2] جلب المحتوى وبدء المعالجة بـ BeautifulSoup ---
-        service = blogger.get_service()
+        # التعديل لضمان عدم وجود NoneType
+        if blogger is None:
+            current_blogger = BloggerService(blog_id=BLOG_ID)
+        else:
+            current_blogger = blogger
+
+        service = current_blogger.get_service()
         post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
         soup = BeautifulSoup(post["content"], "html.parser")
 
@@ -566,27 +581,30 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
         return {"error": str(e)}
 
 
-# في app.py
-# نقدم مجلد static/dist عبر المسار /static/dist
+# 1. ربط المجلد الذي يحتوي على الـ assets والـ index.html
+# بما أن الهيكل هو: static/dist/assets و static/dist/index.html
+# نقوم بعمل Mount للـ /assets مباشرة لتكون متاحة للمتصفح
 app.mount(
-    "/static/dist",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist")),
-    name="static",
+    "/assets",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist", "assets")),
+    name="assets",
 )
 
 
+# 2. دالة عرض الواجهة (Vue SPA)
 @app.get("/{rest_of_path:path}")
 async def serve_vue_app(rest_of_path: str):
     # تجاهل مسارات الـ API
-    if rest_of_path.startswith("api/"):
+    if rest_of_path.startswith("api"):
         raise HTTPException(status_code=404, detail="API route not found")
 
+    # المسار الحقيقي وفقاً لـ ls التي أرسلتها (static/dist/index.html)
     index_path = os.path.join(BASE_DIR, "static", "dist", "index.html")
 
     if os.path.exists(index_path):
         return FileResponse(index_path)
 
-    return {"error": "Frontend build not found"}
+    return {"error": f"Frontend build not found at {index_path}"}
 
 
 if __name__ == "__main__":
