@@ -87,8 +87,9 @@
                     <span>حلقة {{ ep.episode_number }}</span>
                     <div class="actions">
                         <button @click="manageLinks(ep.id)" class="btn-links">السيرفرات</button>
-                        <button @click="syncToBlogger(ep)" :class="['btn-sync', ep?.is_synced ? 'synced' : 'pending']">
-                            {{ ep?.is_synced ? 'منشور' : 'نشر الآن' }}
+                        <button @click="handleSyncClick(ep)"
+                            :class="['btn-sync', ep?.is_synced ? 'synced' : 'pending']">
+                            {{ ep?.is_synced ? 'منشور (اضغط للتحديث)' : 'نشر الآن' }}
                         </button>
                         <button @click="deleteEpisode(ep.id)" class="btn-delete-ep">حذف</button>
                     </div>
@@ -133,6 +134,7 @@ const loadMedia = async () => {
     try {
         const response = await api.get(`/media/details/${route.params.id}`);
         mediaData.value = response.data;
+        // تم حذف الـ forEach هنا لمنع الضغط على سيرفر بلوجر
     } catch (e) { console.error(e); }
 };
 
@@ -216,9 +218,39 @@ const saveMediaDetails = async () => {
         isSaving.value = false;
     }
 };
+// داخل الـ Script في Vue
+const checkSyncStatus = async (ep) => {
+    const postId = ep.medias?.blogger_post_id;
+    if (!postId) return false; // لا يوجد مقال
 
+    try {
+        const res = await api.get(`/blogger/check-status/${postId}`);
+        if (res.data.status === 'not_found') {
+            await api.post(`/episodes/${ep.id}/reset-sync`);
+            ep.is_synced = false; // تحديث الواجهة
+            return false; // الحلقة غير موجودة
+        }
+        return true; // الحلقة موجودة
+    } catch (e) {
+        console.error("فحص الحالة فشل");
+        return false;
+    }
+};
 
+const handleSyncClick = async (ep) => {
+    // ننتظر نتيجة الفحص الحقيقية
+    const isStillOnBlogger = await checkSyncStatus(ep);
+
+    // الآن نستخدم النتيجة التي عادت من الدالة مباشرة
+    if (!isStillOnBlogger) {
+        // إذا لم تكن موجودة، ابدأ النشر فوراً
+        await syncToBlogger(ep);
+    } else {
+        alert("الحلقة موجودة بالفعل في بلوجر.");
+    }
+};
 </script>
+
 <style scoped>
 .media-details-container {
     display: flex;

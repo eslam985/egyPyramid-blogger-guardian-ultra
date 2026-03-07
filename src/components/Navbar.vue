@@ -1,4 +1,5 @@
 <template>
+
   <nav class=" flex items-center justify-between p-4 shadow-md  z-50 sticky top-px my-card">
 
     <div
@@ -6,19 +7,19 @@
       EGY PYRMID
     </div>
 
-<div class="flex flex-[0_1_500px] mx-6">
-  <form @submit.prevent="searchMedia" class="flex flex-row-reverse w-full">
-    
-    <button type="submit" 
-      class="px-5 py-2.5 bg-primary text-white border border-primary rounded-l-lg hover:bg-primary-dark transition-colors flex items-center justify-center">
-      <i class="fa fa-search"></i>
-    </button>
+    <div class="flex flex-[0_1_500px] mx-6">
+      <form @submit.prevent="searchMedia" class="flex flex-row-reverse w-full">
 
-    <input v-model="searchQuery" type="text" placeholder="ابحث..." 
-      class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-r-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-all focus:outline-none focus:border-primary focus:ring-4 focus:ring-blue-500/10">
-      
-  </form>
-</div>
+        <button type="submit"
+          class="px-5 py-2.5 bg-primary text-white border border-primary rounded-l-lg hover:bg-primary-dark transition-colors flex items-center justify-center">
+          <i class="fa fa-search"></i>
+        </button>
+
+        <input v-model="searchQuery" type="text" placeholder="ابحث..."
+          class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-r-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-all focus:outline-none focus:border-primary focus:ring-4 focus:ring-blue-500/10">
+
+      </form>
+    </div>
 
     <div class=" flex gap-2">
       <button class=" relative z-60 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 cursor-pointer"
@@ -27,11 +28,16 @@
       </button>
 
 
-      <button class="bg-[#ea580c] text-white px-4 py-0 rounded hover:bg-yellow-600 cursor-pointer" @click="triggerPublisher">
+      <button class="bg-[#ea580c] text-white px-4 py-0 rounded hover:bg-yellow-600 cursor-pointer"
+        @click="triggerPublisher">
         🚀 تشغيل محرك النشر
+      </button>
+      <button @click="logout" class="bg-red-500 text-white px-4 py-2 rounded">
+        تسجيل خروج
       </button>
     </div>
   </nav>
+
 </template>
 
 <script setup>
@@ -41,7 +47,13 @@ import api from '../services/api';
 const searchQuery = ref('');
 const isPublishing = ref(false);
 const emit = defineEmits(['update-search', 'open-add-modal']);
+import { useRouter } from 'vue-router';
+const router = useRouter();
 
+const logout = () => {
+  localStorage.removeItem('user_token');
+  router.push('/login');
+};
 const searchMedia = () => {
   emit('update-search', searchQuery.value);
 };

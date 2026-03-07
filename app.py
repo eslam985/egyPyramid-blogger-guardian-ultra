@@ -7,8 +7,10 @@ import requests
 import sys
 import os
 import math
+import jwt
 from dotenv import load_dotenv
 from fastapi import Body  # تأكد من استيراد Body
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 # 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
@@ -20,21 +22,24 @@ from fastapi import (
     status,
     BackgroundTasks,
 )
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from bs4 import BeautifulSoup
 
 # 2. إعداد المسارات والبيئة
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv()
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+)
 
 # 3. استيراد الخدمات الخاصة بك
 from services.supabase_db import SupabaseService
 
 try:
     from services.blogger_api import BloggerService
-except ImportError:
+except ImportError as e:
+    print(f"CRITICAL: BloggerService Import Error: {e}")
     BloggerService = None
 
 # 4. إعداد التطبيق واللوجات
@@ -57,16 +62,57 @@ BLOG_ID = os.getenv("BLOG_ID")
 
 # 5. تهيئة الخدمات
 supabase = getattr(SupabaseService, "client", None)
-blogger = BloggerService(blog_id=BLOG_ID) if (BloggerService and BLOG_ID) else None
 
-# 6. ربط المجلدات الثابتة (مرة واحدة فقط)
+try:
+    print(f"DEBUG: BLOG_ID value detected: '{BLOG_ID}'")
+    if BLOG_ID and BloggerService:
+        blogger = BloggerService(blog_id=BLOG_ID)
+    else:
+        blogger = None
+        print("WARNING: Blogger service skipped (BLOG_ID missing or Service not found)")
+except Exception as e:
+    blogger = None
+    print(f"CRITICAL: BloggerService Initialization Error: {e}")
+
+# 6. ربط المجلدات الثابتة
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 if os.path.exists(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist", "assets")),
+        name="assets",
+    )
+
+# إعدادات الـ JWT والأمن (تُكتب مرة واحدة فقط!)
+SECRET_KEY = os.getenv("SECRET_KEY")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
+
+def authenticate(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return payload.get("sub")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="غير مصرح بالدخول",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@app.post("/api/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    if form_data.username != os.getenv(
+        "ADMIN_EMAIL"
+    ) or form_data.password != os.getenv("ADMIN_PASSWORD"):
+        raise HTTPException(status_code=400, detail="بيانات دخول خاطئة")
+    token = jwt.encode({"sub": form_data.username}, SECRET_KEY, algorithm="HS256")
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.on_event("startup")
 async def startup_event():
+    # لاحظ الفراغ هنا (المحاذاة)
     print(f"✅ System Initialized. BASE_DIR: {BASE_DIR}")
     # أضف هذا السطر:
     print(f"🔍 DEBUG - BLOG_ID value: {os.getenv('BLOG_ID')}")
@@ -86,25 +132,6 @@ async def get_media_list(
         search_query=search, category=cat, status=status, page=page, limit=12
     )
     return {"data": data or [], "total_count": total_count}
-
-
-security = HTTPBasic()
-
-
-# 2. نظام الحماية (Authentication)
-def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_email = os.getenv("ADMIN_EMAIL")
-    correct_password = os.getenv("ADMIN_PASSWORD")
-    if (
-        credentials.username != correct_email
-        or credentials.password != correct_password
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="خطأ في بيانات الدخول",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
 
 
 @app.post("/api/publisher/run")
@@ -581,14 +608,21 @@ async def get_media_details(media_id: int):  # إزالة الـ Depends مؤق�
         return {"error": str(e)}
 
 
-# 1. ربط المجلد الذي يحتوي على الـ assets والـ index.html
-# بما أن الهيكل هو: static/dist/assets و static/dist/index.html
-# نقوم بعمل Mount للـ /assets مباشرة لتكون متاحة للمتصفح
-app.mount(
-    "/assets",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist", "assets")),
-    name="assets",
-)
+@app.get("/api/blogger/check-status/{post_id}")
+async def check_blogger_status(post_id: str):
+    try:
+        if not blogger:
+            return {"status": "error", "message": "Blogger not ready"}
+
+        service = blogger.get_service()
+        # محاولة جلب المقال من بلوجر
+        post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
+
+        # إذا وجده، فهو موجود. إذا لم يجده، سيرمي خطأ 404
+        return {"status": "exists", "blogger_status": post.get("status")}
+    except Exception as e:
+        # إذا كان الخطأ 404، فالمقال محذوف فعلياً
+        return {"status": "not_found"}
 
 
 # 2. دالة عرض الواجهة (Vue SPA)
