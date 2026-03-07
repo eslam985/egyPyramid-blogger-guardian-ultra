@@ -31,3 +31,4 @@ RUN python -m nltk.downloader punkt punkt_tab
 
 EXPOSE 7860
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Triggering a clean build
