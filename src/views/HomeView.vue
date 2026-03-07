@@ -1,7 +1,7 @@
 <template>
     <div id="app">
 
-        <main class="container">
+        <main class="w-full max-w-7xl mx-auto p-8">
 
             <DownloadMonitor />
 

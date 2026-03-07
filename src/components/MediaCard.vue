@@ -126,7 +126,8 @@ const defaultPoster = 'https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,
   cursor: pointer;
   border-radius: 50%;
   transition: background 0.2s;
-  color: #000;
+  color: slategray;
+  font-size: 20px;
 }
 
 .btn-action:hover {

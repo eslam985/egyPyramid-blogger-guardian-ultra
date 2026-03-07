@@ -2,211 +2,46 @@
    ملف الأنماط الرئيسي - Guardian Ultra
    تصميم مرن وقابل للتوسع مع نظام الألوان الداكن/الفاتح
    ======================================== */
+@import "tailwindcss";
 
-/* ---------------------------------------- */
-/* المتغيرات العامة (Custom Properties)     */
-/* ---------------------------------------- */
-:root {
-    /* الوضع الفاتح (Light Mode) - الألوان الافتراضية */
+@custom-variant dark (&:where(.dark-mode, .dark-mode *));
+
+@theme {
     --color-primary: #2563eb;
     --color-primary-dark: #1d4ed8;
-    --color-primary-light: #3b82f6;
-    --color-bg: #f9fafb;
-    --color-surface: #ffffff;
-    --color-text: #1f2937;
-    --color-text-light: #6b7280;
-    --color-text-muted: #9ca3af;
-    --color-border: #e5e7eb;
-    --color-card-bg: #ffffff;
-    --color-card-hover: #f3f4f6;
-    --color-badge-tv: #dc2626;
-    --color-badge-movie: #7c3aed;
-    --color-btn-edit: #2563eb;
-    --color-btn-blogger: #f97316;
-    --color-btn-delete: #dc2626;
-    --color-nav-bg: #ffffff;
-    --color-nav-border: #e5e7eb;
-    --color-search-bg: #f3f4f6;
-    --color-input-bg: #ffffff;
-    --color-input-border: #d1d5db;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --color-secondary-dark: #1e2939;
+
     --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05);
-    --transition: all 0.2s ease-in-out;
+    --variant-dark: selector(.dark-mode &);
 }
 
-/* الوضع الداكن (Dark Mode) - يتم تفعيله بإضافة class .dark-mode إلى عنصر <body> */
-.dark-mode {
-    --color-primary: #3b82f6;
-    --color-primary-dark: #2563eb;
-    --color-primary-light: #60a5fa;
-    --color-bg: #111827;
-    --color-surface: #1f2937;
-    --color-text: #f3f4f6;
-    --color-text-light: #9ca3af;
-    --color-text-muted: #6b7280;
-    --color-border: #374151;
-    --color-card-bg: #1f2937;
-    --color-card-hover: #2d3748;
-    --color-badge-tv: #ef4444;
-    --color-badge-movie: #a78bfa;
-    --color-btn-edit: #3b82f6;
-    --color-btn-blogger: #f59e0b;
-    --color-btn-delete: #ef4444;
-    --color-nav-bg: #1f2937;
-    --color-nav-border: #374151;
-    --color-search-bg: #374151;
-    --color-input-bg: #2d3748;
-    --color-input-border: #4b5563;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4);
-    --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+@layer components {
+    .my-card {
+        @apply bg-white dark:bg-[#1e2939] shadow-card;
+    }
 }
 
 /* ---------------------------------------- */
 /* إعادة تعيين القواعد الأساسية (Reset)     */
 /* ---------------------------------------- */
-*,
-*::before,
-*::after {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
 
 html {
     font-size: 16px;
     scroll-behavior: smooth;
 }
 
-body {
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    line-height: 1.6;
-    transition: background-color 0.3s ease, color 0.2s ease;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-/* الروابط */
-a {
-    color: var(--color-primary);
-    text-decoration: none;
-    transition: var(--transition);
-}
-
-a:hover {
-    color: var(--color-primary-dark);
-}
-
-/* الأزرار العامة */
-button {
-    cursor: pointer;
-    font-family: inherit;
-    border: none;
-    background: none;
-    transition: var(--transition);
-}
-
-/* ---------------------------------------- */
-/* تخطيط الصفحة الرئيسي                     */
-/* ---------------------------------------- */
-.container {
-    max-width: 1300px;
-    margin: 0 auto;
-    padding: 1.5rem 2rem;
-    width: 100%;
-}
 
 /* ---------------------------------------- */
 /* شريط التنقل (Navbar)                      */
 /* ---------------------------------------- */
 .main-nav {
-    display: flex;
-    flex-direction: row-reverse;
-    align-items: center;
-    justify-content: space-between;
-    background-color: var(--color-nav-bg);
     border-bottom: 1px solid var(--color-nav-border);
-    padding: 0.75rem 2rem;
     box-shadow: var(--shadow-sm);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-.logo {
-    font-size: 2rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, #8a8000 0, #000000 80%);
-    color: goldenrod;
-    letter-spacing: -0.5px;
-    white-space: nowrap;
-    padding: 4px 16px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
-}
 
-/* شريط البحث */
-.search-bar {
-    flex: 0 1 500px;
-    margin: 0 1.5rem;
-}
-
-.search-bar form {
-    display: flex;
-    flex-direction: row-reverse;
-    width: 100%;
-}
-
-.search-bar input {
-    width: 100%;
-    padding: 0.65rem 1rem;
-    border: 1px solid var(--color-input-border);
-    border-left: none;
-    border-radius: 8px 0 0 8px;
-    background-color: var(--color-input-bg);
-    color: var(--color-text);
-    font-size: 0.95rem;
-    transition: var(--transition);
-}
-
-.search-bar input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.search-bar button {
-    padding: 0.65rem 1.2rem;
-    background-color: var(--color-primary);
-    color: white;
-    border: 1px solid var(--color-primary);
-    border-radius: 0 8px 8px 0;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-}
-
-.search-bar button:hover {
-    background-color: var(--color-primary-dark);
-    border-color: var(--color-primary-dark);
-}
 
 /* أزرار الإجراءات في الشريط */
-.nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
 .btn-add {
     background-color: var(--color-primary);
     color: white;
@@ -219,7 +54,7 @@ button {
     gap: 0.5rem;
     border: 1px solid var(--color-primary);
     transition: var(--transition);
-    margin: 16px 0;
+
 }
 
 .btn-add:hover {
@@ -236,10 +71,8 @@ button {
 /* استهداف الزر عن طريق الـ ID لضمان أعلى أولوية */
 .publish-btn {
     background-color: #ea580c;
-    /* البرتقالي الخاص بالمحرك */
     color: #ffffff;
     border: none;
-    padding: 10px 20px;
     border-radius: 8px;
     font-weight: bold;
     cursor: pointer;
@@ -382,6 +215,7 @@ button {
     font-size: 0.9rem;
     font-weight: 500;
     transition: var(--transition);
+    cursor: pointer;
 }
 
 /* تنسيق فلاتر الحالة والنوع */
@@ -400,6 +234,7 @@ button {
     font-size: 0.9rem;
     font-weight: 500;
     transition: var(--transition);
+    cursor: pointer;
 }
 
 .btn-filter.active {
@@ -949,8 +784,7 @@ button {
 
 /* 2. موحد: الـ content هو الحاوية الداخلية فقط */
 .modal-content {
-    background-color: var(--color-surface);
-    color: var(--color-text);
+
     width: 90%;
     max-width: 600px;
     max-height: 90vh;
@@ -989,7 +823,7 @@ body.modal-open {
     cursor: pointer;
     font-size: 24px;
     color: #ff4d4d;
-    
+
 }
 
 .form-group {
@@ -1011,6 +845,7 @@ body.modal-open {
     color: #000000;
     transition: border-color 0.3s ease;
 }
+
 /* تنسيقات شريط التقدم الأساسية */
 .progress {
     display: flex;
@@ -1252,9 +1087,6 @@ body.modal-open {
         width: 100%;
     }
 
-    .nav-actions {
-        order: 2;
-    }
 
     .dashboard-header {
         flex-direction: column;

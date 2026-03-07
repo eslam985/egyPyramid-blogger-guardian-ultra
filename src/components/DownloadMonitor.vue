@@ -8,7 +8,7 @@
 
 
         <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
-            <div class="modal-content">
+            <div class="modal-content my-card z-9999">
                 <header class="modal-header">
                     <h3>إضافة مهمة سحب جديدة</h3>
                     <span class="close-btn" @click="showModal = false">&times;</span>

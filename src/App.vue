@@ -26,10 +26,11 @@ provide('searchQuery', globalSearch)
 </script>
 
 <template>
-  <div class="app-container">
+  <div class="min-h-screen p-1 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
+    
     <Navbar @open-add-modal="showModal = true" @update-search="handleSearch" />
     
-    <button @click="toggleTheme" class="theme-toggle-btn">
+    <button @click="toggleTheme" class="fixed bottom-4 left-4 px-4 py-3 bg-primary text-white rounded-full">
         <i class="fa" :class="isDarkMode ? 'fa-sun' : 'fa-moon'"></i>
     </button>
 
