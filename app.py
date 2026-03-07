@@ -579,7 +579,9 @@ async def get_all_progress(user: str = Depends(authenticate)):
 
 
 @app.get("/api/media/details/{media_id}")
-async def get_media_details(media_id: int):  # إزالة الـ Depends مؤقتاً للتأكد
+async def get_media_details(
+    media_id: int, user: str = Depends(authenticate)
+):  # أضفنا الحماية هنا
     try:
         # جلب بيانات الميديا
         media_res = (

@@ -3,11 +3,8 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite' // 1. أضف هذا الاستيراد
 
 export default defineConfig({
-  base: '/static/dist/',
-  plugins: [
-    vue(),
-    tailwindcss(), // 2. أضف الإضافة هنا
-  ],
+  base: './',
+  plugins: [vue(), tailwindcss()],
   build: {
     outDir: 'static/dist',
     emptyOutDir: true,
