@@ -105,7 +105,7 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials.username
 
 
-@app.post("/publisher/run")
+@app.post("/api/publisher/run")
 async def run_publisher(
     background_tasks: BackgroundTasks, user: str = Depends(authenticate)
 ):
