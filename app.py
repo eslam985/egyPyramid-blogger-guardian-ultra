@@ -11,7 +11,11 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Body  # تأكد من استيراد Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import logging
 
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.info("--- التطبيق بدأ بالعمل الآن ---")
 # 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
     FastAPI,
@@ -73,15 +77,6 @@ try:
 except Exception as e:
     blogger = None
     print(f"CRITICAL: BloggerService Initialization Error: {e}")
-
-# 6. ربط المجلدات الثابتة
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-if os.path.exists(STATIC_DIR):
-    app.mount(
-        "/assets",
-        StaticFiles(directory=os.path.join(BASE_DIR, "static", "dist", "assets")),
-        name="assets",
-    )
 
 # إعدادات الـ JWT والأمن (تُكتب مرة واحدة فقط!)
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -627,20 +622,31 @@ async def check_blogger_status(post_id: str):
         return {"status": "not_found"}
 
 
-# 2. دالة عرض الواجهة (Vue SPA)
-@app.get("/{rest_of_path:path}")
-async def serve_vue_app(rest_of_path: str):
-    # تجاهل مسارات الـ API
-    if rest_of_path.startswith("api"):
-        raise HTTPException(status_code=404, detail="API route not found")
+# 6. ربط المجلدات الثابتة والصفحة الرئيسية (نظام SPA)
+STATIC_DIST = os.path.join(BASE_DIR, "static", "dist")
 
-    # المسار الحقيقي وفقاً لـ ls التي أرسلتها (static/dist/index.html)
-    index_path = os.path.join(BASE_DIR, "static", "dist", "index.html")
+if os.path.exists(STATIC_DIST):
+    # خدمة الملفات الثابتة (JS/CSS)
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(STATIC_DIST, "assets")),
+        name="assets",
+    )
 
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
+    # خدمة الصفحة الرئيسية لكل المسارات (SPA Routing)
+    @app.get("/{rest_of_path:path}")
+    async def serve_spa(rest_of_path: str):
+        # تجاهل مسارات الـ API لكي لا يتم اعتراضها
+        if rest_of_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="API route not found")
 
-    return {"error": f"Frontend build not found at {index_path}"}
+        index_path = os.path.join(STATIC_DIST, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"error": "Frontend build not found"}
+
+else:
+    print(f"⚠️ WARNING: STATIC_DIST not found at {STATIC_DIST}")
 
 
 if __name__ == "__main__":
