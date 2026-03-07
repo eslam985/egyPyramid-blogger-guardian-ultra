@@ -1,35 +1,33 @@
-# 1. المرحلة الأولى: بناء الـ Frontend
-FROM node:18-slim AS builder
-WORKDIR /app
-
-# تثبيت المكتبات اللازمة للبناء
-RUN apt-get update && apt-get install -y python3 make g++
-
-COPY package*.json ./
-# إعادة بناء المكتبات الأصلية لضمان التوافق
-RUN npm install --build-from-source
-COPY . .
-RUN npm run build
-
-# 2. المرحلة النهائية
 FROM python:3.11-slim
+
 WORKDIR /code
 
+# 1. تثبيت الحزم الأساسية (أضفنا build-essential للتعامل مع المكتبات الأصلية مثل tailwind)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc python3-dev ffmpeg unrar-free file \
+    gcc g++ make python3-dev ffmpeg unrar-free file nodejs npm \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    python -m nltk.downloader punkt punkt_tab
+# 2. نسخ ملفات الـ JS فقط أولاً (لتحسين الـ Layer Caching)
+COPY package*.json ./
+# مسح الـ modules القديمة إن وجدت وضمان بيئة نظيفة
+RUN rm -rf node_modules && npm install
 
-# نسخ الـ build
-COPY --from=builder /app/static/dist /code/static/dist
+# 3. نسخ باقي الكود
 COPY . .
 
-RUN useradd -m -u 1000 user && chown -R user:user /code
+# 4. بناء الفرونت إيند
+RUN npm run build
+
+# 5. إعداد المستخدم والبيئة
+RUN useradd -m -u 1000 user
+RUN chown -R user:user /code/static/dist
+
 USER user
+ENV PATH="/home/user/.local/bin:${PATH}"
+
+# 6. تثبيت مكتبات بايثون
+RUN pip install --no-cache-dir --user -r requirements.txt
+RUN python -m nltk.downloader punkt punkt_tab
 
 EXPOSE 7860
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
