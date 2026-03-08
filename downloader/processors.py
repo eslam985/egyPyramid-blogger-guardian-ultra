@@ -593,9 +593,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         print(f"🔍 DoodStream Task ID: {f_code}")
 
         # محاولات الفحص (نزيد الوقت قليلاً لضمان عدم الحظر)
-        for i in range(1, 101):
+        for i in range(1, 31):
             await asyncio.sleep(20)  # 15 ثانية وقت مثالي للملفات الصغيرة
-            print(f"🔄 DoodStream Polling Attempt {i}/100...")
+            print(f"🔄 DoodStream Polling Attempt {i}/30...")
 
             for domain in api_domains:
                 try:
@@ -678,9 +678,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
                 target = clean_it(file_name.split(".")[0])
 
-                for i in range(1, 21):
+                for i in range(1, 31):
                     await asyncio.sleep(20)
-                    print(f"🔄 Streamtape Polling Attempt {i}/20...")
+                    print(f"🔄 Streamtape Polling Attempt {i}/30...")
 
                     # 1. الفحص المباشر عبر الـ ID (الأولوية القصوى حسب الديكومنتيشن)
                     try:
@@ -732,73 +732,70 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
 
 async def upload_to_lulustream(key, identifier, file_name):
-    """الرفع لـ LuluStream - النسخة النهائية المعتمدة بعد اختبار كولاب"""
-    print(f"📡 LuluStream: إرسال أمر سحب من الأرشيف...")
+    """النسخة المعتمدة: الرفع مع المراقبة الذكية لحالة الملف"""
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-
-        async with httpx.AsyncClient(
-            timeout=30.0, headers=headers, follow_redirects=True
-        ) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             encoded_url = urllib.parse.quote(remote_url, safe="")
-
-            # النطاق المعتمد بناءً على التجربة الناجحة
             add_url = (
                 f"https://api.lulustream.com/api/upload/url?key={key}&url={encoded_url}"
             )
 
             res = await client.get(add_url)
-
-            if res.status_code != 200:
-                print(
-                    f"⚠️ LuluStream API Primary Failed ({res.status_code}), Trying Secondary..."
-                )
-                add_url = (
-                    f"https://lulustream.com/api/upload/url?key={key}&url={encoded_url}"
-                )
-                res = await client.get(add_url)
-
             data = res.json()
 
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
-                if file_code:
-                    # --- الاستراتيجية الجديدة: التعديل بعد التأكد من الحالة ---
-                    print(f"⏳ LuluStream: تم بدء السحب. سأحاول التسمية بعد قليل...")
 
-                    # سنقوم بمحاولة التعديل، ثم نترك المهمة لسكريبت التصحيح الدوري
-                    # أو ننتظر هنا بشكل غير معطل (Background Task)
+                # --- تشغيل وظيفة المراقبة (Background Polling) ---
+                asyncio.create_task(
+                    monitor_and_rename(client, key, file_code, file_name)
+                )
 
-                    async def delayed_rename(code, title):
-                        # ننتظر دقيقة كاملة لضمان استلام السيرفر للملف
-                        await asyncio.sleep(120)
-                        edit_api = "https://lulustream.com/api/file/edit"
-                        params = {"key": key, "file_code": code, "file_title": title}
-                        try:
-                            async with httpx.AsyncClient() as c:
-                                await c.get(edit_api, params=params)
-                            print(
-                                f"✅ LuluStream: تم إرسال التسمية المتأخرة للملف {code}"
-                            )
-                        except:
-                            pass
-
-                    # تشغيل التسمية في الخلفية حتى لا نعطل بقية السكريبت
-                    asyncio.create_task(delayed_rename(file_code, file_name))
-
-                    print(f"✅ LuluStream Success! Code: {file_code}")
-                    return f"https://lulustream.com/e/{file_code}"
-
-            print(f"❌ LuluStream Refused: {data.get('msg', 'Unknown Error')}")
+                print(f"✅ LuluStream: تم بدء الرفع. الكود: {file_code}")
+                return f"https://lulustream.com/e/{file_code}"
 
     except Exception as e:
         print(f"❌ LuluStream Logic Error: {e}")
     return None
+
+
+async def monitor_and_rename(client, key, file_code, file_name):
+    """دالة الاستطلاع (Polling): تراقب حالة الملف حتى ينتهي الرفع ثم تعدل الاسم"""
+    info_url = f"https://lulustream.com/api/file/info"
+
+    # محاولة التحقق لمدة تصل إلى 10 دقائق (60 محاولة * 10 ثوانٍ)
+    for i in range(60):
+        try:
+            # التحقق من حالة الملف
+            params = {"key": key, "file_code": file_code}
+            res = await client.get(info_url, params=params)
+            info = res.json()
+
+            # فحص الحالة بناءً على الـ Docs (canplay تعني أن الملف جاهز)
+            if info.get("status") == 200 and info.get("result"):
+                file_info = info["result"][0]
+                if file_info.get("canplay") == 1:
+                    print(f"🚀 LuluStream: الملف {file_code} جاهز! جاري التسمية...")
+
+                    # هنا نقوم بالتعديل
+                    edit_url = "https://lulustream.com/api/file/edit"
+                    edit_params = {
+                        "key": key,
+                        "file_code": file_code,
+                        "file_title": file_name,
+                    }
+                    await client.get(edit_url, params=edit_params)
+                    print(f"✅ LuluStream: تم التعديل النهائي لـ {file_name}")
+                    return
+        except Exception as e:
+            print(f"⚠️ Polling Error: {e}")
+
+        await asyncio.sleep(10)  # انتظر 10 ثوانٍ قبل المحاولة التالية
+
+    print(f"❌ LuluStream: انتهى وقت الانتظار للملف {file_code} دون اكتمال.")
 
 
 async def upload_to_mixdrop(file_path, email, key):
