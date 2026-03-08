@@ -635,7 +635,12 @@ async def check_blogger_status(post_id: str):
 
 
 # 6. ربط المجلدات الثابتة والصفحة الرئيسية (نظام SPA)
-STATIC_DIST = os.path.join(BASE_DIR, "static", "dist")
+# بدلاً من المسار النسبي، استخدم المسار الجذري داخل الحاوية
+# تأكد أن المجلد static موجود في المجلد الرئيسي الذي يعمل فيه السيرفر
+STATIC_DIST = "/code/static/dist" 
+
+# أضف طباعة للمسار للتأكد من أنه يرى الـ static
+print(f"DEBUG: Checking path {STATIC_DIST} - Exists: {os.path.exists(STATIC_DIST)}")
 
 if os.path.exists(STATIC_DIST):
     # خدمة الملفات الثابتة (JS/CSS)
