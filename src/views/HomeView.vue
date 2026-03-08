@@ -64,35 +64,38 @@ const currentStatus = ref('all');
 const currentCategory = ref('all');
 const currentPage = ref(1);
 const totalPages = ref(1);
-
+// عدل الـ computed لضمان عدم حدوث الخطأ أبداً
+const filteredMedia = computed(() => {
+ return Array.isArray(mediaList.value) ? mediaList.value : [];
+});
 // دالة جلب البيانات الأساسية
 const loadMediaList = async (page = 1) => {
-    loading.value = true;
-    try {
-        // نستخدم props.search مباشرة من الـ Parent لضمان دقة القيمة
-        const url = `/media/list?page=${page}&cat=${currentCategory.value}&status=${currentStatus.value}&search=${props.search || ''}`;
-        const response = await api.get(url);
-        
-        mediaList.value = response.data.data || [];
-        totalPages.value = Math.max(1, Math.ceil(response.data.total_count / 12));
-        currentPage.value = page;
-    } catch (e) {
-        console.error("خطأ في جلب البيانات:", e);
-    } finally {
-        loading.value = false;
-    }
+ loading.value = true;
+ try {
+  // نستخدم props.search مباشرة من الـ Parent لضمان دقة القيمة
+  const url = `/media/list?page=${page}&cat=${currentCategory.value}&status=${currentStatus.value}&search=${props.search || ''}`;
+  const response = await api.get(url);
+
+  mediaList.value = response.data.data || [];
+  totalPages.value = Math.max(1, Math.ceil(response.data.total_count / 12));
+  currentPage.value = page;
+ } catch (e) {
+  console.error("خطأ في جلب البيانات:", e);
+ } finally {
+  loading.value = false;
+ }
 };
 
 // مراقبة التغيرات: أي تغيير في الفلاتر أو البحث يعيدنا للصفحة الأولى ويجلب البيانات
 watch([() => props.search, currentStatus, currentCategory], () => {
-    loadMediaList(1);
+ loadMediaList(1);
 });
 
-const handleDelete = (id) => { 
-    console.log("Delete triggered for:", id); 
+const handleDelete = (id) => {
+ console.log("Delete triggered for:", id);
 };
 
 onMounted(async () => {
-    await loadMediaList(1);
+ await loadMediaList(1);
 });
 </script>
