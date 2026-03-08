@@ -4,11 +4,6 @@ import time
 import requests
 from datetime import datetime
 import random
-from groq import Groq
-from google import genai
-from google.genai import types
-from textblob import TextBlob
-from deep_translator import GoogleTranslator
 from dotenv import load_dotenv  # أضف هذا السطر
 
 # 1. شحن المتغيرات (هذا يقرأ ملف .env في جهازك المحلي)
@@ -16,23 +11,7 @@ load_dotenv()
 
 # 2. استدعاء المفاتيح
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# 3. تعريف الـ Clients مع فحص الأخطاء
-# الحقيقة الصارمة: لو المفتاح مش موجود، السطر ده هيوقع السيرفر كله (Crash)
-if not GROQ_API_KEY:
-    print("⚠️ Warning: GROQ_API_KEY is missing!")
-    client_groq = None
-else:
-    client_groq = Groq(api_key=GROQ_API_KEY)
-
-if not GEMINI_API_KEY:
-    print("⚠️ Warning: GEMINI_API_KEY is missing!")
-    client_gemini = None
-else:
-    client_gemini = genai.Client(
-        api_key=GEMINI_API_KEY, http_options={"api_version": "v1"}
-    )
+client_groq = os.getenv("GROQ_API_KEY")
 
 
 def ar_to_en(text):
@@ -75,6 +54,8 @@ def clean_for_match(t):
 # وظيفة تحويل العنوان لرابط إنجليزي نظيف
 # وظيفة تحويل العنوان لرابط إنجليزي نظيف (نسخة مضمنة ومضمونة)
 def generate_clean_slug(text):
+    from deep_translator import GoogleTranslator  # استيراد محلي فقط
+
     try:
         # 1. ترجمة النص كاملاً
         translated = GoogleTranslator(source="auto", target="en").translate(text)
@@ -205,6 +186,9 @@ def generate_seo_tags(title, labels_list):
 
 
 def generate_ai_seo_description(movie_title, story_summary):
+    from groq import Groq
+    from google import genai
+
     """صياغة وصف SEO احترافي باستخدام Groq (أسرع وأقوى بديل)"""
     title_clean = movie_title.split("[")[0].strip()
 

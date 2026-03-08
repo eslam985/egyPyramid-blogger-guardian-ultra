@@ -11,7 +11,6 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Body  # تأكد من استيراد Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-import logging
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
