@@ -736,29 +736,48 @@ async def upload_to_lulustream(key, identifier, file_name):
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
-        base_api = "https://lulustream.com/api"  # النطاق اللي نجح معاك
+        base_api = "https://lulustream.com/api"
 
-        async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
-            # 1. طلب الرفع
+        # زيادة التايم أوت للرفع لمنع التكرار (عشان ميفكرش إنه فشل ويعيد)
+        async with httpx.AsyncClient(timeout=100.0, follow_redirects=True) as client:
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
             res = await client.get(add_url)
             data = res.json()
 
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
-                print(f"✅ تم قبول الرفع بنجاح. الكود: {file_code}")
+                print(f"✅ تم قبول الرفع! الكود: {file_code}")
 
-                # --- دالة المطارد (Hunter) المحسنة ---
                 async def hunter_fixer(target_code, target_title):
-                    print(f"🕵️ [Hunter] المطارد بدأ عمله للملف {target_code}...")
+                    print(f"🕵️ [Hunter] بدأت عملية 'القناص' للملف {target_code}...")
 
-                    # محاولات فحص سريعة في الأول ثم أبطأ
                     for attempt in range(1, 21):
-                        print(f"🔍 [Hunter] محاولة فحص رقم {attempt} في القائمة...")
+                        print(f"🔄 [Hunter] محاولة رقم {attempt}...")
                         try:
-                            # نفتح اتصال جديد لكل فحص لضمان الفريش داتا
                             async with httpx.AsyncClient(timeout=30.0) as hunter_client:
-                                list_url = f"{base_api}/file/list?key={key}&per_page=20"  # آخر 20 ملف بس
+                                # 1. الطريقة الأولى: الهجوم المباشر (Direct Edit)
+                                # إحنا معانا الكود، ليه نستنى القائمة؟ نعدل فوراً!
+                                edit_params = {
+                                    "key": key,
+                                    "file_code": target_code,
+                                    "file_title": target_title,
+                                }
+                                edit_res = await hunter_client.get(
+                                    f"{base_api}/file/edit", params=edit_params
+                                )
+
+                                # لو السيرفر قبل التعديل، يبقى المهمة انتهت بنجاح
+                                if "true" in edit_res.text or (
+                                    edit_res.text.strip().startswith("{")
+                                    and edit_res.json().get("status") == 200
+                                ):
+                                    print(
+                                        f"✨ [Hunter] نجاح اختراق! تم تثبيت الاسم بالهجوم المباشر: {target_title}"
+                                    )
+                                    return
+
+                                # 2. الطريقة الثانية: البحث العميق (لو المباشر فشل)
+                                list_url = f"{base_api}/file/list?key={key}&per_page=100"  # فحص 100 ملف!
                                 list_res = await hunter_client.get(list_url)
 
                                 if list_res.status_code == 200:
@@ -767,63 +786,41 @@ async def upload_to_lulustream(key, identifier, file_name):
                                         .get("result", {})
                                         .get("files", [])
                                     )
-                                    # البحث عن الملف
-                                    target_file = next(
-                                        (
-                                            f
-                                            for f in files
-                                            if f["file_code"] == target_code
-                                        ),
-                                        None,
-                                    )
 
-                                    if target_file:
-                                        # لو لقيناه واسمه لسه مش مظبوط (فيه حروف غريبة)
-                                        if (
-                                            "D8" in target_file["title"]
-                                            or "D9" in target_file["title"]
-                                            or "?" in target_file["title"]
-                                        ):
+                                    # البحث بـ 3 طرق: الكود، أو الاسم المشوه، أو تطابق جزئي
+                                    for f in files:
+                                        is_match = (f["file_code"] == target_code) or (
+                                            "D8" in f["title"] and attempt < 5
+                                        )  # لو لسه برفع وملقتش الكود، خد أي حد مشوه
+
+                                        if is_match:
+                                            f_code = f["file_code"]
                                             print(
-                                                f"🎯 [Hunter] وجدته! الاسم الحالي مشوه. جاري التصحيح لـ: {target_title}"
+                                                f"🎯 [Hunter] تم اصطياد الملف في القائمة (كود: {f_code}). جاري التعديل..."
                                             )
-                                            edit_params = {
-                                                "key": key,
-                                                "file_code": target_code,
-                                                "file_title": target_title,
-                                            }
-                                            edit_res = await hunter_client.get(
+                                            await hunter_client.get(
                                                 f"{base_api}/file/edit",
-                                                params=edit_params,
+                                                params={
+                                                    "key": key,
+                                                    "file_code": f_code,
+                                                    "file_title": target_title,
+                                                },
                                             )
-                                            if (
-                                                "true" in edit_res.text
-                                                or "200" in edit_res.text
-                                            ):
-                                                print(
-                                                    f"✨ [Hunter] نجاح! تم تثبيت الاسم النهائي."
-                                                )
-                                                return
-                                        else:
-                                            print(
-                                                f"✅ [Hunter] الملف موجود والاسم سليم فعلاً."
-                                            )
+                                            print(f"✨ [Hunter] تم التصحيح بنجاح!")
                                             return
-                                    else:
-                                        print(
-                                            f"😴 [Hunter] الملف لسه مظهرش في قائمة الرفع."
-                                        )
+
+                                print(
+                                    f"😴 [Hunter] لم يعثر عليه بعد.. السيرفر لم يدرج الملف في القائمة."
+                                )
+
                         except Exception as e:
-                            print(f"⚠️ [Hunter] تعثر بسيط (سيرفر ضغط): {e}")
+                            print(f"⚠️ [Hunter] خطأ فني في المحاولة: {e}")
 
-                        # انتظار يتزايد (أول مرة 30 ثانية، بعد كده 60)
-                        await asyncio.sleep(30 if attempt < 3 else 60)
+                        await asyncio.sleep(60)  # انتظر دقيقة بين كل محاولة
+                    print(f"🛑 [Hunter] فشلت في العثور على الملف بعد 20 محاولة.")
 
-                # تشغيل المهمة
+                # شغل القناص فوراً
                 asyncio.create_task(hunter_fixer(file_code, file_name))
-
-                # انتظار 5 ثواني "تصبيرة" عشان البرنتات تظهر في الكونسول قبل الـ return
-                await asyncio.sleep(5)
                 return f"https://lulustream.com/e/{file_code}"
 
     except Exception as e:
