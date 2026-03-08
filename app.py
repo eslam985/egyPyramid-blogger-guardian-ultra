@@ -1,21 +1,5 @@
-import uvicorn
-import logging
-import json
-import re
-import html
-import requests
-import sys
-import os
-import math
-import jwt
+import uvicorn, logging, json, re, html, requests, sys, os, jwt
 from dotenv import load_dotenv
-from fastapi import Body  # تأكد من استيراد Body
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-logger.info("--- التطبيق بدأ بالعمل الآن ---")
-# 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
     FastAPI,
     Request,
@@ -24,62 +8,46 @@ from fastapi import (
     HTTPException,
     status,
     BackgroundTasks,
+    Body,
 )
-from fastapi import HTTPException
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from bs4 import BeautifulSoup
-
-# 2. إعداد المسارات والبيئة
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(
-    dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-)
-
-# 3. استيراد الخدمات الخاصة بك
 from services.supabase_db import SupabaseService
 
+# محاولة استيراد BloggerService
 try:
     from services.blogger_api import BloggerService
-except ImportError as e:
-    print(f"CRITICAL: BloggerService Import Error: {e}")
+except ImportError:
     BloggerService = None
 
-# 4. إعداد التطبيق واللوجات
+# إعداد البيئة واللوجات
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+# 1. تهيئة التطبيق والميدلوير (يجب أن يكونا أول شيء)
 app = FastAPI()
-from fastapi.middleware.cors import CORSMiddleware
-
-
-# أضف هذا الجزء فوراً
-# اجعل الـ CORS مرناً للـ Production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # للنشر في Hugging Face، استخدم "*" مؤقتاً
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# 2. إعداد المتغيرات الأساسية
 BLOG_ID = os.getenv("BLOG_ID")
-
-# 5. تهيئة الخدمات
-supabase = getattr(SupabaseService, "client", None)
-
-try:
-    print(f"DEBUG: BLOG_ID value detected: '{BLOG_ID}'")
-    if BLOG_ID and BloggerService:
-        blogger = BloggerService(blog_id=BLOG_ID)
-    else:
-        blogger = None
-        print("WARNING: Blogger service skipped (BLOG_ID missing or Service not found)")
-except Exception as e:
-    blogger = None
-    print(f"CRITICAL: BloggerService Initialization Error: {e}")
-
-# إعدادات الـ JWT والأمن (تُكتب مرة واحدة فقط!)
 SECRET_KEY = os.getenv("SECRET_KEY")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
+# 3. تهيئة الخدمات
+blogger = BloggerService(blog_id=BLOG_ID) if BLOG_ID and BloggerService else None
+
+# 4. تهيئة الخدمات
+supabase = getattr(SupabaseService, "client", None)
 
 
 def authenticate(token: str = Depends(oauth2_scheme)):
@@ -94,6 +62,46 @@ def authenticate(token: str = Depends(oauth2_scheme)):
         )
 
 
+def convert_vk_to_embed(url):
+    if (
+        not url
+        or not any(domain in url for domain in ["vk.com", "vkvideo.ru"])
+        or "video_ext.php" in url
+    ):
+        return url
+    try:
+
+        match_ids = re.search(r"video(-?\d+)_(\d+)", url)
+        if not match_ids:
+            return url
+
+        fixed_oid = match_ids.group(1)
+        fixed_id = match_ids.group(2)
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
+        response = requests.get(url, headers=headers, timeout=10)
+        # تنظيف محتوى الصفحة من رموز مثل &amp; قبل البحث عن الهاش
+        clean_content = html.unescape(response.text)
+
+        # البحث عن الهاش بنمط أكثر دقة
+        hash_match = re.search(r'hash[":=]+([a-z0-9]+)', clean_content)
+
+        if hash_match:
+            final_hash = hash_match.group(1)
+            # نستخدم vkvideo.ru ونضع الهاش والـ & بشكل نظيف
+            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
+        else:
+            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}"
+
+    except Exception as e:
+        print(f"⚠️ VK Hash Error: {e}")
+        return url
+
+
 @app.post("/api/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if form_data.username != os.getenv(
@@ -102,24 +110,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=400, detail="بيانات دخول خاطئة")
     token = jwt.encode({"sub": form_data.username}, SECRET_KEY, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer"}
-
-
-@app.on_event("startup")
-async def startup_event():
-    print(f"✅ System Initialized.")
-    print(f"🔍 BASE_DIR: {BASE_DIR}")
-    print(f"🔍 STATIC_DIST: {STATIC_DIST}")
-    print(f"🔍 Does static/dist exist? {os.path.exists(STATIC_DIST)}")
-    print(
-        f"🔍 Does index.html exist? {os.path.exists(os.path.join(STATIC_DIST, 'index.html'))}"
-    )
-    # لاحظ الفراغ هنا (المحاذاة)
-    print(f"✅ System Initialized. BASE_DIR: {BASE_DIR}")
-    # أضف هذا السطر:
-    print(f"🔍 DEBUG - BLOG_ID value: {os.getenv('BLOG_ID')}")
-    print(
-        f"📂 Checking for index.html at: {os.path.join(BASE_DIR, 'static', 'dist', 'index.html')}"
-    )
 
 
 # 7. المسارات (الـ APIs توضع هنا...)
@@ -135,46 +125,43 @@ async def get_media_list(
     return {"data": data or [], "total_count": total_count}
 
 
-@app.post("/api/publisher/run")
-async def run_publisher(
-    background_tasks: BackgroundTasks, user: str = Depends(authenticate)
-):
-    # استخدام BackgroundTasks ضروري جداً هنا
-    # لأن عملية النشر قد تأخذ دقائق، ولا نريد للمتصفح أن ينتظر (Timeout)
+@app.get("/api/media/details/{media_id}")
+async def get_media_details(
+    media_id: int, user: str = Depends(authenticate)
+):  # أضفنا الحماية هنا
     try:
-        from publisher.main_publisher import start_publishing_from_supabase
-
-        background_tasks.add_task(start_publishing_from_supabase)
-    except ImportError:
-        print("⚠️ Publisher function not available (Library missing)")
-    return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
-
-
-@app.post("/api/media/add")
-async def add_new_work(
-    user: str = Depends(authenticate),
-    # استخدم Body بدلاً من Form لاستقبال JSON
-    payload: dict = Body(...),
-):
-    # الآن payload هو القاموس (dictionary) القادم من Vue مباشرة
-    # لا حاجة لاستخراج كل حقل على حدة
-    new_media = SupabaseService.add_media(payload)
-
-    if new_media:
-        media_id = new_media["id"]
-        # إنشاء مسودة في بلوجر
-        blogger_res = blogger.create_post(
-            title=payload.get("title"),
-            content=f"<p>{payload.get('story')}</p>",
-            is_draft=True,
+        # جلب بيانات الميديا
+        media_res = (
+            SupabaseService.client.table("medias")
+            .select("*")
+            .eq("id", media_id)
+            .single()
+            .execute()
+        )
+        # جلب الحلقات المرتبطة بها مرتبة برقم الحلقة
+        episodes_res = (
+            SupabaseService.client.table("episodes")
+            .select("*")
+            .eq("media_id", media_id)
+            .order("episode_number")
+            .execute()
         )
 
-        if blogger_res and "id" in blogger_res:
-            SupabaseService.update_media(
-                media_id, {"blogger_post_id": blogger_res["id"]}
-            )
+        if not media_res.data:
+            return {"error": "العمل غير موجود"}
 
-    return {"status": "success", "data": new_media}
+        data = media_res.data
+        data["episodes"] = episodes_res.data if episodes_res.data else []
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# حذف عمل
+@app.post("/api/media/delete/{media_id}")
+async def delete_media(media_id: int, user: str = Depends(authenticate)):
+    SupabaseService.delete_media(media_id)
+    return {"status": "deleted"}
 
 
 # تعديل عمل
@@ -215,11 +202,31 @@ async def update_media(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# حذف عمل
-@app.post("/api/media/delete/{media_id}")
-async def delete_media(media_id: int, user: str = Depends(authenticate)):
-    SupabaseService.delete_media(media_id)
-    return {"status": "deleted"}
+@app.post("/api/media/add")
+async def add_new_work(
+    user: str = Depends(authenticate),
+    # استخدم Body بدلاً من Form لاستقبال JSON
+    payload: dict = Body(...),
+):
+    # الآن payload هو القاموس (dictionary) القادم من Vue مباشرة
+    # لا حاجة لاستخراج كل حقل على حدة
+    new_media = SupabaseService.add_media(payload)
+
+    if new_media:
+        media_id = new_media["id"]
+        # إنشاء مسودة في بلوجر
+        blogger_res = blogger.create_post(
+            title=payload.get("title"),
+            content=f"<p>{payload.get('story')}</p>",
+            is_draft=True,
+        )
+
+        if blogger_res and "id" in blogger_res:
+            SupabaseService.update_media(
+                media_id, {"blogger_post_id": blogger_res["id"]}
+            )
+
+    return {"status": "success", "data": new_media}
 
 
 # التعديل: تحويل المسار لنظام FastAPI وتصحيح استدعاء السوبابيز
@@ -265,88 +272,6 @@ async def add_episode(
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
-
-
-# جلب روابط حلقة معينة
-@app.get("/api/episodes/{ep_id}/links")
-async def get_links(ep_id: int):
-    res = (
-        SupabaseService.client.table("links")
-        .select("*")
-        .eq("episode_id", ep_id)
-        .execute()
-    )
-    return res.data
-
-
-# إضافة رابط جديد
-@app.post("/api/episodes/{ep_id}/add-link")
-async def add_link(ep_id: int):
-    # التعديل: استخدام url بدلاً من link_url
-    SupabaseService.client.table("links").insert(
-        {"episode_id": ep_id, "server_name": "سيرفر جديد", "url": ""}
-    ).execute()
-    return {"status": "success"}
-
-
-# تحديث بيانات رابط (سيرفر) معين
-@app.post("/api/links/{link_id}/update")
-async def update_link_api(
-    link_id: int,
-    server_name: str = Form(None),
-    url: str = Form(None),  # تعديل هنا
-    user: str = Depends(authenticate),
-):
-    update_data = {}
-    if server_name is not None:
-        update_data["server_name"] = server_name
-    if url is not None:
-        update_data["url"] = url  # تعديل هنا
-
-    SupabaseService.client.table("links").update(update_data).eq(
-        "id", link_id
-    ).execute()
-    return {"status": "success"}
-
-
-def convert_vk_to_embed(url):
-    if (
-        not url
-        or not any(domain in url for domain in ["vk.com", "vkvideo.ru"])
-        or "video_ext.php" in url
-    ):
-        return url
-    try:
-
-        match_ids = re.search(r"video(-?\d+)_(\d+)", url)
-        if not match_ids:
-            return url
-
-        fixed_oid = match_ids.group(1)
-        fixed_id = match_ids.group(2)
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-
-        response = requests.get(url, headers=headers, timeout=10)
-        # تنظيف محتوى الصفحة من رموز مثل &amp; قبل البحث عن الهاش
-        clean_content = html.unescape(response.text)
-
-        # البحث عن الهاش بنمط أكثر دقة
-        hash_match = re.search(r'hash[":=]+([a-z0-9]+)', clean_content)
-
-        if hash_match:
-            final_hash = hash_match.group(1)
-            # نستخدم vkvideo.ru ونضع الهاش والـ & بشكل نظيف
-            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}&hash={final_hash}&hd=2"
-        else:
-            return f"https://vkvideo.ru/video_ext.php?oid={fixed_oid}&id={fixed_id}"
-
-    except Exception as e:
-        print(f"⚠️ VK Hash Error: {e}")
-        return url
 
 
 # مسار المزامنة الفعلي مع بلوجر
@@ -476,6 +401,97 @@ async def sync_episode_to_blogger(
         return {"status": "error", "error": str(e)}
 
 
+# تحديث بيانات رابط (سيرفر) معين
+@app.post("/api/links/{link_id}/update")
+async def update_link_api(
+    link_id: int,
+    server_name: str = Form(None),
+    url: str = Form(None),  # تعديل هنا
+    user: str = Depends(authenticate),
+):
+    update_data = {}
+    if server_name is not None:
+        update_data["server_name"] = server_name
+    if url is not None:
+        update_data["url"] = url  # تعديل هنا
+
+    SupabaseService.client.table("links").update(update_data).eq(
+        "id", link_id
+    ).execute()
+    return {"status": "success"}
+
+
+# جلب روابط حلقة معينة
+@app.get("/api/episodes/{ep_id}/links")
+async def get_links(ep_id: int):
+    res = (
+        SupabaseService.client.table("links")
+        .select("*")
+        .eq("episode_id", ep_id)
+        .execute()
+    )
+    return res.data
+
+
+# حذف رابط معين
+@app.post("/api/links/{link_id}/delete")
+async def delete_link_api(link_id: int, user: str = Depends(authenticate)):
+    SupabaseService.client.table("links").delete().eq("id", link_id).execute()
+    return {"status": "deleted"}
+
+
+# إضافة رابط جديد
+@app.post("/api/episodes/{ep_id}/add-link")
+async def add_link(ep_id: int):
+    # التعديل: استخدام url بدلاً من link_url
+    SupabaseService.client.table("links").insert(
+        {"episode_id": ep_id, "server_name": "سيرفر جديد", "url": ""}
+    ).execute()
+    return {"status": "success"}
+
+
+@app.post("/api/episodes/{ep_id}/delete")
+async def delete_episode_api(ep_id: int, user: str = Depends(authenticate)):
+    try:
+        # حذف الحلقة (سيحذف الروابط تلقائياً لو عندك Cascade)
+        SupabaseService.client.table("episodes").delete().eq("id", ep_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/api/publisher/run")
+async def run_publisher(
+    background_tasks: BackgroundTasks, user: str = Depends(authenticate)
+):
+    # استخدام BackgroundTasks ضروري جداً هنا
+    # لأن عملية النشر قد تأخذ دقائق، ولا نريد للمتصفح أن ينتظر (Timeout)
+    try:
+        from publisher.main_publisher import start_publishing_from_supabase
+
+        background_tasks.add_task(start_publishing_from_supabase)
+    except ImportError:
+        print("⚠️ Publisher function not available (Library missing)")
+    return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
+
+
+@app.get("/api/blogger/check-status/{post_id}")
+async def check_blogger_status(post_id: str):
+    try:
+        if not blogger:
+            return {"status": "error", "message": "Blogger not ready"}
+
+        service = blogger.get_service()
+        # محاولة جلب المقال من بلوجر
+        post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
+
+        # إذا وجده، فهو موجود. إذا لم يجده، سيرمي خطأ 404
+        return {"status": "exists", "blogger_status": post.get("status")}
+    except Exception as e:
+        # إذا كان الخطأ 404، فالمقال محذوف فعلياً
+        return {"status": "not_found"}
+
+
 @app.post("/api/blogger/toggle/{post_id}")
 async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
     try:
@@ -516,21 +532,25 @@ async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
         return {"status": "error", "error": str(e)}
 
 
-# حذف رابط معين
-@app.post("/api/links/{link_id}/delete")
-async def delete_link_api(link_id: int, user: str = Depends(authenticate)):
-    SupabaseService.client.table("links").delete().eq("id", link_id).execute()
-    return {"status": "deleted"}
-
-
-@app.post("/api/episodes/{ep_id}/delete")
-async def delete_episode_api(ep_id: int, user: str = Depends(authenticate)):
+# 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
+# 2. مسار جلب التقدم (النسخة المنضبطة)
+@app.get("/api/download/progress")
+async def get_all_progress(user: str = Depends(authenticate)):
     try:
-        # حذف الحلقة (سيحذف الروابط تلقائياً لو عندك Cascade)
-        SupabaseService.client.table("episodes").delete().eq("id", ep_id).execute()
-        return {"status": "success"}
+        # الحقيقة الصارمة: نريد فقط المهام التي "تتحرك" فعلياً
+        res = (
+            SupabaseService.client.table("episodes")
+            .select("id, status_message, progress_percent, download_speed")
+            .neq("download_speed", "Done")  # استبعاد المنتهي
+            .lt("progress_percent", 100)  # استبعاد من وصل 100%
+            .order("id", desc=True)  # الترتيب حسب الأحدث
+            .limit(5)
+            .execute()
+        )
+        return res.data
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        print(f"❌ Error fetching progress: {e}")
+        return []
 
 
 # 1. مسار بدء التحميل
@@ -563,81 +583,6 @@ async def run_download_task(
         print(f"❌ Error in run_download: {e}")
         return {"status": "error", "message": str(e)}
 
-
-# 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
-# 2. مسار جلب التقدم (النسخة المنضبطة)
-@app.get("/api/download/progress")
-async def get_all_progress(user: str = Depends(authenticate)):
-    try:
-        # الحقيقة الصارمة: نريد فقط المهام التي "تتحرك" فعلياً
-        res = (
-            SupabaseService.client.table("episodes")
-            .select("id, status_message, progress_percent, download_speed")
-            .neq("download_speed", "Done")  # استبعاد المنتهي
-            .lt("progress_percent", 100)  # استبعاد من وصل 100%
-            .order("id", desc=True)  # الترتيب حسب الأحدث
-            .limit(5)
-            .execute()
-        )
-        return res.data
-    except Exception as e:
-        print(f"❌ Error fetching progress: {e}")
-        return []
-
-
-@app.get("/api/media/details/{media_id}")
-async def get_media_details(
-    media_id: int, user: str = Depends(authenticate)
-):  # أضفنا الحماية هنا
-    try:
-        # جلب بيانات الميديا
-        media_res = (
-            SupabaseService.client.table("medias")
-            .select("*")
-            .eq("id", media_id)
-            .single()
-            .execute()
-        )
-        # جلب الحلقات المرتبطة بها مرتبة برقم الحلقة
-        episodes_res = (
-            SupabaseService.client.table("episodes")
-            .select("*")
-            .eq("media_id", media_id)
-            .order("episode_number")
-            .execute()
-        )
-
-        if not media_res.data:
-            return {"error": "العمل غير موجود"}
-
-        data = media_res.data
-        data["episodes"] = episodes_res.data if episodes_res.data else []
-        return data
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/blogger/check-status/{post_id}")
-async def check_blogger_status(post_id: str):
-    try:
-        if not blogger:
-            return {"status": "error", "message": "Blogger not ready"}
-
-        service = blogger.get_service()
-        # محاولة جلب المقال من بلوجر
-        post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
-
-        # إذا وجده، فهو موجود. إذا لم يجده، سيرمي خطأ 404
-        return {"status": "exists", "blogger_status": post.get("status")}
-    except Exception as e:
-        # إذا كان الخطأ 404، فالمقال محذوف فعلياً
-        return {"status": "not_found"}
-
-
-import os
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
 
 # 1. تحديد المسار بناءً على مكان ملف app.py (هذا يعمل في أي مكان)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

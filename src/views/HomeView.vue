@@ -6,7 +6,7 @@
    <DownloadMonitor />
 
    <header class="dashboard-header">
-    <h2>إدارة المحتوى ({{ filteredMedia.length }})</h2>
+    <h2>إدارة المحتوى ({{ Array.isArray(mediaList) ? mediaList.length : 0 }})</h2>
 
     <div class="filters-bar">
      <button class="btn-filter" :class="{ active: currentStatus === 'all' }"
@@ -50,12 +50,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+
 import api from '../services/api';
 import MediaCard from '../components/MediaCard.vue';
 import DownloadMonitor from '../components/DownloadMonitor.vue';
 import MediaSkeleton from '../components/MediaSkeleton.vue';
-
 const props = defineProps(['search']);
 
 const mediaList = ref([]);
