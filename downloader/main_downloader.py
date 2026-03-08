@@ -708,13 +708,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
                 # 1. تحضير مهام الريموت (تستهلك طلبات HTTP فقط)
                 task_voe = upload_to_voe_api(vid_path, identifier)
-                await asyncio.sleep(2)
+                await asyncio.sleep(20)
                 task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
-                await asyncio.sleep(2)
+                await asyncio.sleep(20)
                 task_tape = upload_to_streamtape(
                     st_login, st_key, identifier, file_name
                 )
-                await asyncio.sleep(2)
+                await asyncio.sleep(20)
                 task_lulu = upload_to_lulustream(lu_key, identifier, file_name)
 
                 # 2. تحضير مهمة VK (رفع محلي ثقيل) - تشغيلها في Thread منفصل لعدم تعطيل الـ Event Loop

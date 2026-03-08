@@ -750,9 +750,7 @@ async def upload_to_lulustream(key, identifier, file_name):
                 file_code = data["result"].get("filecode")
 
                 # --- تشغيل وظيفة المراقبة (Background Polling) ---
-                asyncio.create_task(
-                    monitor_and_rename(client, key, file_code, file_name)
-                )
+                asyncio.create_task(monitor_and_rename(key, file_code, file_name))
 
                 print(f"✅ LuluStream: تم بدء الرفع. الكود: {file_code}")
                 return f"https://lulustream.com/e/{file_code}"
@@ -762,38 +760,40 @@ async def upload_to_lulustream(key, identifier, file_name):
     return None
 
 
-async def monitor_and_rename(client, key, file_code, file_name):
-    """دالة الاستطلاع (Polling): تراقب حالة الملف حتى ينتهي الرفع ثم تعدل الاسم"""
-    info_url = f"https://lulustream.com/api/file/info"
+async def monitor_and_rename(key, file_code, file_name):
+    """دالة المراقبة المستقلة (تفتح وتغلق الـ Client الخاص بها)"""
+    info_url = "https://lulustream.com/api/file/info"
+    edit_url = "https://lulustream.com/api/file/edit"
 
-    # محاولة التحقق لمدة تصل إلى 10 دقائق (60 محاولة * 10 ثوانٍ)
-    for i in range(60):
-        try:
-            # التحقق من حالة الملف
-            params = {"key": key, "file_code": file_code}
-            res = await client.get(info_url, params=params)
-            info = res.json()
+    # فتح Client جديد ومستقل تماماً
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for i in range(60):  # محاولات لمدة 10 دقائق
+            try:
+                params = {"key": key, "file_code": file_code}
+                res = await client.get(info_url, params=params)
+                info = res.json()
 
-            # فحص الحالة بناءً على الـ Docs (canplay تعني أن الملف جاهز)
-            if info.get("status") == 200 and info.get("result"):
-                file_info = info["result"][0]
-                if file_info.get("canplay") == 1:
-                    print(f"🚀 LuluStream: الملف {file_code} جاهز! جاري التسمية...")
+                if info.get("status") == 200 and info.get("result"):
+                    # --- التعديل هنا: التأكد أن الـ result قائمة وبها عناصر ---
+                    results = info["result"]
+                    if isinstance(results, list) and len(results) > 0:
+                        file_info = results[0]
+                        if file_info.get("canplay") == 1:
+                            # تنفيذ التعديل
+                            edit_params = {
+                                "key": key,
+                                "file_code": file_code,
+                                "file_title": file_name,
+                            }
+                            await client.get(edit_url, params=edit_params)
+                            print(f"✅ LuluStream: تم التعديل النهائي لـ {file_name}")
+                            return
+                    else:
+                        print(f"⚠️ LuluStream: الرد لا يحتوي على بيانات ملف صالحة.")
+            except Exception as e:
+                print(f"⚠️ Polling Error: {e}")
 
-                    # هنا نقوم بالتعديل
-                    edit_url = "https://lulustream.com/api/file/edit"
-                    edit_params = {
-                        "key": key,
-                        "file_code": file_code,
-                        "file_title": file_name,
-                    }
-                    await client.get(edit_url, params=edit_params)
-                    print(f"✅ LuluStream: تم التعديل النهائي لـ {file_name}")
-                    return
-        except Exception as e:
-            print(f"⚠️ Polling Error: {e}")
-
-        await asyncio.sleep(10)  # انتظر 10 ثوانٍ قبل المحاولة التالية
+            await asyncio.sleep(10)
 
     print(f"❌ LuluStream: انتهى وقت الانتظار للملف {file_code} دون اكتمال.")
 
