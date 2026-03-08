@@ -639,11 +639,12 @@ if os.path.exists(STATIC_DIST):
     )
 
     # خدمة الصفحة الرئيسية لكل المسارات (SPA Routing)
+    # 6. خدمة الصفحة الرئيسية لكل المسارات (SPA Routing)
     @app.get("/{rest_of_path:path}")
     async def serve_spa(rest_of_path: str):
-        # تجاهل مسارات الـ API لكي لا يتم اعتراضها
-        if rest_of_path.startswith("api"):
-            raise HTTPException(status_code=404, detail="API route not found")
+        # لا تضع أي شروط هنا!
+        # FastAPI يبحث أولاً عن المسارات المعرفة (الـ APIs)،
+        # إذا لم يجدها (أي أن الطلب ليس API)، فسينفذ هذا المسار التلقائي.
 
         index_path = os.path.join(STATIC_DIST, "index.html")
         if os.path.exists(index_path):
