@@ -736,76 +736,95 @@ async def upload_to_lulustream(key, identifier, file_name):
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
-        base_api = "https://lulustream.com/api"
+        base_api = "https://lulustream.com/api"  # النطاق اللي نجح معاك
 
-        # 1. طلب الرفع (نستخدم Client محلي هنا ينتهي بانتهاء الطلب)
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
+            # 1. طلب الرفع
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
             res = await client.get(add_url)
             data = res.json()
 
-        if data.get("status") == 200 and "result" in data:
-            file_code = data["result"].get("filecode")
-            print(f"✅ تم قبول الرفع. الكود المستهدف: {file_code}")
+            if data.get("status") == 200 and "result" in data:
+                file_code = data["result"].get("filecode")
+                print(f"✅ تم قبول الرفع بنجاح. الكود: {file_code}")
 
-            # --- دالة المطارد (مستقلة تماماً) ---
-            async def hunter_fixer(target_code, target_title):
-                print(f"🕵️ [Hunter] المطارد بدأ عمله بشكل مستقل للملف {target_code}...")
-                await asyncio.sleep(60)
+                # --- دالة المطارد (Hunter) المحسنة ---
+                async def hunter_fixer(target_code, target_title):
+                    print(f"🕵️ [Hunter] المطارد بدأ عمله للملف {target_code}...")
 
-                # نفتح Client جديد تماماً داخل المطارد
-                async with httpx.AsyncClient(timeout=30.0) as hunter_client:
-                    for attempt in range(1, 15):
+                    # محاولات فحص سريعة في الأول ثم أبطأ
+                    for attempt in range(1, 21):
+                        print(f"🔍 [Hunter] محاولة فحص رقم {attempt} في القائمة...")
                         try:
-                            # جلب القائمة
-                            list_url = f"{base_api}/file/list?key={key}&per_page=50"
-                            list_res = await hunter_client.get(list_url)
+                            # نفتح اتصال جديد لكل فحص لضمان الفريش داتا
+                            async with httpx.AsyncClient(timeout=30.0) as hunter_client:
+                                list_url = f"{base_api}/file/list?key={key}&per_page=20"  # آخر 20 ملف بس
+                                list_res = await hunter_client.get(list_url)
 
-                            if (
-                                list_res.status_code == 200
-                                and list_res.text.strip().startswith("{")
-                            ):
-                                list_data = list_res.json()
-                                files = list_data.get("result", {}).get("files", [])
-                                found = any(
-                                    f for f in files if f["file_code"] == target_code
-                                )
-
-                                if found:
-                                    print(
-                                        f"🎯 [Hunter] وجدته في القائمة! جاري تثبيت الاسم..."
+                                if list_res.status_code == 200:
+                                    files = (
+                                        list_res.json()
+                                        .get("result", {})
+                                        .get("files", [])
                                     )
-                                    edit_params = {
-                                        "key": key,
-                                        "file_code": target_code,
-                                        "file_title": target_title,
-                                    }
-                                    # التعديل بنفس الـ Client المستقل
-                                    edit_res = await hunter_client.get(
-                                        f"{base_api}/file/edit", params=edit_params
+                                    # البحث عن الملف
+                                    target_file = next(
+                                        (
+                                            f
+                                            for f in files
+                                            if f["file_code"] == target_code
+                                        ),
+                                        None,
                                     )
 
-                                    if "true" in edit_res.text or (
-                                        edit_res.text.strip().startswith("{")
-                                        and edit_res.json().get("status") == 200
-                                    ):
+                                    if target_file:
+                                        # لو لقيناه واسمه لسه مش مظبوط (فيه حروف غريبة)
+                                        if (
+                                            "D8" in target_file["title"]
+                                            or "D9" in target_file["title"]
+                                            or "?" in target_file["title"]
+                                        ):
+                                            print(
+                                                f"🎯 [Hunter] وجدته! الاسم الحالي مشوه. جاري التصحيح لـ: {target_title}"
+                                            )
+                                            edit_params = {
+                                                "key": key,
+                                                "file_code": target_code,
+                                                "file_title": target_title,
+                                            }
+                                            edit_res = await hunter_client.get(
+                                                f"{base_api}/file/edit",
+                                                params=edit_params,
+                                            )
+                                            if (
+                                                "true" in edit_res.text
+                                                or "200" in edit_res.text
+                                            ):
+                                                print(
+                                                    f"✨ [Hunter] نجاح! تم تثبيت الاسم النهائي."
+                                                )
+                                                return
+                                        else:
+                                            print(
+                                                f"✅ [Hunter] الملف موجود والاسم سليم فعلاً."
+                                            )
+                                            return
+                                    else:
                                         print(
-                                            f"✨ [Hunter] نجاح مبهر! تم تثبيت الاسم: {target_title}"
+                                            f"😴 [Hunter] الملف لسه مظهرش في قائمة الرفع."
                                         )
-                                        return
-                                else:
-                                    print(
-                                        f"😴 [Hunter] محاولة {attempt}: الملف لم يظهر بعد.."
-                                    )
                         except Exception as e:
-                            print(f"⚠️ [Hunter] تعثر بسيط في المحاولة {attempt}: {e}")
+                            print(f"⚠️ [Hunter] تعثر بسيط (سيرفر ضغط): {e}")
 
-                        await asyncio.sleep(60)
-                print(f"🛑 [Hunter] توقفت المطاردة لـ {target_code}.")
+                        # انتظار يتزايد (أول مرة 30 ثانية، بعد كده 60)
+                        await asyncio.sleep(30 if attempt < 3 else 60)
 
-            # تشغيل المطارد كمهمة خلفية (لن يتأثر بالـ return)
-            asyncio.create_task(hunter_fixer(file_code, file_name))
-            return f"https://lulustream.com/e/{file_code}"
+                # تشغيل المهمة
+                asyncio.create_task(hunter_fixer(file_code, file_name))
+
+                # انتظار 5 ثواني "تصبيرة" عشان البرنتات تظهر في الكونسول قبل الـ return
+                await asyncio.sleep(5)
+                return f"https://lulustream.com/e/{file_code}"
 
     except Exception as e:
         print(f"❌ LuluStream Fatal Error: {e}")
