@@ -11,7 +11,11 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Body  # تأكد من استيراد Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import logging
 
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.info("--- التطبيق بدأ بالعمل الآن ---")
 # 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
     FastAPI,
