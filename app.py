@@ -106,6 +106,13 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.on_event("startup")
 async def startup_event():
+    print(f"✅ System Initialized.")
+    print(f"🔍 BASE_DIR: {BASE_DIR}")
+    print(f"🔍 STATIC_DIST: {STATIC_DIST}")
+    print(f"🔍 Does static/dist exist? {os.path.exists(STATIC_DIST)}")
+    print(
+        f"🔍 Does index.html exist? {os.path.exists(os.path.join(STATIC_DIST, 'index.html'))}"
+    )
     # لاحظ الفراغ هنا (المحاذاة)
     print(f"✅ System Initialized. BASE_DIR: {BASE_DIR}")
     # أضف هذا السطر:
