@@ -6,6 +6,4 @@ token.json
 static/downloads/
 extracted_*/
 node_modules/
-dist/
-
 venv/
