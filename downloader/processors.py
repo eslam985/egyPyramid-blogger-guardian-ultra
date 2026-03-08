@@ -761,41 +761,46 @@ async def upload_to_lulustream(key, identifier, file_name):
 
 
 async def monitor_and_rename(key, file_code, file_name):
-    """دالة المراقبة المستقلة (تفتح وتغلق الـ Client الخاص بها)"""
     info_url = "https://lulustream.com/api/file/info"
     edit_url = "https://lulustream.com/api/file/edit"
 
-    # فتح Client جديد ومستقل تماماً
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for i in range(60):  # محاولات لمدة 10 دقائق
+    # تعريف الهيدرز التي كانت موجودة في دالتك القديمة (مهمة جداً للتعريف)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+        # زيادة وقت الانتظار الأولي ليعطي السيرفر فرصة لبدء المعالجة
+        await asyncio.sleep(30)
+
+        for i in range(20):  # محاولات أقل، لكن بذكاء
             try:
                 params = {"key": key, "file_code": file_code}
                 res = await client.get(info_url, params=params)
-                info = res.json()
 
-                if info.get("status") == 200 and info.get("result"):
-                    # --- التعديل هنا: التأكد أن الـ result قائمة وبها عناصر ---
-                    results = info["result"]
-                    if isinstance(results, list) and len(results) > 0:
-                        file_info = results[0]
-                        if file_info.get("canplay") == 1:
-                            # تنفيذ التعديل
-                            edit_params = {
-                                "key": key,
-                                "file_code": file_code,
-                                "file_title": file_name,
-                            }
-                            await client.get(edit_url, params=edit_params)
-                            print(f"✅ LuluStream: تم التعديل النهائي لـ {file_name}")
-                            return
-                    else:
-                        print(f"⚠️ LuluStream: الرد لا يحتوي على بيانات ملف صالحة.")
+                if res.status_code == 200:
+                    info = res.json()
+                    if info.get("status") == 200 and info.get("result"):
+                        results = info["result"]
+                        if isinstance(results, list) and len(results) > 0:
+                            if results[0].get("canplay") == 1:
+                                await client.get(
+                                    edit_url,
+                                    params={
+                                        "key": key,
+                                        "file_code": file_code,
+                                        "file_title": file_name,
+                                    },
+                                )
+                                print(f"✅ تم التعديل النهائي لـ {file_name}")
+                                return
+
             except Exception as e:
-                print(f"⚠️ Polling Error: {e}")
+                pass  # تجاهل الأخطاء العابرة
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(30)  # الانتظار 30 ثانية بين كل محاولة هو الأمان التام
 
-    print(f"❌ LuluStream: انتهى وقت الانتظار للملف {file_code} دون اكتمال.")
+    print(f"❌ انتهى وقت الانتظار.")
 
 
 async def upload_to_mixdrop(file_path, email, key):
