@@ -734,33 +734,32 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 async def upload_to_lulustream(key, identifier, file_name):
     print(f"📡 LuluStream: بدء الرفع للملف: {file_name}")
     try:
-        # تجهيز الرابط
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
-
-        # لولو يفضل أحياناً api.lulustream وأحياناً lulustream.com/api حسب الضغط
         base_api = "https://lulustream.com/api"
 
+        # 1. طلب الرفع (نستخدم Client محلي هنا ينتهي بانتهاء الطلب)
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            # 1. أمر الرفع
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
             res = await client.get(add_url)
             data = res.json()
 
-            if data.get("status") == 200 and "result" in data:
-                file_code = data["result"].get("filecode")
-                print(f"✅ تم قبول الرفع. الكود المستهدف: {file_code}")
+        if data.get("status") == 200 and "result" in data:
+            file_code = data["result"].get("filecode")
+            print(f"✅ تم قبول الرفع. الكود المستهدف: {file_code}")
 
-                # --- دالة "المطارد الذكي" بناءً على فكرتك ---
-                async def hunter_fixer(target_code, target_title):
-                    print(f"🕵️ [Hunter] بدأت مطاردة الملف {target_code} في القائمة...")
-                    await asyncio.sleep(40)  # انتظار أولي بسيط
+            # --- دالة المطارد (مستقلة تماماً) ---
+            async def hunter_fixer(target_code, target_title):
+                print(f"🕵️ [Hunter] المطارد بدأ عمله بشكل مستقل للملف {target_code}...")
+                await asyncio.sleep(60)
 
-                    for attempt in range(1, 15):  # 15 محاولة
+                # نفتح Client جديد تماماً داخل المطارد
+                async with httpx.AsyncClient(timeout=30.0) as hunter_client:
+                    for attempt in range(1, 15):
                         try:
-                            # 2. جلب القائمة (مثل السكريبت الناجح)
+                            # جلب القائمة
                             list_url = f"{base_api}/file/list?key={key}&per_page=50"
-                            list_res = await client.get(list_url)
+                            list_res = await hunter_client.get(list_url)
 
                             if (
                                 list_res.status_code == 200
@@ -768,25 +767,22 @@ async def upload_to_lulustream(key, identifier, file_name):
                             ):
                                 list_data = list_res.json()
                                 files = list_data.get("result", {}).get("files", [])
-
-                                # البحث عن الملف بالكود داخل القائمة
                                 found = any(
                                     f for f in files if f["file_code"] == target_code
                                 )
 
                                 if found:
                                     print(
-                                        f"🎯 [Hunter] وجدته! الملف ظهر في القائمة. جاري فرض الاسم الآن..."
+                                        f"🎯 [Hunter] وجدته في القائمة! جاري تثبيت الاسم..."
                                     )
-
-                                    # 3. التصحيح بنفس الطريقة التي نجحت معك
-                                    params = {
+                                    edit_params = {
                                         "key": key,
                                         "file_code": target_code,
                                         "file_title": target_title,
                                     }
-                                    edit_res = await client.get(
-                                        f"{base_api}/file/edit", params=params
+                                    # التعديل بنفس الـ Client المستقل
+                                    edit_res = await hunter_client.get(
+                                        f"{base_api}/file/edit", params=edit_params
                                     )
 
                                     if "true" in edit_res.text or (
@@ -794,27 +790,22 @@ async def upload_to_lulustream(key, identifier, file_name):
                                         and edit_res.json().get("status") == 200
                                     ):
                                         print(
-                                            f"✨ [Hunter] تم تثبيت الاسم بنجاح: {target_title}"
+                                            f"✨ [Hunter] نجاح مبهر! تم تثبيت الاسم: {target_title}"
                                         )
                                         return
-                                    else:
-                                        print(
-                                            f"⚠️ [Hunter] حاولت التعديل لكن السيرفر لم يؤكد بعد."
-                                        )
                                 else:
                                     print(
-                                        f"😴 [Hunter] محاولة {attempt}: الملف لم يظهر في القائمة بعد.."
+                                        f"😴 [Hunter] محاولة {attempt}: الملف لم يظهر بعد.."
                                     )
-
                         except Exception as e:
-                            print(f"🔥 [Hunter] خطأ في المحاولة {attempt}: {e}")
+                            print(f"⚠️ [Hunter] تعثر بسيط في المحاولة {attempt}: {e}")
 
-                        await asyncio.sleep(60)  # انتظر دقيقة قبل البحث مجدداً
-                    print(f"🛑 [Hunter] استسلمت بعد 15 دقيقة من المطاردة.")
+                        await asyncio.sleep(60)
+                print(f"🛑 [Hunter] توقفت المطاردة لـ {target_code}.")
 
-                # تشغيل المطارد في الخلفية
-                asyncio.create_task(hunter_fixer(file_code, file_name))
-                return f"https://lulustream.com/e/{file_code}"
+            # تشغيل المطارد كمهمة خلفية (لن يتأثر بالـ return)
+            asyncio.create_task(hunter_fixer(file_code, file_name))
+            return f"https://lulustream.com/e/{file_code}"
 
     except Exception as e:
         print(f"❌ LuluStream Fatal Error: {e}")
