@@ -753,76 +753,81 @@ async def upload_to_lulustream(key, identifier, file_name):
 
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
-                print(f"✅ LuluStream: تم قبول الطلب. الكود المستقبلي: {file_code}")
+                print(f"✅ LuluStream: تم قبول الطلب. الكود: {file_code}")
 
-                # --- دالة المراقبة المطورة بـ "رادار" تشخيص ---
+                # --- دالة المراقبة باستخدام منطق "السكريبت الناجح" ---
                 async def smart_rename(code, title):
-                    print(f"🕵️ [Radar] بدأت مراقبة الملف {code} في الخلفية...")
-                    await asyncio.sleep(60)  # الانتظار الأول (لولو يحتاج وقت للسحب)
+                    print(f"🕵️ [Radar] جاري مراقبة الجاهزية للملف {code}...")
+                    await asyncio.sleep(60)
 
-                    for i in range(1, 15):  # 15 محاولة (حوالي 15 دقيقة)
-                        print(f"🔍 [Radar] محاولة فحص رقم {i} للملف {code}...")
+                    for i in range(1, 20):  # زيادة المحاولات لضمان الجاهزية
                         try:
                             async with httpx.AsyncClient(
                                 headers=headers, timeout=20.0
                             ) as c:
-                                # فحص الحالة
+                                # 1. فحص الحالة
                                 info_res = await c.get(
                                     f"https://lulustream.com/api/file/info",
                                     params={"key": key, "file_code": code},
                                 )
-                                info = info_res.json()
 
-                                if info.get("status") == 200 and info.get("result"):
-                                    file_data = info["result"][0]
-                                    can_play = file_data.get("canplay")
-                                    print(
-                                        f"📊 [Radar] حالة الملف {code}: canplay = {can_play}"
-                                    )
-
-                                    if can_play == 1:
+                                # حماية: التأكد من وجود رد نصي قبل تحويله لـ JSON
+                                if (
+                                    info_res.status_code == 200
+                                    and info_res.text.strip().startswith("{")
+                                ):
+                                    info = info_res.json()
+                                    if (
+                                        info.get("result")
+                                        and info["result"][0].get("canplay") == 1
+                                    ):
                                         print(
-                                            f"🚀 [Radar] الملف جاهز! جاري محاولة التسمية لـ: {title}"
+                                            f"🚀 [Radar] الملف {code} جاهز! جاري التصحيح بمنطق السكريبت الناجح..."
                                         )
 
-                                        # استخدام POST لإرسال الاسم العربي بشكل سليم كما اقترح المستشار
-                                        edit_url = (
-                                            "https://lulustream.com/api/file/edit"
-                                        )
-                                        edit_payload = {
+                                        # 2. التعديل باستخدام GET و Params (نفس منطق سكريبتك اللي نجح)
+                                        edit_params = {
                                             "key": key,
                                             "file_code": code,
                                             "file_title": title,
                                         }
-                                        # إرسال كـ Data (POST) وليس Params (GET)
-                                        edit_res = await c.post(
-                                            edit_url, data=edit_payload
+                                        edit_res = await c.get(
+                                            "https://lulustream.com/api/file/edit",
+                                            params=edit_params,
                                         )
-                                        edit_result = edit_res.json()
 
-                                        if edit_result.get("status") == 200:
-                                            print(
-                                                f"✨ [Radar] نجاح باهر! تم تغيير اسم {code} إلى {title}"
-                                            )
-                                            return
+                                        if (
+                                            edit_res.status_code == 200
+                                            and edit_res.text.strip().startswith("{")
+                                        ):
+                                            edit_data = edit_res.json()
+                                            if (
+                                                edit_data.get("status") == 200
+                                                or edit_data.get("result") == "true"
+                                            ):
+                                                print(
+                                                    f"✨ [Radar] تم تصحيح الاسم بنجاح: {title}"
+                                                )
+                                                return
                                         else:
                                             print(
-                                                f"⚠️ [Radar] السيرفر رفض التسمية: {edit_result.get('msg')}"
+                                                f"⚠️ [Radar] رد غير متوقع أثناء التعديل."
                                             )
+                                    else:
+                                        print(
+                                            f"😴 [Radar] محاولة {i}: الملف لا يزال قيد المعالجة..."
+                                        )
                                 else:
                                     print(
-                                        f"😴 [Radar] الملف {code} لم يظهر في Info بعد..."
+                                        f"⚠️ [Radar] محاولة {i}: السيرفر لم يرد ببيانات JSON (ربما ضغط)."
                                     )
-                        except Exception as inner_e:
-                            print(f"❌ [Radar] خطأ أثناء الفحص: {inner_e}")
+                        except Exception as e:
+                            print(f"❌ [Radar] خطأ في المحاولة {i}: {e}")
 
-                        await asyncio.sleep(60)  # انتظر دقيقة قبل الفحص التالي
-                    print(f"🛑 [Radar] توقفت المراقبة للملف {code} بعد فوات الأوان.")
+                        await asyncio.sleep(60)
 
                 asyncio.create_task(smart_rename(file_code, file_name))
                 return f"https://lulustream.com/e/{file_code}"
-
-            print(f"❌ LuluStream: السيرفر رفض السحب: {data.get('msg')}")
 
     except Exception as e:
         print(f"❌ LuluStream Logic Error: {e}")
