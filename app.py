@@ -635,33 +635,35 @@ async def check_blogger_status(post_id: str):
 
 
 # 6. ربط المجلدات الثابتة والصفحة الرئيسية (نظام SPA)
-# بدلاً من المسار النسبي، استخدم المسار الجذري داخل الحاوية
-# تأكد أن المجلد static موجود في المجلد الرئيسي الذي يعمل فيه السيرفر
-STATIC_DIST = "/code/static/dist" 
-
-# أضف طباعة للمسار للتأكد من أنه يرى الـ static
-print(f"DEBUG: Checking path {STATIC_DIST} - Exists: {os.path.exists(STATIC_DIST)}")
-
+# بدلاً من المسار الثابت /code/، ابحث عن المجلد بناءً على مكان ملف app.py
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# ابحث عن المجلد static في المسار الحالي
+# 1. تعريف المسار (الذي أثبت نجاحه)
+STATIC_DIST = "/code/static/dist"
+print(f"DEBUG: Calculated STATIC_DIST: {STATIC_DIST}")
+print(f"DEBUG: Does it exist? {os.path.exists(STATIC_DIST)}")
+# 2. التأكد من المجلدات
 if os.path.exists(STATIC_DIST):
-    # خدمة الملفات الثابتة (JS/CSS)
+    # ربط ملفات الـ assets الموجودة داخل dist/assets بالمسار /assets
     app.mount(
         "/assets",
         StaticFiles(directory=os.path.join(STATIC_DIST, "assets")),
         name="assets",
     )
 
-    # خدمة الصفحة الرئيسية لكل المسارات (SPA Routing)
-    # 6. خدمة الصفحة الرئيسية لكل المسارات (SPA Routing)
+    # 3. توجيه الصفحة الرئيسية (index.html)
+    @app.get("/")
+    async def index():
+        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
+
+    # 4. توجيه الـ SPA (أي مسار لا يطابق API)
     @app.get("/{rest_of_path:path}")
     async def serve_spa(rest_of_path: str):
-        # لا تضع أي شروط هنا!
-        # FastAPI يبحث أولاً عن المسارات المعرفة (الـ APIs)،
-        # إذا لم يجدها (أي أن الطلب ليس API)، فسينفذ هذا المسار التلقائي.
+        # استثناء مسارات الـ API (إذا كان الرابط يبدأ بـ api/ فلا تخدمه كـ SPA)
+        if rest_of_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API route not found")
 
-        index_path = os.path.join(STATIC_DIST, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"error": "Frontend build not found"}
+        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
 
 else:
     print(f"⚠️ WARNING: STATIC_DIST not found at {STATIC_DIST}")
