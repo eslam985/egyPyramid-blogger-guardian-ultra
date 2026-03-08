@@ -1,122 +1,199 @@
 <template>
-    <button class="back-btn" @click="$router.push('/')">
+    <!-- زر العودة -->
+    <button @click="$router.push('/')"
+        class="back-btn flex items-center gap-2 text-primary font-bold text-lg p-4 hover:underline transition">
         <i class="fa fa-arrow-right"></i> العودة للرئيسية
     </button>
-    <div class="media-details-container my-card" v-if="mediaData.title">
-        <div class="details-header my-card">
-            <div class="poster-side">
-                <img :src="mediaData.poster_url" :alt="mediaData.title">
+
+    <div class="media-details-container my-card max-w-6xl mx-auto mt-5 p-5 flex flex-col gap-5 rounded-2xl"
+        v-if="mediaData.title">
+        <!-- رأس الصفحة: صورة + معلومات قابلة للتعديل -->
+        <div class="details-header flex flex-col md:flex-row-reverse justify-evenly gap-6 mb-8">
+            <!-- جانب الصورة -->
+            <div class="poster-side flex-shrink-0">
+                <img :src="mediaData.poster_url" :alt="mediaData.title"
+                    class="max-w-[300px] aspect-square rounded-xl shadow-lg">
             </div>
-            <div class="info-side">
+
+            <!-- جانب النماذج -->
+            <div class="info-side flex-1">
                 <div class="edit-form-container">
-                    <div class="form-grid">
+                    <!-- شبكة من عمودين للحقول القصيرة -->
+                    <div class="form-grid grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- عنوان العمل -->
                         <div class="form-group">
-                            <label>عنوان العمل</label>
-                            <input v-model="mediaData.title" class="form-control">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">عنوان
+                                العمل</label>
+                            <input v-model="mediaData.title"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
+                        <!-- TMDB ID -->
                         <div class="form-group">
-                            <label>TMDB ID</label>
-                            <input v-model="mediaData.tmdb_id" class="form-control">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">TMDB
+                                ID</label>
+                            <input v-model="mediaData.tmdb_id"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
+                        <!-- سنة الإنتاج -->
                         <div class="form-group">
-                            <label>سنة الإنتاج (year)</label>
-                            <input v-model="mediaData.year" class="form-control">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">سنة الإنتاج
+                                (year)</label>
+                            <input v-model="mediaData.year"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
+                        <!-- المدة ISO -->
                         <div class="form-group">
-                            <label>المدة (duration_iso)</label>
-                            <input v-model="mediaData.duration_iso" class="form-control" placeholder="ISO 8601">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">المدة
+                                (duration_iso)</label>
+                            <input v-model="mediaData.duration_iso" placeholder="ISO 8601"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
+                        <!-- التصنيفات -->
                         <div class="form-group">
-                            <label>التصنيفات (labels)</label>
-                            <input v-model="mediaData.labels" class="form-control" placeholder="مثال: أكشن, دراما">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">التصنيفات
+                                (labels)</label>
+                            <input v-model="mediaData.labels" placeholder="مثال: أكشن, دراما"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
+                        <!-- حالة البلوجر -->
                         <div class="form-group">
-                            <label>حالة البلوجر (blogger_status)</label>
-                            <select v-model="mediaData.blogger_status" class="form-control">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">حالة
+                                البلوجر (blogger_status)</label>
+                            <select v-model="mediaData.blogger_status"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                                 <option value="draft">مسودة</option>
                                 <option value="published">منشور</option>
                             </select>
                         </div>
-
+                        <!-- النوع -->
                         <div class="form-group">
-                            <label>النوع (category)</label>
-                            <select v-model="mediaData.category" class="form-control">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">النوع
+                                (category)</label>
+                            <select v-model="mediaData.category"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                                 <option value="movie">فيلم</option>
                                 <option value="tv">مسلسل</option>
                             </select>
                         </div>
-
+                        <!-- التقييم -->
                         <div class="form-group">
-                            <label>التقييم (rating)</label>
-                            <input v-model="mediaData.rating" class="form-control" placeholder="مثال: 8.5">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">التقييم
+                                (rating)</label>
+                            <input v-model="mediaData.rating" placeholder="مثال: 8.5"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
-
+                        <!-- وقت العرض -->
                         <div class="form-group">
-                            <label>وقت العرض (runtime)</label>
-                            <input v-model="mediaData.runtime" class="form-control" placeholder="مثال: 120 دقيقة">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">وقت العرض
+                                (runtime)</label>
+                            <input v-model="mediaData.runtime" placeholder="مثال: 120 دقيقة"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
-
-
                     </div>
 
-                    <div class="form-group">
-                        <label>رابط البوستر</label>
-                        <input v-model="mediaData.poster_url" class="form-control">
+                    <!-- رابط البوستر (يمتد على عمود واحد) -->
+                    <div class="form-group mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">رابط
+                            البوستر</label>
+                        <input v-model="mediaData.poster_url"
+                            class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                     </div>
 
-                    <div class="form-group">
-                        <label>قصة العمل</label>
-                        <textarea v-model="mediaData.story" class="form-control textarea my-card text-dark "></textarea>
+                    <!-- قصة العمل (textarea) -->
+                    <div class="form-group mb-6">
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">قصة
+                            العمل</label>
+                        <textarea v-model="mediaData.story"
+                            class="form-control w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100 min-h-[200px] max-w-full"></textarea>
                     </div>
 
-                    <button @click="saveMediaDetails" class="btn-primary" :disabled="isSaving">
+                    <!-- زر الحفظ -->
+                    <button @click="saveMediaDetails" :disabled="isSaving"
+                        class="btn-primary bg-primary hover:bg-primary-dark text-white font-bold py-2 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
                         {{ isSaving ? 'جاري الحفظ...' : 'حفظ التعديلات' }}
                     </button>
                 </div>
             </div>
         </div>
 
+        <!-- قسم الحلقات -->
         <div class="episodes-section">
-            <div class="ep-header">
-                <h2>إدارة الحلقات</h2>
-                <button @click="addNewEpisodeRow" class="btn-add">إضافة حلقة جديدة</button>
+            <div class="ep-header flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-white">إدارة الحلقات</h2>
+                <button @click="addNewEpisodeRow"
+                    class="btn-add bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition">
+                    إضافة حلقة جديدة
+                </button>
             </div>
 
-            <div class="episodes-grid" v-if="mediaData.episodes && mediaData.episodes.length > 0">
-                <div v-for="ep in mediaData.episodes" :key="ep.id" class="ep-card my-card">
-                    <span>حلقة {{ ep.episode_number }}</span>
-                    <div class="actions">
-                        <button @click="manageLinks(ep.id)" class="btn-links">السيرفرات</button>
-                        <button @click="handleSyncClick(ep)"
-                            :class="['btn-sync', ep?.is_synced ? 'synced' : 'pending']">
+            <!-- شبكة الحلقات -->
+            <div class="episodes-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                v-if="mediaData.episodes && mediaData.episodes.length > 0">
+                <div v-for="ep in mediaData.episodes" :key="ep.id"
+                    class="ep-card my-card flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">حلقة {{ ep.episode_number }}</span>
+                    <div class="actions flex items-center gap-3">
+                        <button @click="manageLinks(ep.id)"
+                            class="btn-links text-primary hover:text-primary-dark font-bold transition">
+                            السيرفرات
+                        </button>
+                        <button @click="handleSyncClick(ep)" :class="[
+                            'btn-sync transition font-medium',
+                            ep?.is_synced
+                                ? 'text-green-600 dark:text-green-400 hover:text-green-700'
+                                : 'text-amber-600 dark:text-amber-400 hover:text-amber-700'
+                        ]">
                             {{ ep?.is_synced ? 'منشور (اضغط للتحديث)' : 'نشر الآن' }}
                         </button>
-                        <button @click="deleteEpisode(ep.id)" class="btn-delete-ep">حذف</button>
+                        <button @click="deleteEpisode(ep.id)"
+                            class="btn-delete-ep text-red-500 hover:text-red-700 transition text-3xl leading-none">
+                            ×
+                        </button>
                     </div>
                 </div>
             </div>
-            <div v-else class="empty-state">
+            <div v-else class="empty-state my-card p-8 text-center text-gray-500 dark:text-gray-400 rounded-xl">
                 <p>لا توجد حلقات مضافة بعد. اضغط على "إضافة حلقة جديدة".</p>
             </div>
         </div>
 
-        <div v-if="showLinksModal" class="modal-overlay-sub" @click.self="showLinksModal = false">
-            <div class="modal-content-sub my-card">
-                <h3>إدارة سيرفرات الحلقة: {{ selectedEpisodeId }}</h3>
-                <div v-for="link in links" :key="link.id" class="link-row">
-                    <input class="server-name" v-model="link.server_name" @blur="updateLink(link)"
-                        placeholder="اسم السيرفر">
-                    <input class="server-url" v-model="link.url" @blur="updateLink(link)" placeholder="الرابط">
-                    <button @click="deleteLink(link.id)">×</button>
+        <!-- مودال إدارة السيرفرات -->
+        <div v-if="showLinksModal"
+            class="modal-overlay-sub fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+            @click.self="showLinksModal = false">
+            <div class="modal-content-sub my-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-xl">
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4">إدارة سيرفرات الحلقة: {{
+                    selectedEpisodeId }}</h3>
+                <div v-for="link in links" :key="link.id" class="link-row flex gap-3 mb-3">
+                    <input v-model="link.server_name" @blur="updateLink(link)" placeholder="اسم السيرفر"
+                        class="server-name w-1/3 p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
+                    <input v-model="link.url" @blur="updateLink(link)" placeholder="الرابط"
+                        class="server-url flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
+                    <button @click="deleteLink(link.id)"
+                        class="bg-red-500 hover:bg-red-700 text-white px-3 rounded-lg transition">
+                        ×
+                    </button>
                 </div>
-                <div class="footer--content-sub">
-                    <button class="btn-add" @click="addNewLink(selectedEpisodeId)">إضافة سيرفر جديد</button>
-                    <button class="close-btn" @click="showLinksModal = false">إغلاق</button>
+                <div
+                    class="footer--content-sub flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button @click="addNewLink(selectedEpisodeId)"
+                        class="btn-add bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-lg transition">
+                        إضافة سيرفر جديد
+                    </button>
+                    <button @click="showLinksModal = false"
+                        class="close-btn bg-gray-500 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition">
+                        إغلاق
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </template>
+
+<!-- لم يعد هناك حاجة لـ style scoped، يمكن إزالته بالكامل، أو الاحتفاظ به فقط لتجاوزات نادرة إن وجدت -->
+<style scoped>
+/* يمكن ترك هذا الملف فارغاً، أو إضافة أي تجاوزات ضرورية لا يمكن تحقيقها بـ Tailwind */
+</style>
 
 <script setup>
 import { ref, onMounted } from 'vue';
@@ -255,225 +332,3 @@ const handleSyncClick = async (ep) => {
     }
 };
 </script>
-
-<style scoped>
-.media-details-container {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    max-width: 900px;
-    margin: 20px auto 0;
-    padding: 20px;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.details-header {
-    display: flex;
-    flex-direction: row-reverse;
-    justify-content: space-evenly;
-    margin-bottom: 30px;
-
-}
-
-.poster-side img {
-    max-width: 300px;
-    aspect-ratio: 1 / 1;
-    border-radius: 12px;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-}
-
-.episodes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 15px;
-    margin-top: 20px;
-}
-
-.form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    /* عمودين */
-    gap: 15px;
-    margin-bottom: 15px;
-}
-
-.form-group {
-    margin-bottom: 10px;
-}
-
-.form-group label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #555;
-    margin-bottom: 4px;
-    display: block;
-}
-
-.form-control {
-    width: 100%;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
-    font-size: 16px;
-
-}
-
-/* زر العودة */
-.back-btn {
-    background: none;
-    font-size: 20px;
-    border: none;
-    cursor: pointer;
-    padding: 16px;
-    color: var(--color-primary);
-    font-weight: bold;
-}
-
-/* تنسيق حلقة واحدة */
-.ep-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
-    margin-bottom: 10px;
-}
-
-.actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    padding: 8px;
-
-}
-
-.textarea {
-    width: 100%;
-    height: 80px;
-    padding: 12px;
-
-    border: 1px solid #444;
-    border-radius: 8px;
-    font-family: sans-serif;
-    outline: none;
-    min-height: 200px;
-    max-width: 500px;
-}
-
-.btn-delete-ep {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #ff4d4f;
-    font-size: 16px;
-
-}
-
-.btn-links {
-    font-weight: 700;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--color-primary);
-    font-size: 16px;
-}
-
-.btn-action {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #666;
-    font-size: 16px;
-}
-
-.btn-action:hover {
-    color: #333;
-}
-
-.btn-sync.synced {
-    color: #28a745;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-/* تنسيق المودال */
-.modal-overlay-sub {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-.modal-content-sub {
-
-    padding: 25px;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 600px;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.link-row {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-
-.link-row input {
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-.modal-content-sub .server-name {
-    max-width: 150px;
-
-}
-
-.server-url {
-    flex-grow: 1;
-}
-
-.link-row button {
-    background: #ff4d4f;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 0 10px;
-    cursor: pointer;
-}
-
-.footer--content-sub {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 20px;
-    padding: 8px 0;
-}
-
-.add-server-btn {
-    background: #007bff;
-    color: white;
-    width: 100%;
-    padding: 10px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-top: 15px;
-}
-
-button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    filter: grayscale(1);
-    /* يجعل الزر يبدو باهتاً عند التحميل */
-}
-</style>

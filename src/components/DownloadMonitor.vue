@@ -1,139 +1,122 @@
 <template>
-    <div>
+ <div>
+  <!-- الحاوية العائمة لمتابعة التحميلات -->
+  <div class="fixed bottom-4 right-4 w-56 max-h-96  z-50 flex flex-col gap-2">
+   <!-- زر إضافة مهمة جديدة -->
+   <button @click="showModal = true"
+    class=" bg-primary hover:bg-primary-dark text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2">
+    <i class="fa fa-plus-circle"></i>
+    <span>مهمة تحميل جديدة</span>
+   </button>
 
-            <div class="download-monitor-container">
-                <button @click="showModal = true" class="btn-add">➕ مهمة تحميل جديدة</button>
+   <!-- قائمة المهام النشطة -->
+   <div v-if="activeTasks.length > 0" class="space-y-2">
+    <div v-for="task in activeTasks" :key="task.id"
+     class="progress-item bg-gradient-to-br from-gray-900 to-black border border-amber-600/30 rounded-xl p-4 shadow-lg"
+     :class="{ 'is-uploading': task.status_message.includes('جاري الرفع') }">
+     <div class="flex items-center justify-between mb-2">
+      <span class="task-name font-semibold text-amber-500 truncate">{{ task.task_name }}</span>
+      <span class="status-text text-sm"
+       :class="task.status_message.includes('جاري الرفع') ? 'text-cyan-400 animate-pulse' : 'text-gray-300'">
+       {{ task.status_message }}
+      </span>
+      <span class="percent text-amber-500 font-mono text-sm">{{ task.progress_percent }}%</span>
+     </div>
 
-            </div>
-
-
-        <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
-            <div class="modal-content my-card z-9999">
-                <header class="modal-header">
-                    <h3>إضافة مهمة سحب جديدة</h3>
-                    <span class="close-btn" @click="showModal = false">&times;</span>
-                </header>
-
-                <form @submit.prevent="submitTask">
-                    <div class="form-group">
-                        <input v-model="taskUrl" type="text" placeholder="رابط المصدر" required class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <input v-model="taskName" type="text" placeholder="اسم المهمة" required class="form-control">
-                    </div>
-                    <button type="submit" class="btn-primary">ابدأ السحب والمعالجة</button>
-                </form>
-            </div>
-        </div>
-
-        <div id="progress-container" v-if="activeTasks.length > 0">
-            <div v-for="task in activeTasks" :key="task.id" class="progress-item"
-                :class="{ 'is-uploading': task.status_message.includes('جاري الرفع') }">
-
-                <span class="task-name">{{ task.task_name }}</span>:
-                <span class="status-text">{{ task.status_message }}</span>
-                <span class="percent">({{ task.progress_percent }}%)</span>
-
-                <div class="mini-progress-bar">
-                    <div class="fill" :style="{ width: task.progress_percent + '%' }"></div>
-                </div>
-            </div>
-        </div>
+     <!-- شريط التقدم -->
+     <div class="mini-progress-bar h-1.5 bg-gray-700 rounded-full overflow-hidden">
+      <div class="fill h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500 ease-out"
+       :style="{ width: task.progress_percent + '%' }"></div>
+     </div>
     </div>
+   </div>
+  </div>
+
+  <!-- مودال إضافة مهمة جديدة -->
+  <div v-if="showModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+   @click.self="showModal = false">
+   <div class="my-card bg-white dark:bg-secondary-dark w-full max-w-md rounded-2xl shadow-card p-6">
+    <header class="flex items-center justify-between mb-4">
+     <h3 class="text-xl font-bold text-gray-800 dark:text-white">إضافة مهمة سحب جديدة</h3>
+     <button @click="showModal = false"
+      class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition">
+      <i class="fa fa-times text-xl"></i>
+     </button>
+    </header>
+
+    <form @submit.prevent="submitTask">
+     <div class="space-y-4">
+      <!-- رابط المصدر -->
+      <div>
+       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">رابط
+        المصدر</label>
+       <input v-model="taskUrl" type="text" placeholder="https://example.com/file.mp4" required
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary transition" />
+      </div>
+      <!-- اسم المهمة -->
+      <div>
+       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">اسم
+        المهمة</label>
+       <input v-model="taskName" type="text" placeholder="فيلم XYZ" required
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary transition" />
+      </div>
+     </div>
+
+     <div class="flex gap-3 justify-end mt-6">
+      <button type="button" @click="showModal = false"
+       class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium">
+       إلغاء
+      </button>
+      <button type="submit"
+       class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition font-medium">
+       ابدأ السحب والمعالجة
+      </button>
+     </div>
+    </form>
+   </div>
+  </div>
+ </div>
 </template>
-<style scoped>
-/* اجعل الحاوية عائمة في الأسفل على اليمين */
-.download-monitor-container {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 350px;
-    z-index: 9999;
-    max-height: 400px;
-    overflow-y: auto;
-}
 
-.progress-item {
-    padding: 12px;
-    margin-bottom: 8px;
-    background: #1a1a1a;
-    border: 1px solid #daa520;
-    border-radius: 8px;
-    color: #daa520;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-}
-
-.progress-item {
-    padding: 12px;
-    margin-bottom: 8px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #000 100%);
-    border: 1px solid #daa52033;
-    border-radius: 8px;
-    color: #daa520;
-}
-
-.is-uploading .status-text {
-    color: #00ffcc;
-    /* لون مختلف لمرحلة الرفع */
-    animation: blinker 1.5s linear infinite;
-}
-
-.mini-progress-bar {
-    height: 4px;
-    background: #333;
-    margin-top: 8px;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.fill {
-    height: 100%;
-    background: #daa520;
-    transition: width 0.5s ease;
-}
-
-@keyframes blinker {
-    50% {
-        opacity: 0.3;
-    }
-}
-</style>
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { supabaseClient } from '../services/supabase.js'
+import { supabaseClient } from '../services/supabase.js';
 
-const showModal = ref(false); // التحكم في ظهور المودال
+const showModal = ref(false);
 const taskUrl = ref('');
 const taskName = ref('');
 const activeTasks = ref([]);
 
 const submitTask = async () => {
-    const { error } = await supabaseClient.from('download_tasks').insert([{
-        source_url: taskUrl.value,
-        task_name: taskName.value,
-        status: 'idle',
-        status_message: 'Waiting for Beast...'
-    }]);
+ const { error } = await supabaseClient.from('download_tasks').insert([
+  {
+   source_url: taskUrl.value,
+   task_name: taskName.value,
+   status: 'idle',
+   status_message: 'Waiting for Beast...'
+  }
+ ]);
 
-    if (!error) {
-        alert("تم الإرسال!");
-        showModal.value = false; // إغلاق المودال بعد الإرسال
-        taskUrl.value = ''; // تصفير الحقول
-        taskName.value = '';
-    }
+ if (!error) {
+  alert('✅ تم إرسال المهمة بنجاح!');
+  showModal.value = false;
+  taskUrl.value = '';
+  taskName.value = '';
+ } else {
+  alert('❌ فشل في إرسال المهمة');
+ }
 };
 
-// دالة التحديث (بدل updateDownloadProgress)
 const fetchTasks = async () => {
-    const { data } = await supabaseClient.from('download_tasks').select('*');
-    activeTasks.value = data || [];
+ const { data } = await supabaseClient.from('download_tasks').select('*');
+ activeTasks.value = data || [];
 };
 
 let interval;
 onMounted(() => {
-    fetchTasks();
-    interval = setInterval(fetchTasks, 3000); // التحديث كل 3 ثواني
+ fetchTasks();
+ interval = setInterval(fetchTasks, 3000);
 });
 
-onUnmounted(() => clearInterval(interval)); // تنظيف الذاكرة لما الـ Component يختفي
+onUnmounted(() => clearInterval(interval));
 </script>

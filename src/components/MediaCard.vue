@@ -1,25 +1,67 @@
 <template>
-  <div class="media-card" v-if="media" @click="goToDetails(media.id)">
-    <div class="card-image">
-      <img :src="media.poster_url || defaultPoster" :alt="media.title">
-      <span class="category-badge">{{ media.category === 'tv' ? 'مسلسل' : 'فيلم' }}</span>
+  <div v-if="media" @click="goToDetails(media.id)"
+    class="group relative flex flex-col rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-secondary-dark shadow-card hover:shadow-xl transition-all duration-300 ease-out cursor-pointer hover:-translate-y-1">
+    <!-- الجزء العلوي: الصورة والشارة -->
+    <div class="relative aspect-[3/2] overflow-hidden bg-gray-100 dark:bg-gray-800">
+      <img :src="media.poster_url || defaultPoster" :alt="media.title"
+        class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+      <!-- شارة التصنيف (فيلم / مسلسل) -->
+      <span :class="[
+        'absolute top-3 right-3 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-lg z-10 backdrop-blur-sm',
+        media.category === 'tv' ? 'bg-blue-500/90' : 'bg-black/60'
+      ]">
+        {{ media.category === 'tv' ? 'مسلسل' : 'فيلم' }}
+      </span>
+
+      <!-- شارة السنة إذا كانت موجودة -->
+      <span v-if="media.year"
+        class="absolute bottom-3 left-3 px-2 py-1 rounded-md bg-black/50 text-white text-xs font-medium backdrop-blur-sm">
+        {{ media.year }}
+      </span>
+
+      <!-- شارة التقييم إذا كانت موجودة -->
+      <span v-if="media.rating"
+        class="absolute top-3 left-3 px-2 py-1 rounded-md bg-yellow-500/90 text-white text-xs font-bold flex items-center gap-1 backdrop-blur-sm">
+        <i class="fa fa-star text-yellow-200"></i>
+        {{ media.rating }}
+      </span>
     </div>
 
-    <div class="card-content">
-      <h3>{{ media.title }}</h3>
+    <!-- الجزء السفلي: المحتوى والأزرار -->
+    <div class="p-3 flex-1 flex flex-col text-center">
+      <h3
+        class="text-xs font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-primary transition-colors duration-300 ">
+        {{ media.title }}
+      </h3>
+
+      <!-- وصف مختصر إذا كان متوفراً -->
+      <p v-if="media.overview" class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3 text-right">
+        {{ media.overview }}
+      </p>
     </div>
 
-    <div class="card-actions" @click.stop>
-      <button @click="goToDetails(media.id)" class="btn-action edit" title="تعديل">
+    <!-- شريط الأزرار -->
+    <div @click.stop
+      class="flex justify-around items-center p-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+      <!-- زر التعديل -->
+      <button @click="goToDetails(media.id)"
+        class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-primary-dark transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        title="تعديل">
         <i class="fa fa-edit"></i>
       </button>
 
-      <button @click="toggleBlogger(media.blogger_post_id, media.id)" class="btn-action blogger"
-        :class="media.blogger_status === 'published' ? 'is-live' : 'is-draft'">
+      <!-- زر Blogger -->
+      <button @click="toggleBlogger(media.blogger_post_id, media.id)"
+        class="w-10 h-10 rounded-xl flex items-center justify-center  text-[#708090] transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        :class="media.blogger_status === 'published' ? ' text-[#708090] hover:bg-orange-700' : 'bg-orange-400 hover:bg-orange-500'"
+        :title="media.blogger_status === 'published' ? 'إلغاء النشر (تحديث)' : 'نشر على Blogger'">
         <i class="fab fa-blogger"></i>
       </button>
 
-      <button @click="$emit('delete', media.id)" class="btn-action delete" title="حذف">
+      <!-- زر الحذف -->
+      <button @click="$emit('delete', media.id)"
+        class="w-10 h-10 rounded-xl flex items-center justify-center  text-[#708090] hover:bg-red-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        title="حذف">
         <i class="fa fa-trash"></i>
       </button>
     </div>
@@ -27,110 +69,42 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'; // 1. استيراد الراوتر
+import { useRouter } from 'vue-router';
 import api from '../services/api';
 
+const props = defineProps({
+  media: {
+    type: Object,
+    required: true
+  },
+  defaultPoster: {
+    type: String,
+    default: 'https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_300,h_200,c_fill/blogger/logo.webp'
+  }
+});
 
-const router = useRouter(); // 2. تعريف الراوتر
-// 3. دالة التنقل
+const router = useRouter();
+
 const goToDetails = (id) => {
   router.push(`/media/${id}`);
 };
+
 const toggleBlogger = async (postId, mediaId) => {
-  if (!postId || postId === 'None') return alert("⚠️ لا يوجد ID لهذا المقال!");
+  if (!postId || postId === 'None') {
+    alert("⚠️ لا يوجد ID لهذا المقال!");
+    return;
+  }
 
   try {
     const response = await api.post(`/blogger/toggle/${postId}`);
     if (response.data.status === "success") {
       const isLive = response.data.new_status === 'live';
       alert(`✅ الحالة الجديدة: ${isLive ? 'منشور' : 'مسودة'}`);
-      // قم بتحديث البيانات هنا لإعادة رسم الحالة
+      // يمكنك إصدار حدث لتحديث القائمة الأصلية
+      // مثلاً: emit('blogger-toggled', mediaId, response.data.new_status)
     }
   } catch (e) {
     alert("❌ فشل الاتصال بالسيرفر");
   }
 };
-// الـ script هنا خارج الـ template تماماً
-defineProps(['media']);
-const defaultPoster = 'https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_300,h_200,c_fill/blogger/logo.webp';
 </script>
-
-<style scoped>
-
-
-.media-card {
-  background: var(--color-surface);
-  /* تأكد أن المتغيرات معرفة */
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-
-}
-
-.media-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-  transform: scale(1.02);
-}
-
-.card-image {
-  position: relative;
-  aspect-ratio: 2/3;
-}
-
-.card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.category-badge {
-  position: absolute;
-  top: 10px;
-
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-}
-
-.card-content {
-  padding: 12px;
-  text-align: center;
-}
-
-.card-content h3 {
-  margin: 0;
-  font-size: 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.card-actions {
-  display: flex;
-  justify-content: space-around;
-  padding: 10px;
-  border-top: 1px solid #eee;
-}
-
-.btn-action {
-  background: none;
-  border: none;
-  padding: 8px;
-  cursor: pointer;
-  border-radius: 50%;
-  transition: background 0.2s;
-  color: slategray;
-  font-size: 20px;
-}
-
-.btn-action:hover {
-  background: #e0e0e0;
-}
-</style>
