@@ -1,5 +1,6 @@
 import os
 from supabase import create_client, Client
+from postgrest.exceptions import APIError  # تأكد من إضافة هذا الاستيراد في الأعلى
 
 # جلب القيم وتنظيفها فوراً
 RAW_URL = os.getenv("SUPABASE_URL")
@@ -62,13 +63,24 @@ class SupabaseService:
 
     @staticmethod
     def update_media(media_id: int, data: dict):
-        result = (
-            SupabaseService.client.table("medias")
-            .update(data)
-            .eq("id", media_id)
-            .execute()
-        )
-        return result.data
+        try:
+            result = (
+                SupabaseService.client.table("medias")
+                .update(data)
+                .eq("id", media_id)
+                .execute()
+            )
+            return result.data
+        except APIError as e:
+            # كود 23505 هو كود تعارض البيانات (Unique Violation)
+            if e.code == "23505":
+                print(f"❌ Conflict Error: {e.message}")
+                raise Exception(
+                    "تعارض في البيانات: يوجد بالفعل عمل بهذا الاسم/السنة أو الـ ID."
+                )
+            else:
+                print(f"❌ Supabase API Error: {e.message}")
+                raise e
 
     @staticmethod
     def delete_media(media_id: int):
