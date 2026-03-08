@@ -200,20 +200,25 @@ const isSaving = ref(false); // أضف هذا المتغير
 const saveMediaDetails = async () => {
     isSaving.value = true;
     try {
-        // تحويل البيانات إلى تنسيق Form Data ليتوافق مع app.py
         const params = new URLSearchParams();
+
         for (const key in mediaData.value) {
-            // تجاهل الحلقات عند الإرسال لأن السيرفر لا يتوقع مصفوفة حلقات في مسار التحديث
             if (key !== 'episodes') {
-                params.append(key, mediaData.value[key]);
+                const val = mediaData.value[key];
+                // الحقيقة الصارمة: إذا كانت القيمة فارغة أو غير معرفة، لا ترسلها أو أرسل 'null'
+                // لكن الأفضل هو عدم إضافتها للـ params إذا كانت فارغة ليقوم Supabase بتجاهلها
+                if (val !== null && val !== undefined && val !== '') {
+                    params.append(key, val);
+                }
             }
         }
 
         await api.post(`/media/update/${route.params.id}`, params);
         alert("✅ تم تحديث بيانات العمل بنجاح");
     } catch (e) {
-        console.error(e);
-        alert("❌ فشل في حفظ البيانات");
+        // الآن ستظهر لك رسالة الخطأ الحقيقية التي كنا ننتظرها
+        const errorMsg = e.response?.data?.detail || "❌ فشل في حفظ البيانات";
+        alert(errorMsg);
     } finally {
         isSaving.value = false;
     }
