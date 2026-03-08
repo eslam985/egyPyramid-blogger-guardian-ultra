@@ -732,107 +732,92 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
 
 async def upload_to_lulustream(key, identifier, file_name):
-    print(f"📡 LuluStream: بدء عملية السحب لـ: {file_name}")
+    print(f"📡 LuluStream: بدء الرفع للملف: {file_name}")
     try:
-        # تجهيز الرابط الأصلي
+        # تجهيز الرابط
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
+        # لولو يفضل أحياناً api.lulustream وأحياناً lulustream.com/api حسب الضغط
+        base_api = "https://lulustream.com/api"
 
-        async with httpx.AsyncClient(
-            timeout=30.0, headers=headers, follow_redirects=True
-        ) as client:
-            encoded_url = urllib.parse.quote(remote_url, safe="")
-
-            # --- التعديل الذهبي 1: إضافة الاسم مباشرة في طلب الرفع ---
-            # لولو يقبل بارامتر name لتحديد اسم الملف قبل حتى ما يبدأ
-            encoded_title = urllib.parse.quote(file_name)
-            add_url = f"https://lulustream.com/api/upload/url?key={key}&url={encoded_url}&name={encoded_title}"
-
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            # 1. أمر الرفع
+            add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
             res = await client.get(add_url)
-
-            # حماية من الردود الفارغة
-            if res.status_code != 200 or not res.text.strip().startswith("{"):
-                print(f"⚠️ لولو رد بطريقة غير متوقعة، سأحاول الرابط البديل...")
-                add_url = f"https://api.lulustream.com/api/upload/url?key={key}&url={encoded_url}&name={encoded_title}"
-                res = await client.get(add_url)
-
             data = res.json()
 
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
-                print(f"✅ LuluStream: تم قبول الطلب بالكود: {file_code}")
+                print(f"✅ تم قبول الرفع. الكود المستهدف: {file_code}")
 
-                # --- دالة المراقبة (الرادار) بمنطق السكريبت الناجح 100% ---
-                async def smart_rename(code, title):
-                    print(f"🕵️ [Radar] سأراقب الملف {code} لتأكيد التسمية...")
-                    await asyncio.sleep(
-                        120
-                    )  # انتظر دقيقتين كاملتين قبل أول فحص (لتقليل الضغط)
+                # --- دالة "المطارد الذكي" بناءً على فكرتك ---
+                async def hunter_fixer(target_code, target_title):
+                    print(f"🕵️ [Hunter] بدأت مطاردة الملف {target_code} في القائمة...")
+                    await asyncio.sleep(40)  # انتظار أولي بسيط
 
-                    for i in range(1, 10):
+                    for attempt in range(1, 15):  # 15 محاولة
                         try:
-                            # نفتح Client جديد لكل محاولة لضمان عدم حدوث تداخل
-                            async with httpx.AsyncClient(
-                                headers=headers, timeout=20.0
-                            ) as c:
-                                # الفحص (Info)
-                                info_api = f"https://lulustream.com/api/file/info?key={key}&file_code={code}"
-                                info_res = await c.get(info_api)
+                            # 2. جلب القائمة (مثل السكريبت الناجح)
+                            list_url = f"{base_api}/file/list?key={key}&per_page=50"
+                            list_res = await client.get(list_url)
 
-                                if (
-                                    info_res.status_code == 200
-                                    and info_res.text.strip().startswith("{")
-                                ):
-                                    info = info_res.json()
-                                    if (
-                                        info.get("result")
-                                        and info["result"][0].get("canplay") == 1
+                            if (
+                                list_res.status_code == 200
+                                and list_res.text.strip().startswith("{")
+                            ):
+                                list_data = list_res.json()
+                                files = list_data.get("result", {}).get("files", [])
+
+                                # البحث عن الملف بالكود داخل القائمة
+                                found = any(
+                                    f for f in files if f["file_code"] == target_code
+                                )
+
+                                if found:
+                                    print(
+                                        f"🎯 [Hunter] وجدته! الملف ظهر في القائمة. جاري فرض الاسم الآن..."
+                                    )
+
+                                    # 3. التصحيح بنفس الطريقة التي نجحت معك
+                                    params = {
+                                        "key": key,
+                                        "file_code": target_code,
+                                        "file_title": target_title,
+                                    }
+                                    edit_res = await client.get(
+                                        f"{base_api}/file/edit", params=params
+                                    )
+
+                                    if "true" in edit_res.text or (
+                                        edit_res.text.strip().startswith("{")
+                                        and edit_res.json().get("status") == 200
                                     ):
                                         print(
-                                            f"🚀 [Radar] الملف جاهز! جاري التصحيح النهائي..."
+                                            f"✨ [Hunter] تم تثبيت الاسم بنجاح: {target_title}"
                                         )
-
-                                        # التعديل (Edit) بنفس منطق سكريبتك القديم
-                                        params = {
-                                            "key": key,
-                                            "file_code": code,
-                                            "file_title": title,
-                                        }
-                                        edit_res = await c.get(
-                                            "https://lulustream.com/api/file/edit",
-                                            params=params,
+                                        return
+                                    else:
+                                        print(
+                                            f"⚠️ [Hunter] حاولت التعديل لكن السيرفر لم يؤكد بعد."
                                         )
-
-                                        if "true" in edit_res.text or (
-                                            edit_res.text.strip().startswith("{")
-                                            and edit_res.json().get("status") == 200
-                                        ):
-                                            print(
-                                                f"✨ [Radar] نجاح! تم تثبيت الاسم: {title}"
-                                            )
-                                            return
                                 else:
                                     print(
-                                        f"😴 [Radar] محاولة {i}: السيرفر مشغول، سأنتظر دقيقتين..."
+                                        f"😴 [Hunter] محاولة {attempt}: الملف لم يظهر في القائمة بعد.."
                                     )
+
                         except Exception as e:
-                            print(
-                                f"⚠️ [Radar] تنبيه في المحاولة {i}: السيرفر لم يستجب (عادي في لولو)"
-                            )
+                            print(f"🔥 [Hunter] خطأ في المحاولة {attempt}: {e}")
 
-                        await asyncio.sleep(
-                            120
-                        )  # زيادة الانتظار لدقيقتين لمنع حظر الـ IP
+                        await asyncio.sleep(60)  # انتظر دقيقة قبل البحث مجدداً
+                    print(f"🛑 [Hunter] استسلمت بعد 15 دقيقة من المطاردة.")
 
-                asyncio.create_task(smart_rename(file_code, file_name))
+                # تشغيل المطارد في الخلفية
+                asyncio.create_task(hunter_fixer(file_code, file_name))
                 return f"https://lulustream.com/e/{file_code}"
 
     except Exception as e:
-        print(f"❌ LuluStream Logic Error: {e}")
+        print(f"❌ LuluStream Fatal Error: {e}")
     return None
 
 
