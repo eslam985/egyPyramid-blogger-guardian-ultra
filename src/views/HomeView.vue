@@ -50,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue'; // تأكد من استيراد watch
 import api from '../services/api';
 import MediaCard from '../components/MediaCard.vue';
 import DownloadMonitor from '../components/DownloadMonitor.vue';
@@ -62,17 +62,26 @@ const mediaList = ref([]);
 const loading = ref(true);
 const currentStatus = ref('all');
 const currentCategory = ref('all');
+const searchQuery = ref(''); // <--- تعريف المتغير كان ناقصاً هنا!
+
 const currentPage = ref(1);
 const totalPages = ref(1);
 
-// دالة جلب البيانات الأساسية
+// مراقبة التغيرات (تأكد أن المتغيرات معرفة قبل استخدامها في الـ watch)
+watch([currentCategory, currentStatus, searchQuery], () => {
+ loadMediaList(1);
+});
+
+// مراقبة الـ Props القادم من Navbar
+watch(() => props.search, (newVal) => {
+ searchQuery.value = newVal;
+});
+
 const loadMediaList = async (page = 1) => {
  loading.value = true;
  try {
-  // نستخدم props.search مباشرة من الـ Parent لضمان دقة القيمة
-  const url = `/media/list?page=${page}&cat=${currentCategory.value}&status=${currentStatus.value}&search=${props.search || ''}`;
+  const url = `/media/list?page=${page}&cat=${currentCategory.value}&status=${currentStatus.value}&search=${searchQuery.value}`;
   const response = await api.get(url);
-
   mediaList.value = response.data.data || [];
   totalPages.value = Math.max(1, Math.ceil(response.data.total_count / 12));
   currentPage.value = page;
@@ -83,16 +92,14 @@ const loadMediaList = async (page = 1) => {
  }
 };
 
-// مراقبة التغيرات: أي تغيير في الفلاتر أو البحث يعيدنا للصفحة الأولى ويجلب البيانات
-watch([() => props.search, currentStatus, currentCategory], () => {
- loadMediaList(1);
-});
+const filteredMedia = computed(() => mediaList.value);
 
-const handleDelete = (id) => {
- console.log("Delete triggered for:", id);
-};
+const handleDelete = (id) => { console.log("Delete triggered for:", id); };
+
+// ... بعد دالة handleDelete مباشرة ...
 
 onMounted(async () => {
+ // جلب البيانات فور تحميل الصفحة
  await loadMediaList(1);
 });
 </script>
