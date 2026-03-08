@@ -11,11 +11,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Body  # تأكد من استيراد Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-import logging
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-logger.info("--- التطبيق بدأ بالعمل الآن ---")
 # 1. الاستيرادات (Imports) يجب أن تكون دائماً في الأعلى
 from fastapi import (
     FastAPI,
@@ -184,23 +180,29 @@ async def update_media(
     tmdb_id: str = Form(None),
     labels: str = Form(None),
     runtime: str = Form(None),
-    duration_iso: str = Form(None),  # أضف هذا السطر
+    duration_iso: str = Form(None),
     poster_url: str = Form(...),
 ):
-    data = {
-        "title": title,
-        "story": story,
-        "category": category,
-        "year": year,
-        "rating": rating,
-        "tmdb_id": tmdb_id,
-        "labels": labels,
-        "runtime": runtime,
-        "duration_iso": duration_iso,  # أضف هذا السطر
-        "poster_url": poster_url,
-    }
-    SupabaseService.update_media(media_id, data)
-    return {"status": "success"}
+    # يجب أن يبدأ الكود بـ try لتتمكن من استخدام except لاحقاً
+    try:
+        data = {
+            "title": title,
+            "story": story,
+            "category": category,
+            "year": year,
+            "rating": rating,
+            "tmdb_id": tmdb_id,
+            "labels": labels,
+            "runtime": runtime,
+            "duration_iso": duration_iso,
+            "poster_url": poster_url,
+        }
+        print(f"DEBUG: Updating media {media_id} with data: {data}")
+        SupabaseService.update_media(media_id, data)
+        return {"status": "success"}
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR in update_media: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # حذف عمل
