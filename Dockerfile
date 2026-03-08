@@ -24,4 +24,6 @@ USER user
 ENV PATH="/home/user/.local/bin:${PATH}"
 
 EXPOSE 7860
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+
+# استبدل سطر CMD بالسطر التالي الذي يحدد المسار الكامل:
+CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
