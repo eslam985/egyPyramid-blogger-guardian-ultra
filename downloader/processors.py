@@ -732,12 +732,17 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
 
 async def upload_to_lulustream(key, identifier, file_name):
-    """النسخة المعتمدة: الرفع مع المراقبة الذكية لحالة الملف"""
+    print(f"📡 LuluStream: إرسال أمر سحب...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, headers=headers, follow_redirects=True
+        ) as client:
             encoded_url = urllib.parse.quote(remote_url, safe="")
             add_url = (
                 f"https://api.lulustream.com/api/upload/url?key={key}&url={encoded_url}"
@@ -749,58 +754,40 @@ async def upload_to_lulustream(key, identifier, file_name):
             if data.get("status") == 200 and "result" in data:
                 file_code = data["result"].get("filecode")
 
-                # --- تشغيل وظيفة المراقبة (Background Polling) ---
-                asyncio.create_task(monitor_and_rename(key, file_code, file_name))
+                # --- دمج منطق المراقبة الذكي داخل الهيكلية القديمة ---
+                async def smart_rename(code, title):
+                    await asyncio.sleep(40)  # انتظار أولي
+                    for _ in range(10):  # محاولات مراقبة
+                        try:
+                            # نستخدم نفس الـ Client إذا أمكن، أو نفتح واحد جديد (الأضمن)
+                            async with httpx.AsyncClient(headers=headers) as c:
+                                info = (
+                                    await c.get(
+                                        f"https://lulustream.com/api/file/info?key={key}&file_code={code}"
+                                    )
+                                ).json()
+                                if (
+                                    info.get("result")
+                                    and info["result"][0].get("canplay") == 1
+                                ):
+                                    await c.get(
+                                        f"https://lulustream.com/api/file/edit",
+                                        params={
+                                            "key": key,
+                                            "file_code": code,
+                                            "file_title": title,
+                                        },
+                                    )
+                                    return
+                        except:
+                            pass
+                        await asyncio.sleep(60)
 
-                print(f"✅ LuluStream: تم بدء الرفع. الكود: {file_code}")
+                asyncio.create_task(smart_rename(file_code, file_name))
                 return f"https://lulustream.com/e/{file_code}"
-
     except Exception as e:
-        print(f"❌ LuluStream Logic Error: {e}")
+        print(f"❌ Error: {e}")
     return None
-
-
-async def monitor_and_rename(key, file_code, file_name):
-    info_url = "https://lulustream.com/api/file/info"
-    edit_url = "https://lulustream.com/api/file/edit"
-
-    # تعريف الهيدرز التي كانت موجودة في دالتك القديمة (مهمة جداً للتعريف)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-
-    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
-        # زيادة وقت الانتظار الأولي ليعطي السيرفر فرصة لبدء المعالجة
-        await asyncio.sleep(30)
-
-        for i in range(20):  # محاولات أقل، لكن بذكاء
-            try:
-                params = {"key": key, "file_code": file_code}
-                res = await client.get(info_url, params=params)
-
-                if res.status_code == 200:
-                    info = res.json()
-                    if info.get("status") == 200 and info.get("result"):
-                        results = info["result"]
-                        if isinstance(results, list) and len(results) > 0:
-                            if results[0].get("canplay") == 1:
-                                await client.get(
-                                    edit_url,
-                                    params={
-                                        "key": key,
-                                        "file_code": file_code,
-                                        "file_title": file_name,
-                                    },
-                                )
-                                print(f"✅ تم التعديل النهائي لـ {file_name}")
-                                return
-
-            except Exception as e:
-                pass  # تجاهل الأخطاء العابرة
-
-            await asyncio.sleep(30)  # الانتظار 30 ثانية بين كل محاولة هو الأمان التام
-
-    print(f"❌ انتهى وقت الانتظار.")
 
 
 async def upload_to_mixdrop(file_path, email, key):
