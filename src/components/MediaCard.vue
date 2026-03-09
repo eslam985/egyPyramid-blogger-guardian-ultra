@@ -28,7 +28,7 @@
     </div>
 
     <!-- الجزء السفلي: المحتوى والأزرار -->
-    <div class="p-3 flex-1 flex flex-col text-center">
+    <div class="p-2 flex-1 flex flex-col text-center">
       <h3
         class="text-xs font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-primary transition-colors duration-300 ">
         {{ media.title }}
@@ -42,25 +42,16 @@
 
     <!-- شريط الأزرار -->
     <div @click.stop
-      class="flex justify-around items-center p-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-      <!-- زر التعديل -->
+      class="flex justify-center items-center gap-4 p-1 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+
       <button @click="goToDetails(media.id)"
-        class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-primary-dark transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-primary-dark hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
         title="تعديل">
         <i class="fa fa-edit"></i>
       </button>
 
-      <!-- زر Blogger -->
-      <button @click="toggleBlogger(media.blogger_post_id, media.id)"
-        class="w-10 h-10 rounded-xl flex items-center justify-center  text-[#708090] transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
-        :class="media.blogger_status === 'published' ? ' text-[#708090] hover:bg-orange-700' : 'bg-orange-400 hover:bg-orange-500'"
-        :title="media.blogger_status === 'published' ? 'إلغاء النشر (تحديث)' : 'نشر على Blogger'">
-        <i class="fab fa-blogger"></i>
-      </button>
-
-      <!-- زر الحذف -->
       <button @click="$emit('delete', media.id)"
-        class="w-10 h-10 rounded-xl flex items-center justify-center  text-[#708090] hover:bg-red-600 transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-red-600 hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
         title="حذف">
         <i class="fa fa-trash"></i>
       </button>
@@ -70,8 +61,8 @@
 
 <script setup>
 import { useRouter } from 'vue-router';
-import api from '../services/api';
-
+// أزلنا import api لأنه لم يعد مستخدماً هنا
+const emit = defineEmits(['delete']); // تم إبقاء 'delete' فقط
 const props = defineProps({
   media: {
     type: Object,
@@ -84,27 +75,7 @@ const props = defineProps({
 });
 
 const router = useRouter();
-
 const goToDetails = (id) => {
   router.push(`/media/${id}`);
-};
-
-const toggleBlogger = async (postId, mediaId) => {
-  if (!postId || postId === 'None') {
-    alert("⚠️ لا يوجد ID لهذا المقال!");
-    return;
-  }
-
-  try {
-    const response = await api.post(`/blogger/toggle/${postId}`);
-    if (response.data.status === "success") {
-      const isLive = response.data.new_status === 'live';
-      alert(`✅ الحالة الجديدة: ${isLive ? 'منشور' : 'مسودة'}`);
-      // يمكنك إصدار حدث لتحديث القائمة الأصلية
-      // مثلاً: emit('blogger-toggled', mediaId, response.data.new_status)
-    }
-  } catch (e) {
-    alert("❌ فشل الاتصال بالسيرفر");
-  }
 };
 </script>

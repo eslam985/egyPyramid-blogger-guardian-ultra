@@ -9,20 +9,19 @@ import httplib2
 class BloggerService:
     def __init__(self, blog_id):
         self.blog_id = blog_id
-        self.creds = self._load_credentials()
-        self.service = build("blogger", "v3", credentials=self.creds)
+        # لم نعد نخزن self.service هنا، لأن الخدمة يجب أن تُبنى ديناميكياً
 
     def _load_credentials(self):
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
-        import requests
 
-        refresh_token = os.getenv("BLOGGER_REFRESH_TOKEN")
         client_id = os.getenv("CLIENT_ID")
         client_secret = os.getenv("CLIENT_SECRET")
+        refresh_token = os.getenv("BLOGGER_REFRESH_TOKEN")
 
-        if not refresh_token or not client_id or not client_secret:
-            return None
+        print(f"DEBUG: Token loaded? {bool(refresh_token)}")
+        if not refresh_token:
+            raise Exception("❌ BLOGGER_REFRESH_TOKEN غير موجود في البيئة!")
 
         creds = Credentials(
             token=None,
@@ -34,16 +33,16 @@ class BloggerService:
         )
 
         try:
-            # استخدام جلسة requests مع تعطيل التحقق من الشهادة كحل أخير إذا استمر الـ EOF
-            # ولكن نبدأ بالطريقة القياسية المحدثة
+            # تجديد التوكن فوراً قبل إرجاع الاعتمادات
             creds.refresh(Request())
             return creds
         except Exception as e:
             raise Exception(f"❌ فشل تجديد التوكن: {e}")
 
     def get_service(self):
-        """هذه الدالة هي التي تستدعيها في main_publisher.py"""
-        return self.service
+        """بناء الخدمة في اللحظة التي يتم استدعاؤها فيها لضمان حداثة الـ Credentials"""
+        creds = self._load_credentials()
+        return build("blogger", "v3", credentials=creds)
 
     def change_post_status(self, post_id: str, revert: bool = True):
         try:

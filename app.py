@@ -475,63 +475,6 @@ async def run_publisher(
     return {"status": "success", "message": "بدأت عملية النشر في الخلفية..."}
 
 
-@app.get("/api/blogger/check-status/{post_id}")
-async def check_blogger_status(post_id: str):
-    try:
-        if not blogger:
-            return {"status": "error", "message": "Blogger not ready"}
-
-        service = blogger.get_service()
-        # محاولة جلب المقال من بلوجر
-        post = service.posts().get(blogId=BLOG_ID, postId=post_id).execute()
-
-        # إذا وجده، فهو موجود. إذا لم يجده، سيرمي خطأ 404
-        return {"status": "exists", "blogger_status": post.get("status")}
-    except Exception as e:
-        # إذا كان الخطأ 404، فالمقال محذوف فعلياً
-        return {"status": "not_found"}
-
-
-@app.post("/api/blogger/toggle/{post_id}")
-async def toggle_post_status(post_id: str, user: str = Depends(authenticate)):
-    try:
-
-        blogger_service = BloggerService(blog_id=os.getenv("BLOG_ID"))
-        service = blogger_service.get_service()
-        b_id = os.getenv("BLOG_ID")
-
-        # 1. جلب الحالة الحقيقية من جوجل وتجريدها من أي مسافات
-        post_data = service.posts().get(blogId=b_id, postId=post_id).execute()
-        current_status = str(post_data.get("status", "")).strip().upper()
-
-        # 2. المنطق المعكوس
-        if current_status == "LIVE":
-            # لو جوجل قالت LIVE -> اجبرها تبقى مسودة
-            service.posts().revert(blogId=b_id, postId=post_id).execute()
-            final_status_db = "draft"
-            new_status_ui = "draft"
-        else:
-            # لو جوجل قالت DRAFT أو أي شيء آخر -> اجبرها تبقى LIVE
-            service.posts().publish(blogId=b_id, postId=post_id).execute()
-            final_status_db = "published"
-            new_status_ui = "live"
-
-        # 3. تحديث ساب باز فوراً (تأكد من أسماء الأعمدة والجداول)
-        # تحديث جدول الميديا
-        SupabaseService.client.table("medias").update(
-            {"blogger_status": final_status_db}
-        ).eq("blogger_post_id", post_id).execute()
-        # تحديث جدول الحلقات أيضاً لنفس الـ post_id
-        SupabaseService.client.table("episodes").update(
-            {"blogger_status": final_status_db}
-        ).eq("blogger_post_id", post_id).execute()
-        return {"status": "success", "new_status": new_status_ui}
-
-    except Exception as e:
-        print(f"❌ Toggle Critical Error: {str(e)}")
-        return {"status": "error", "error": str(e)}
-
-
 # 2. مسار جلب التقدم (هذا ما سيقرأه شريط التقدم)
 # 2. مسار جلب التقدم (النسخة المنضبطة)
 @app.get("/api/download/progress")

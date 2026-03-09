@@ -12,33 +12,23 @@
 
         <div class="filters-bar flex flex-wrap items-center gap-2">
           <!-- أزرار حالة النشر -->
-          <button
-            @click="currentStatus = 'all'"
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            :class="currentStatus === 'all' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
-          >
+          <button @click="currentStatus = 'all'" class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            :class="currentStatus === 'all' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'">
             الكل
           </button>
-          <button
-            @click="currentStatus = 'published'"
+          <button @click="currentStatus = 'published'"
             class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            :class="currentStatus === 'published' ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
-          >
+            :class="currentStatus === 'published' ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'">
             ✅ منشور
           </button>
-          <button
-            @click="currentStatus = 'draft'"
-            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            :class="currentStatus === 'draft' ? 'bg-amber-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
-          >
+          <button @click="currentStatus = 'draft'" class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            :class="currentStatus === 'draft' ? 'bg-amber-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'">
             ⏳ غير منشور
           </button>
 
           <!-- تحديد النوع -->
-          <select
-            v-model="currentCategory"
-            class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-none focus:ring-2 focus:ring-primary outline-none"
-          >
+          <select v-model="currentCategory"
+            class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-none focus:ring-2 focus:ring-primary outline-none">
             <option value="all">كل الأنواع</option>
             <option value="tv">مسلسلات</option>
             <option value="movie">أفلام</option>
@@ -53,13 +43,8 @@
         </template>
 
         <template v-else-if="mediaList.length > 0">
-          <MediaCard
-            v-for="media in mediaList"
-            :key="media.id"
-            :media="media"
-            @delete="handleDelete"
-            @toggle-blogger="handleToggleBlogger"
-          />
+          <MediaCard v-for="item in mediaList" :key="item.id" :media="item" @delete="handleDelete(item.id)"
+            @toggle-blogger="handleToggleBlogger(item)" />
         </template>
 
         <!-- حالة عدم وجود نتائج -->
@@ -70,11 +55,8 @@
 
       <!-- Pagination -->
       <div class="pagination flex items-center justify-center gap-2 mt-8" v-if="totalPages > 1">
-        <button
-          @click="loadMediaList(currentPage - 1)"
-          :disabled="currentPage <= 1"
-          class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-        >
+        <button @click="loadMediaList(currentPage - 1)" :disabled="currentPage <= 1"
+          class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-700 transition">
           السابق
         </button>
 
@@ -82,11 +64,8 @@
           صفحة {{ currentPage }} من {{ totalPages }}
         </span>
 
-        <button
-          @click="loadMediaList(currentPage + 1)"
-          :disabled="currentPage >= totalPages"
-          class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-        >
+        <button @click="loadMediaList(currentPage + 1)" :disabled="currentPage >= totalPages"
+          class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 dark:hover:bg-gray-700 transition">
           التالي
         </button>
       </div>
@@ -95,6 +74,7 @@
 </template>
 
 <script setup>
+import Swal from 'sweetalert2';
 import { ref, computed, onMounted, watch } from 'vue';
 import api from '../services/api';
 import MediaCard from '../components/MediaCard.vue';
@@ -142,21 +122,57 @@ watch(
   }
 );
 
-const handleDelete = (id) => {
-  // بعد الحذف يمكن إعادة تحميل القائمة أو إزالة العنصر محلياً
-  mediaList.value = mediaList.value.filter(item => item.id !== id);
-  totalCount.value -= 1;
-  // تحديث عدد الصفحات إذا لزم الأمر
-};
 
-const handleToggleBlogger = ({ postId, mediaId }) => {
-  // يمكن تحديث حالة blogger محلياً بعد النجاح
-  // أو إعادة تحميل القائمة
+
+const handleDelete = async (id) => {
+  // التنبيه المودرن
+  const result = await Swal.fire({
+    title: 'هل أنت متأكد؟',
+    text: "سيتم حذف هذا العمل وجميع حلقاته وروابطه نهائياً!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444', // لون أحمر متناسق مع Tailwind (red-500)
+    cancelButtonColor: '#6b7280',  // لون رمادي (gray-500)
+    confirmButtonText: 'نعم، احذف الكل',
+    cancelButtonText: 'تراجع',
+    background: '#1f2937', // لون Dark متناسق مع الداشبورد بتاعتك
+    color: '#ffffff',
+    iconColor: '#f87171'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      // إرسال الطلب الفعلي للسيرفر
+      const response = await api.post(`/media/delete/${id}`);
+
+      if (response.data.status === "deleted") {
+        // حذف من الشاشة
+        mediaList.value = mediaList.value.filter(item => item.id !== id);
+        totalCount.value -= 1;
+
+        // رسالة نجاح سريعة (Toast)
+        Swal.fire({
+          icon: 'success',
+          title: 'تم الحذف بنجاح',
+          showConfirmButton: false,
+          timer: 1500,
+          background: '#1f2937',
+          color: '#ffffff'
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'فشل الحذف',
+        text: 'حدث خطأ أثناء الاتصال بالسيرفر، حاول مرة أخرى.',
+        background: '#1f2937',
+        color: '#ffffff'
+      });
+    }
+  }
 };
 
 onMounted(() => {
   loadMediaList(1);
 });
 </script>
-
-<!-- لم يعد هناك حاجة لأي CSS إضافي، كل شيء عبر Tailwind -->
