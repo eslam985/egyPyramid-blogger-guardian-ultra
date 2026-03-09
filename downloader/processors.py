@@ -476,6 +476,7 @@ def upload_to_vk_local(title, file_path):
 async def upload_to_voe_api(file_path, identifier):
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:  # أضف هذا السطر هنا
+
             file_name = os.path.basename(file_path).replace(" ", "%20")
             remote_url = f"https://archive.org/download/{identifier}/{file_name}"
             params = {"key": VOE_API_KEY, "url": remote_url}
@@ -758,7 +759,9 @@ async def upload_to_lulustream(key, identifier, file_name):
 
                 for attempt in range(1, 21):
                     try:
-                        async with httpx.AsyncClient(timeout=30.0) as hunter_client:
+                        async with httpx.AsyncClient(
+                            timeout=600.0, follow_redirects=True
+                        ) as hunter_client:
                             # الاستعلام عن حالة الملف (المصدر 5 في الدوكيومنتشن)
                             info_url = f"{base_api}/file/info?key={key}&file_code={target_code}"
                             info_res = await hunter_client.get(info_url)
