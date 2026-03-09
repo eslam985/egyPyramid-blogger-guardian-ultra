@@ -42,7 +42,7 @@
 
     <!-- شريط الأزرار -->
     <div @click.stop
-      class="flex justify-center items-center gap-4 p-1 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+      class="flex justify-center items-center gap-4 p-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
 
       <button @click="goToDetails(media.id)"
         class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-primary-dark hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
