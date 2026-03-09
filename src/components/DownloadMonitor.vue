@@ -12,11 +12,11 @@
    <!-- قائمة المهام النشطة -->
    <div v-if="activeTasks.length > 0" class="space-y-2">
     <div v-for="task in activeTasks" :key="task.id"
-     class="progress-item bg-gradient-to-br from-gray-900 to-black border border-amber-600/30 rounded-xl p-3 shadow-lg text-[8px] w-xs"
+     class="progress-item bg-gradient-to-br from-gray-900 to-black border border-amber-600/30 rounded-xl p-3 shadow-lg text-[11px] w-md"
      :class="{ 'is-uploading': task.status_message.includes('جاري الرفع') }">
-     <div class="flex items-center justify-between mb-2 p-1">
+     <div class="flex items-center justify-between mb-2">
       <span class="task-name font-semibold text-amber-500 truncate">{{ task.task_name }}</span>
-      <span class="status-text text-[12px]"
+      <span class="status-text text-[11px]"
        :class="task.status_message.includes('جاري الرفع') ? 'text-cyan-400 animate-pulse' : 'text-gray-300'">
        {{ task.status_message }}
       </span>
