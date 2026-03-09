@@ -735,34 +735,33 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 async def upload_to_lulustream(key, identifier, file_name):
     print(f"📡 LuluStream: بدء الرفع للملف: {file_name}")
     try:
-        base_api = "https://lulustream.com/api"
+        # التعديل هنا: إضافة www لتجنب خطأ الـ 301
+        base_api = "https://www.lulustream.com/api"
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
             res = await client.get(add_url)
 
             if res.status_code != 200:
-                print(f"❌ خطأ اتصال: {res.status_code}")
+                print(f"❌ خطأ اتصال (Code {res.status_code}): {res.text}")
                 return None
 
             data = res.json()
             if data.get("status") != 200:
+                print(f"❌ رفض السيرفر الطلب: {data}")
                 return None
 
             file_code = data["result"].get("filecode")
             print(f"✅ تم قبول الرفع! الكود: {file_code}")
 
             async def hunter_fixer(target_code, target_title):
-                print(f"🕵️ [Hunter] وضع الانتظار والتعديل نشط للملف: {target_code}")
-
+                print(f"🕵️ [Hunter] بدأ مراقبة الكود: {target_code}")
                 for attempt in range(1, 21):
                     try:
-                        async with httpx.AsyncClient(
-                            timeout=600.0, follow_redirects=True
-                        ) as hunter_client:
-                            # الاستعلام عن حالة الملف (المصدر 5 في الدوكيومنتشن)
+                        async with httpx.AsyncClient(timeout=30.0) as hunter_client:
+                            # الاستعلام المباشر باستخدام النطاق المحدث
                             info_url = f"{base_api}/file/info?key={key}&file_code={target_code}"
                             info_res = await hunter_client.get(info_url)
 
@@ -772,8 +771,6 @@ async def upload_to_lulustream(key, identifier, file_name):
                                     "result"
                                 ):
                                     file_info = info_data["result"][0]
-
-                                    # التعديل فقط إذا كان الملف جاهزاً (canplay == 1)
                                     if file_info.get("canplay") == 1:
                                         print(
                                             f"🎯 [Hunter] الملف جاهز! جاري فرض الاسم النظيف..."
@@ -786,7 +783,6 @@ async def upload_to_lulustream(key, identifier, file_name):
                                         edit_res = await hunter_client.get(
                                             f"{base_api}/file/edit", params=edit_params
                                         )
-
                                         if "true" in edit_res.text:
                                             print(
                                                 f"✨ [Hunter] نجاح: تم تثبيت الاسم: {target_title}"
@@ -794,18 +790,15 @@ async def upload_to_lulustream(key, identifier, file_name):
                                             return
                                     else:
                                         print(
-                                            f"⏳ [Hunter] المحاولة {attempt}: الملف موجود لكنه لسه بيتعالج (Encoding/Pending)..."
+                                            f"⏳ [Hunter] المحاولة {attempt}: الملف جاري معالجته..."
                                         )
-
                     except Exception as e:
-                        print(f"⚠️ [Hunter] خطأ في المحاولة {attempt}: {e}")
-
+                        print(f"⚠️ [Hunter] خطأ: {e}")
                     await asyncio.sleep(45)
-                print(f"🛑 [Hunter] فشل التعديل بعد 20 محاولة.")
+                print(f"🛑 [Hunter] انتهت المحاولات.")
 
             asyncio.create_task(hunter_fixer(file_code, file_name))
             return f"https://lulustream.com/e/{file_code}"
-
     except Exception as e:
         print(f"❌ Fatal Error: {e}")
     return None
