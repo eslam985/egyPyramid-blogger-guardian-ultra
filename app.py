@@ -528,36 +528,35 @@ async def run_download_task(
 
 
 # 1. تحديد المسار بناءً على مكان ملف app.py (هذا يعمل في أي مكان)
+# 1. تحديد المسار بدقة
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIST = os.path.join(BASE_DIR, "static", "dist")
 
-print(f"DEBUG: Calculated STATIC_DIST: {STATIC_DIST}")
-print(f"DEBUG: Does it exist? {os.path.exists(STATIC_DIST)}")
-
-# 2. التأكد من المجلدات
 if os.path.exists(STATIC_DIST):
-    # ربط ملفات الـ assets
+    # الطريقة الصحيحة: نربط المسار root بالملفات الموجودة داخل dist مباشرة
+    # هذا يجعل المتصفح يرى الملفات في /assets مباشرة عند طلبها
     app.mount(
         "/assets",
         StaticFiles(directory=os.path.join(STATIC_DIST, "assets")),
         name="assets",
     )
 
-    # 3. توجيه الصفحة الرئيسية
+    # 3. توجيه الصفحة الرئيسية للـ index.html
     @app.get("/")
     async def index():
         return FileResponse(os.path.join(STATIC_DIST, "index.html"))
 
-    # 4. توجيه الـ SPA
+    # 4. توجيه الـ SPA (أي مسار غير موجود يرجع للـ index)
     @app.get("/{rest_of_path:path}")
     async def serve_spa(rest_of_path: str):
-        if rest_of_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="API route not found")
+        # إذا كان المسار يبدأ بـ /assets، دعه يمر للمجلد (إضافة احتياطية)
+        if rest_of_path.startswith("assets/"):
+            return FileResponse(os.path.join(STATIC_DIST, rest_of_path))
+        # غير ذلك، أعد ملف الـ index للـ SPA
         return FileResponse(os.path.join(STATIC_DIST, "index.html"))
 
 else:
     print(f"⚠️ CRITICAL: STATIC_DIST not found at {STATIC_DIST}")
-
 
 if __name__ == "__main__":
     # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة
