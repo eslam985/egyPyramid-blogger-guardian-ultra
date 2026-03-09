@@ -731,85 +731,88 @@ async def upload_to_streamtape(login, key, identifier, file_name):
     return None
 
 
+
+
+
 async def upload_to_lulustream(key, identifier, file_name):
     print(f"📡 LuluStream: بدء الرفع للملف: {file_name}")
     try:
+        # استخدام الرابط الصحيح من الدوكومنتيشن (بدون api. في البداية)
+        base_api = "https://lulustream.com/api"
         clean_file_name = urllib.parse.quote(file_name)
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
-        base_api = "https://lulustream.com/api"
 
-        async with httpx.AsyncClient(timeout=100.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
             res = await client.get(add_url)
+
+            # صمام الأمان: إذا فشل الـ JSON، نطبع ما حدث فعلياً
+            if res.status_code != 200:
+                print(f"❌ خطأ اتصال: {res.status_code} - الرد: {res.text}")
+                return None
+
             data = res.json()
+            if data.get("status") != 200:
+                print(f"❌ رفض السيرفر الطلب: {data}")
+                return None
 
-            if data.get("status") == 200:
-                file_code = data["result"].get("filecode")
-                print(f"✅ تم قبول الرفع! الكود: {file_code}")
+            file_code = data["result"].get("filecode")
+            print(f"✅ تم قبول الرفع! الكود: {file_code}")
 
-                async def hunter_fixer(target_code, target_title):
-                    print(
-                        f"🕵️ [Hunter] وضع الاستعلام المباشر نشط للملف {target_code}..."
-                    )
+            # --- المطارد الذكي (Hunter 2.0) ---
+            async def hunter_fixer(target_code, target_title):
+                print(f"🕵️ [Hunter] بدأ مراقبة الكود: {target_code}")
 
-                    for attempt in range(1, 21):
-                        try:
-                            async with httpx.AsyncClient(timeout=30.0) as hunter_client:
-                                # الحل الجذري: الاستعلام المباشر عن معلومات الملف
-                                info_url = f"{base_api}/file/info?key={key}&file_code={target_code}"
-                                info_res = await hunter_client.get(info_url)
+                # لن نبحث في القائمة! سنستعلم عن الملف نفسه بـ file_code
+                for attempt in range(1, 21):
+                    try:
+                        async with httpx.AsyncClient(timeout=30.0) as hunter_client:
+                            # استخدام مسار File Info المباشر (Source 5)
+                            info_url = f"{base_api}/file/info?key={key}&file_code={target_code}"
+                            info_res = await hunter_client.get(info_url)
 
-                                if info_res.status_code == 200:
-                                    info_data = info_res.json()
-                                    # التحقق إذا كانت النتيجة تحتوي على ملف (قائمة)
-                                    if info_data.get("status") == 200 and isinstance(
-                                        info_data.get("result"), list
-                                    ):
-                                        file_info = info_data["result"][0]
-                                        current_title = file_info.get("file_title", "")
+                            if info_res.status_code == 200:
+                                info_data = info_res.json()
+                                if info_data.get("status") == 200 and info_data.get(
+                                    "result"
+                                ):
+                                    # السيرفر وجد الملف!
+                                    file_data = info_data["result"][0]
 
-                                        # إذا كان الاسم مشوهاً (فيه D8 أو D9 أو كود عشوائي)
-                                        if (
-                                            any(
-                                                x in current_title
-                                                for x in ["D8", "D9", "?"]
-                                            )
-                                            or current_title == ""
-                                        ):
-                                            print(
-                                                f"🎯 [Hunter] تم العثور على الملف برمجياً! جاري التصحيح..."
-                                            )
-                                            edit_res = await hunter_client.get(
-                                                f"{base_api}/file/edit",
-                                                params={
-                                                    "key": key,
-                                                    "file_code": target_code,
-                                                    "file_title": target_title,
-                                                },
-                                            )
-                                            if "true" in edit_res.text:
-                                                print(
-                                                    f"✨ [Hunter] تم تثبيت الاسم بنجاح: {target_title}"
-                                                )
-                                                return
-                                        else:
-                                            print(
-                                                f"✅ [Hunter] الملف متاح والاسم سليم."
-                                            )
-                                            return
+                                    # التعديل المباشر (بغض النظر عن اسمه الحالي)
+                                    print(
+                                        f"🎯 [Hunter] تم الوصول للملف. جاري فرض الاسم: {target_title}"
+                                    )
+                                    edit_params = {
+                                        "key": key,
+                                        "file_code": target_code,
+                                        "file_title": target_title,
+                                    }
+                                    edit_res = await hunter_client.get(
+                                        f"{base_api}/file/edit", params=edit_params
+                                    )
 
+                                    if "true" in edit_res.text:
+                                        print(f"✨ [Hunter] تم تثبيت الاسم بنجاح!")
+                                        return
+                            else:
                                 print(
-                                    f"😴 [Hunter] محاولة {attempt}: الملف غير متاح بعد للاستعلام (السيرفر بطيء)."
+                                    f"😴 [Hunter] المحاولة {attempt}: الملف لا يزال قيد المعالجة في السيرفر.."
                                 )
-                        except Exception as e:
-                            print(f"⚠️ [Hunter] خطأ في الاستعلام: {e}")
 
-                        await asyncio.sleep(45)
+                    except Exception as e:
+                        print(f"⚠️ [Hunter] خطأ: {e}")
 
-                asyncio.create_task(hunter_fixer(file_code, file_name))
-                return f"https://lulustream.com/e/{file_code}"
+                    await asyncio.sleep(
+                        45
+                    )  # الانتظار ليعطي فرصة للسيرفر للتحويل من PENDING لـ OK
+                print(f"🛑 [Hunter] انتهت المحاولات.")
+
+            asyncio.create_task(hunter_fixer(file_code, file_name))
+            return f"https://lulustream.com/e/{file_code}"
+
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Fatal Error: {e}")
     return None
 
 
