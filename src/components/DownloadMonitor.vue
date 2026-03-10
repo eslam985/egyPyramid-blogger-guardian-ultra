@@ -1,7 +1,8 @@
 <template>
   <div>
     <!-- الحاوية العائمة لمتابعة التحميلات -->
-    <div class="fixed bottom-4 right-4 w-[400px] max-h-96 overflow-y-auto overflow-x-hidden z-50 flex flex-col gap-2">
+    <div class="fixed bottom-10 right-4 w-[400px] max-h-96 overflow-y-auto overflow-x-hidden z-50 flex flex-col flex-col-reverse
+ gap-2">
 
       <button @click="showModal = true"
         class="w-[150px] items-start bg-primary hover:bg-primary-dark text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2">
@@ -9,7 +10,6 @@
         <span>مهمة جديدة</span>
       </button>
 
-      <div v-if="activeTasks.length > 0" class="space-y-2">
         <div v-for="task in activeTasks" :key="task.id"
           class="progress-item bg-gradient-to-br from-gray-900 to-black border border-amber-600/30 rounded-xl p-3 shadow-lg text-[10px] w-full">
           <div class="flex items-center justify-between mb-2 gap-1"> <span
@@ -28,7 +28,7 @@
               :style="{ width: task.progress_percent + '%' }"></div>
           </div>
         </div>
-      </div>
+
     </div>
 
     <!-- مودال إضافة مهمة جديدة -->

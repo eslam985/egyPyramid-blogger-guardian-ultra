@@ -33,7 +33,7 @@ provide('searchQuery', globalSearch)
 
 <template>
     <div
-        class="min-h-screen p-1 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
+        class="min-h-screen p-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
 
         <Navbar v-if="showNavbar" @open-add-modal="showModal = true" @update-search="handleSearch" />
 

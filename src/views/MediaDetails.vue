@@ -12,7 +12,7 @@
             <!-- جانب الصورة -->
             <div class="poster-side flex-shrink-0">
                 <img :src="mediaData.poster_url" :alt="mediaData.title"
-                    class="max-w-[300px] aspect-square rounded-xl shadow-lg">
+                    class="max-w-[300px] aspect-[1/1]  rounded-xl shadow-lg">
             </div>
 
             <!-- جانب النماذج -->

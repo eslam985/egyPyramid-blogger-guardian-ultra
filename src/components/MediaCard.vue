@@ -2,7 +2,7 @@
   <div v-if="media" @click="goToDetails(media.id)"
     class="group relative flex flex-col rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-secondary-dark shadow-card hover:shadow-xl transition-all duration-300 ease-out cursor-pointer hover:-translate-y-1">
     <!-- الجزء العلوي: الصورة والشارة -->
-    <div class="relative aspect-[3/2] overflow-hidden bg-gray-100 dark:bg-gray-800">
+    <div class="relative aspect-[1/1] overflow-hidden bg-gray-100 dark:bg-gray-800">
       <img :src="media.poster_url || defaultPoster" :alt="media.title"
         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
       <!-- شارة التصنيف (فيلم / مسلسل) -->
@@ -42,16 +42,16 @@
 
     <!-- شريط الأزرار -->
     <div @click.stop
-      class="flex justify-center items-center gap-4 p-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+      class="flex justify-between items-center gap-4 p-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
 
       <button @click="goToDetails(media.id)"
-        class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-primary-dark hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        class="w-8 h-8 rounded-xl flex items-center justify-center text-[#708090] hover:bg-primary-dark hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
         title="تعديل">
         <i class="fa fa-edit"></i>
       </button>
 
       <button @click="$emit('delete', media.id)"
-        class="w-10 h-10 rounded-xl flex items-center justify-center text-[#708090] hover:bg-red-600 hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
+        class="w-8 h-8 rounded-xl flex items-center justify-center text-[#708090] hover:bg-red-600 hover:text-white transition-all duration-200 hover:scale-110 active:scale-95 shadow-md"
         title="حذف">
         <i class="fa fa-trash"></i>
       </button>
