@@ -17,6 +17,10 @@ from fastapi.responses import FileResponse
 from bs4 import BeautifulSoup
 from services.supabase_db import SupabaseService
 
+# تعديل عمل
+from pydantic import BaseModel
+from typing import Optional
+
 # محاولة استيراد BloggerService
 try:
     from services.blogger_api import BloggerService
@@ -164,41 +168,32 @@ async def delete_media(media_id: int, user: str = Depends(authenticate)):
     return {"status": "deleted"}
 
 
-# تعديل عمل
+# 1. عرف الموديل أولاً
+class MediaUpdate(BaseModel):
+    title: str
+    story: str
+    category: str
+    poster_url: str
+    year: Optional[str] = None
+    rating: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    labels: Optional[str] = None
+    runtime: Optional[str] = None
+    duration_iso: Optional[str] = None
+    blogger_status: Optional[str] = None  # لا تنسَ إضافة هذا الحقل!
+
+
 @app.post("/api/media/update/{media_id}")
 async def update_media(
-    media_id: int,
-    user: str = Depends(authenticate),
-    title: str = Form(...),
-    story: str = Form(...),
-    category: str = Form(...),
-    year: str = Form(None),
-    rating: str = Form(None),
-    tmdb_id: str = Form(None),
-    labels: str = Form(None),
-    runtime: str = Form(None),
-    duration_iso: str = Form(None),
-    poster_url: str = Form(...),
+    media_id: int, data: MediaUpdate, user: str = Depends(authenticate)
 ):
-    # يجب أن يبدأ الكود بـ try لتتمكن من استخدام except لاحقاً
     try:
-        data = {
-            "title": title,
-            "story": story,
-            "category": category,
-            "year": year,
-            "rating": rating,
-            "tmdb_id": tmdb_id,
-            "labels": labels,
-            "runtime": runtime,
-            "duration_iso": duration_iso,
-            "poster_url": poster_url,
-        }
-        print(f"DEBUG: Updating media {media_id} with data: {data}")
-        SupabaseService.update_media(media_id, data)
+        # تحويل الموديل إلى dictionary
+        update_data = data.dict(exclude_unset=True)
+        print(f"DEBUG: Updating media {media_id} with data: {update_data}")
+        SupabaseService.update_media(media_id, update_data)
         return {"status": "success"}
     except Exception as e:
-        print(f"❌ CRITICAL ERROR in update_media: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -302,19 +297,27 @@ async def sync_episode_to_blogger(
         post_id = episode.get("medias", {}).get("blogger_post_id")
 
         # إذا لم يوجد مقال، سنعطي أمر للمحرك بالعمل فوراً
+        # في app.py داخل دالة sync_episode_to_blogger
+        # إذا لم يوجد مقال (عمل جديد)، سنقوم بتشغيل المحرك فوراً بشكل مباشر
         if not post_id:
-            from publisher.main_publisher import start_publishing_from_supabase
+            try:
+                from publisher.main_publisher import start_publishing_from_supabase
 
-            # تحديث الحالة لكي يراها المحرك
-            supabase.table("episodes").update({"blogger_sync": "Approved"}).eq(
-                "id", ep_id
-            ).execute()
-            # تشغيل المحرك في الخلفية
-            background_tasks.add_task(start_publishing_from_supabase)
-            return {
-                "status": "success",
-                "message": "🆕 عمل جديد! جاري إنشاء المقال في الخلفية...",
-            }
+                print(f"🚀 بدء عملية النشر المباشر للحلقة {ep_id}...")
+
+                # تنفيذ مباشر بدون background_tasks
+                print("--- [DEBUG] قبل استدعاء المحرك ---")
+                start_publishing_from_supabase()
+                print("--- [DEBUG] بعد استدعاء المحرك ---")
+
+                return {
+                    "status": "success",
+                    "message": "✅ تم إنشاء المقال ونشره بنجاح!",
+                }
+            except Exception as e:
+                # هنا سيظهر الخطأ الحقيقي في التيرمينال وفي المتصفح
+                print(f"❌ خطأ فادح أثناء النشر المباشر: {str(e)}")
+                return {"status": "error", "error": f"فشل النشر: {str(e)}"}
 
         # 2. جلب الروابط وتجهيز الـ HTML الجديد للحلقة
         links_res = (

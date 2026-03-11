@@ -80,6 +80,8 @@ import api from '../services/api';
 import MediaCard from '../components/MediaCard.vue';
 import DownloadMonitor from '../components/DownloadMonitor.vue';
 import MediaSkeleton from '../components/MediaSkeleton.vue';
+import { onUnmounted } from 'vue';
+import { supabaseClient } from '../services/supabase';
 
 const props = defineProps({
   search: {
@@ -95,6 +97,26 @@ const currentCategory = ref('all');
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalCount = ref(0); // العدد الإجمالي للعناصر (للعرض في العنوان)
+
+
+// 2. جوه الـ onMounted، زود الـ channel بعد استدعاء loadMediaList
+onMounted(() => {
+  // 1. التحميل الأولي للبيانات
+  loadMediaList(1);
+
+  // 2. تفعيل المزامنة اللحظية مرة واحدة فقط
+  const channel = supabaseClient
+    .channel('public:medias_list')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'medias' }, (payload) => {
+      console.log('تحديث لحظي: جاري تحديث القائمة...');
+      loadMediaList(currentPage.value);
+    })
+    .subscribe();
+});
+
+onUnmounted(() => {
+  supabaseClient.channel('public:medias_list').unsubscribe();
+});
 
 // دالة جلب البيانات
 const loadMediaList = async (page = 1) => {
@@ -172,7 +194,4 @@ const handleDelete = async (id) => {
   }
 };
 
-onMounted(() => {
-  loadMediaList(1);
-});
 </script>

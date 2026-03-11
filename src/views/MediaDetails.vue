@@ -4,9 +4,8 @@
         class="back-btn flex items-center gap-2 text-primary font-bold text-lg p-4 hover:underline transition">
         <i class="fa fa-arrow-right"></i> العودة للرئيسية
     </button>
-
-    <div class="media-details-container my-card max-w-6xl mx-auto mt-5 p-5 flex flex-col gap-5 rounded-2xl"
-        v-if="mediaData.title">
+    <MediaDetailsSkeleton v-if="!mediaData.title" />
+    <div v-else class="media-details-container my-card max-w-6xl mx-auto mt-5 p-5 flex flex-col gap-5 rounded-2xl">
         <!-- رأس الصفحة: صورة + معلومات قابلة للتعديل -->
         <div class="details-header flex flex-col md:flex-row-reverse justify-evenly gap-6 mb-8">
             <!-- جانب الصورة -->
@@ -152,7 +151,7 @@
                     </div>
                 </div>
             </div>
-            <div v-else class="empty-state my-card p-8 text-center text-gray-500 dark:text-gray-400 rounded-xl">
+            <div class="empty-state my-card p-8 text-center text-gray-500 dark:text-gray-400 rounded-xl">
                 <p>لا توجد حلقات مضافة بعد. اضغط على "إضافة حلقة جديدة".</p>
             </div>
         </div>
@@ -196,9 +195,14 @@
 </style>
 
 <script setup>
+import MediaDetailsSkeleton from '../components/MediaDetailsSkeleton.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import api from '../services/api';
+import { notifySuccess, notifyError, notifyLoading, confirmAction } from '../utils/alerts';
+import Swal from 'sweetalert2'; // تأكد أيضاً من إضافة هذا الاستيراد لاستخدامه في handleSyncClick و addNewEpisodeRow
+import { onUnmounted } from 'vue'; // أضفها مع الـ import اللي فوق
+import { supabaseClient } from '../services/supabase';
 
 const route = useRoute();
 const mediaData = ref({});
@@ -207,6 +211,27 @@ const showLinksModal = ref(false);
 const selectedEpisodeId = ref(null);
 const props = defineProps(['search', 'id']);
 
+onMounted(() => {
+    loadMedia();
+
+    // تشغيل الاتصال اللحظي
+    supabaseClient
+        .channel('public:medias')
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'medias',
+            filter: `id=eq.${route.params.id}`
+        }, (payload) => {
+            loadMedia();
+        })
+        .subscribe();
+});
+
+// إغلاق الاتصال عند الخروج من الصفحة
+onUnmounted(() => {
+    supabaseClient.channel('public:medias').unsubscribe();
+});
 const loadMedia = async () => {
     try {
         const response = await api.get(`/media/details/${route.params.id}`);
@@ -235,67 +260,71 @@ const addNewLink = async (epId) => {
     manageLinks(epId); // تحديث القائمة
 };
 
-const deleteLink = async (linkId) => {
-    if (!confirm("هل أنت متأكد من حذف هذا السيرفر؟")) return; // حماية من الحذف الخطأ
-    await api.post(`/links/${linkId}/delete`);
-    links.value = links.value.filter(l => l.id !== linkId);
-};
-
 // --- منطق الحلقات ---
 const addNewEpisodeRow = async () => {
-    const epNum = prompt("رقم الحلقة:");
-    if (!epNum) return;
-    await api.post(`/media/${route.params.id}/add-episode`, new URLSearchParams({ episode_number: epNum }));
-    loadMedia();
+    const { value: epNum } = await Swal.fire({
+        title: 'إضافة حلقة جديدة',
+        input: 'text',
+        inputLabel: 'رقم الحلقة',
+        inputPlaceholder: 'أدخل رقم الحلقة (مثلاً 5)',
+        showCancelButton: true
+    });
+
+    if (epNum) {
+        await api.post(`/media/${route.params.id}/add-episode`, new URLSearchParams({ episode_number: epNum }));
+        notifySuccess('تمت إضافة الحلقة');
+        loadMedia();
+    }
 };
 
 const deleteEpisode = async (epId) => {
-    if (!confirm("حذف الحلقة؟")) return;
-    await api.post(`/episodes/${epId}/delete`);
-    loadMedia();
+    const result = await confirmAction("لن تتمكن من استرجاع هذه الحلقة بعد الحذف!");
+    if (result.isConfirmed) {
+        await api.post(`/episodes/${epId}/delete`);
+        notifySuccess('تم حذف الحلقة بنجاح');
+        loadMedia();
+    }
+};
+
+const deleteLink = async (linkId) => {
+    const result = await confirmAction("سيتم حذف رابط السيرفر نهائياً.");
+    if (result.isConfirmed) {
+        await api.post(`/links/${linkId}/delete`);
+        links.value = links.value.filter(l => l.id !== linkId);
+    }
 };
 
 const syncToBlogger = async (ep) => {
     try {
+        notifyLoading('جاري المزامنة... يرجى الانتظار'); // استخدام دالة الـ loading
+
         const res = await api.post(`/episodes/${ep.id}/sync`);
+
         if (res.data.status === 'success') {
             ep.is_synced = true;
-            alert("✅ " + res.data.message);
+            notifySuccess(res.data.message || 'تم نشر الحلقة بنجاح!');
         } else {
-            alert("⚠️ " + (res.data.error || "حدث خطأ غير معروف"));
+            notifyError(res.data.error || 'حدث خطأ غير معروف أثناء النشر.');
         }
     } catch (e) {
         console.error(e);
-        alert("❌ فشل الاتصال بالسيرفر - تأكد من المسار");
+        notifyError('فشل الاتصال بالسيرفر - تأكد من تشغيل الباك-إند.');
     }
 };
 
-onMounted(loadMedia);
 
 const isSaving = ref(false); // أضف هذا المتغير
+
+
 
 const saveMediaDetails = async () => {
     isSaving.value = true;
     try {
-        const params = new URLSearchParams();
-
-        for (const key in mediaData.value) {
-            if (key !== 'episodes') {
-                const val = mediaData.value[key];
-                // الحقيقة الصارمة: إذا كانت القيمة فارغة أو غير معرفة، لا ترسلها أو أرسل 'null'
-                // لكن الأفضل هو عدم إضافتها للـ params إذا كانت فارغة ليقوم Supabase بتجاهلها
-                if (val !== null && val !== undefined && val !== '') {
-                    params.append(key, val);
-                }
-            }
-        }
-
-        await api.post(`/media/update/${route.params.id}`, params);
-        alert("✅ تم تحديث بيانات العمل بنجاح");
+        await api.post(`/media/update/${route.params.id}`, mediaData.value);
+        notifySuccess('تم تحديث بيانات العمل بنجاح');
+        await loadMedia();
     } catch (e) {
-        // الآن ستظهر لك رسالة الخطأ الحقيقية التي كنا ننتظرها
-        const errorMsg = e.response?.data?.detail || "❌ فشل في حفظ البيانات";
-        alert(errorMsg);
+        notifyError(e.response?.data?.detail || 'فشل في حفظ البيانات');
     } finally {
         isSaving.value = false;
     }
@@ -320,15 +349,34 @@ const checkSyncStatus = async (ep) => {
 };
 
 const handleSyncClick = async (ep) => {
+    // إظهار تنبيه بسيط يشير إلى أننا نقوم بالفحص حالياً
+    Swal.fire({
+        title: 'جاري التحقق...',
+        text: 'يتم فحص حالة الحلقة على بلوجر...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
     // ننتظر نتيجة الفحص الحقيقية
     const isStillOnBlogger = await checkSyncStatus(ep);
+
+    // إغلاق تنبيه "جاري التحقق"
+    Swal.close();
 
     // الآن نستخدم النتيجة التي عادت من الدالة مباشرة
     if (!isStillOnBlogger) {
         // إذا لم تكن موجودة، ابدأ النشر فوراً
         await syncToBlogger(ep);
     } else {
-        alert("الحلقة موجودة بالفعل في بلوجر.");
+        // إذا كانت موجودة، نستخدم SweetAlert بدلاً من alert
+        Swal.fire({
+            icon: 'info',
+            title: 'الحلقة موجودة بالفعل',
+            text: 'هذه الحلقة تم العثور عليها مسبقاً على بلوجر.',
+            confirmButtonText: 'حسناً'
+        });
     }
 };
 </script>

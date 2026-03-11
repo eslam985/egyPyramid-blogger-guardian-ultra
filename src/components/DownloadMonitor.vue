@@ -10,24 +10,24 @@
         <span>مهمة جديدة</span>
       </button>
 
-        <div v-for="task in activeTasks" :key="task.id"
-          class="progress-item bg-gradient-to-br from-gray-900 to-black border border-amber-600/30 rounded-xl p-3 shadow-lg text-[10px] w-full">
-          <div class="flex items-center justify-between mb-2 gap-1"> <span
-              class="task-name font-semibold text-amber-500 truncate max-w-[100%]">{{ task.task_name }}</span>
+      <div v-for="task in activeTasks" :key="task.id"
+        class="progress-item bg-gradient-to-br from-gray-900 to-black border border-amber-600/30 rounded-xl p-3 shadow-lg text-[10px] w-full">
+        <div class="flex items-center justify-between mb-2 gap-1"> <span
+            class="task-name font-semibold text-amber-500 truncate max-w-[100%]">{{ task.task_name }}</span>
 
-            <span class="status-text text-[10px]  max-w-[40%] truncate"
-              :class="task.status_message.includes('جاري الرفع') ? 'text-cyan-400 animate-pulse' : 'text-gray-300'">
-              {{ task.status_message }}
-            </span>
+          <span class="status-text text-[10px]  max-w-[40%] truncate"
+            :class="task.status_message.includes('جاري الرفع') ? 'text-cyan-400 animate-pulse' : 'text-gray-300'">
+            {{ task.status_message }}
+          </span>
 
-            <span class="percent text-amber-500 font-mono text-[12px]">{{ task.progress_percent }}%</span>
-          </div>
-
-          <div class="mini-progress-bar h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="fill h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500 ease-out"
-              :style="{ width: task.progress_percent + '%' }"></div>
-          </div>
+          <span class="percent text-amber-500 font-mono text-[12px]">{{ task.progress_percent }}%</span>
         </div>
+
+        <div class="mini-progress-bar h-1.5 bg-gray-700 rounded-full overflow-hidden">
+          <div class="fill h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500 ease-out"
+            :style="{ width: task.progress_percent + '%' }"></div>
+        </div>
+      </div>
 
     </div>
 
@@ -85,8 +85,41 @@ import { supabaseClient } from '../services/supabase.js';
 const showModal = ref(false);
 const taskUrl = ref('');
 const taskName = ref('');
+// في الـ script setup
 const activeTasks = ref([]);
 
+onMounted(() => {
+  // 1. تحميل المهام الأولية
+  fetchTasks();
+
+  // 2. الاستماع لتغييرات جدول download_tasks لحظياً
+  const channel = supabaseClient
+    .channel('public:download_tasks')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'download_tasks'
+    }, (payload) => {
+      // إذا تم إدراج مهمة جديدة أو تحديث حالة مهمة موجودة
+      if (payload.eventType === 'INSERT') {
+        activeTasks.value.push(payload.new);
+      } else if (payload.eventType === 'UPDATE') {
+        const index = activeTasks.value.findIndex(t => t.id === payload.new.id);
+        if (index !== -1) {
+          activeTasks.value[index] = payload.new;
+        }
+      } else if (payload.eventType === 'DELETE') {
+        activeTasks.value = activeTasks.value.filter(t => t.id !== payload.old.id);
+      }
+    })
+    .subscribe();
+});
+
+onUnmounted(() => {
+  supabaseClient.channel('public:download_tasks').unsubscribe();
+});
+
+// احذف متغير interval والـ setInterval تماماً، لم نعد بحاجة إليه!
 const submitTask = async () => {
   const { error } = await supabaseClient.from('download_tasks').insert([
     {
@@ -111,12 +144,4 @@ const fetchTasks = async () => {
   const { data } = await supabaseClient.from('download_tasks').select('*');
   activeTasks.value = data || [];
 };
-
-let interval;
-onMounted(() => {
-  fetchTasks();
-  interval = setInterval(fetchTasks, 3000);
-});
-
-onUnmounted(() => clearInterval(interval));
 </script>

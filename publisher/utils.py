@@ -2,16 +2,22 @@ import os
 import re
 import time
 import requests
-from datetime import datetime
 import random
-from dotenv import load_dotenv  # أضف هذا السطر
+from datetime import datetime
+from dotenv import load_dotenv
+from groq import Groq  # استيراد المكتبة
+from deep_translator import GoogleTranslator
 
-# 1. شحن المتغيرات (هذا يقرأ ملف .env في جهازك المحلي)
+# 1. شحن المتغيرات
 load_dotenv()
+
+# 2. تهيئة الاتصال (الآن أصبح كائناً جاهزاً للاتصال)
+client_groq = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+# --- لا تغير أي شيء آخر في الدوال، التعديل أعلاه سيصلح الخطأ ---
 
 # 2. استدعاء المفاتيح
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-client_groq = os.getenv("GROQ_API_KEY")
 
 
 def ar_to_en(text):
@@ -186,9 +192,6 @@ def generate_seo_tags(title, labels_list):
 
 
 def generate_ai_seo_description(movie_title, story_summary):
-    from groq import Groq
-    from google import genai
-
     """صياغة وصف SEO احترافي باستخدام Groq (أسرع وأقوى بديل)"""
     title_clean = movie_title.split("[")[0].strip()
 

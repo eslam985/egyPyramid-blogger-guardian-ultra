@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import random
 from datetime import datetime
 
 # 1. استدعاء الخدمات المركزية
@@ -41,8 +42,13 @@ blogger = BloggerService(blog_id=BLOG_ID)
 
 
 def prepare_content(row, is_series_by_title):
+    # --- أضف هذا التعريف الافتراضي في الأعلى ---
+    f_voe = f_vid = f_ok = f_vk = ""
+    # ------------------------------------------
+
     episodes_list = []
     content_type = "MOVIE"
+    # ... بقية الكود كما هو
     # محاولة جمع الحلقات
     for i in range(1, 51):
         voe_val = str(row.get(f"ep{i}_voe", "")).strip()
@@ -103,8 +109,6 @@ def prepare_content(row, is_series_by_title):
                 ):
                     current_links.append({"name": s_key, "url": s_url})
 
-            import json
-
             links_json = json.dumps(current_links).replace('"', "&quot;")
 
             # بناء الزر الديناميكي
@@ -142,8 +146,6 @@ def prepare_content(row, is_series_by_title):
                                 u = convert_vk_to_embed(u)
                             current_links.append({"name": s_name, "url": u})
 
-            import json
-
             links_json = json.dumps(current_links).replace('"', "&quot;")
             down_url = row.get("download_url", "")
 
@@ -175,7 +177,9 @@ def prepare_content(row, is_series_by_title):
     return content_type, episodes_list, ep_buttons_html, f_voe, f_vid, f_ok, f_vk
 
 
-def update_series_post(service, post_id, row, lang_val="لغة أصلية", ep_no=None):
+def update_series_post(
+    service, post_id, row, lang_val="لغة أصلية", ep_no=None, ep_id=None
+):
     # واحذف أسطر الـ re.search الخاصة بالـ ep_match
     # واستخدم ep_no الممرر مباشرة
     try:
@@ -243,8 +247,6 @@ def update_series_post(service, post_id, row, lang_val="لغة أصلية", ep_n
                     u = convert_vk_to_embed(u)
                 episode_links.append({"name": s_name, "url": u})
 
-        import json
-
         links_json = json.dumps(episode_links).replace('"', "&quot;")
 
         # 2. بناء الزر الديناميكي الجديد
@@ -274,12 +276,25 @@ def update_series_post(service, post_id, row, lang_val="لغة أصلية", ep_n
         updated_post_obj = (
             service.posts().patch(blogId=BLOG_ID, postId=post_id, body=post).execute()
         )
+        # --- التعديل هنا: تحديث الحالة في ساب باز ---
+        supabase.table("episodes").update(
+            {"blogger_status": "published", "is_synced": True}
+        ).eq(
+            "id", ep_id
+        ).execute()  # تأكد أن ep_id ممرر للدالة
+        # ------------------------------------------
         print(f"✅ تم حقن الحلقة {ep_no} بنجاح في بلوجر وساب باز.")
         return True
 
     except Exception as e:
-        print(f"❌ فشل تحديث المسلسل: {e}")
-        return False
+        if "404" in str(e):
+            print(f"🛑 المقال {post_id} غير موجود في بلوجر!")
+            # الحل الذكي: امسح الـ ID من Supabase ليضطر السكريبت لإنشاء مقال جديد صحيح
+            supabase.table("medias").update({"blogger_post_id": None}).eq(
+                "blogger_post_id", post_id
+            ).execute()
+            return False
+        raise e
 
 
 def start_publishing_from_supabase():
@@ -349,7 +364,7 @@ def start_publishing_from_supabase():
                 print(f"🔄 جاري حقن الحلقة {ep_no} في المقال {old_post_id}...")
                 # اجعله هكذا (نمرر رقم الحلقة الصريح ep_no)
                 success = update_series_post(
-                    service, old_post_id, row, send_telegram_update=True, ep_no=ep_no
+                    service, old_post_id, row, ep_no=ep_no, ep_id=ep_id
                 )
             else:
                 # --- لوجيك النشر الجديد كلياً (بناء القالب لأول مرة) ---
@@ -478,24 +493,29 @@ def start_publishing_from_supabase():
                     .insert(blogId=BLOG_ID, body=body, isDraft=True)
                     .execute()
                 )
+                # داخل الـ else (بعد إدخال المقال):
                 new_id = post_result.get("id")
-
-                # تحديث ساب باز برقم البوست الجديد فوراً
+                # حدث فقط الـ ID الخاص بالميديا
                 supabase.table("medias").update({"blogger_post_id": new_id}).eq(
                     "id", m_id
                 ).execute()
+
+                # الـ success = True كافية لتخبر السكريبت أن ينهي المهمة في الجزء الأخير
                 success = True
 
-            # 5. ختم المهمة
+            # 5. ختم المهمة (هذا الجزء يغطي الحالتين: النشر الجديد أو التحديث)
             if success:
-                supabase.table("episodes").update({"is_synced": True}).eq(
-                    "id", ep_id
-                ).execute()
+                supabase.table("episodes").update(
+                    {"is_synced": True, "blogger_status": "published"}
+                ).eq("id", ep_id).execute()
                 print(f"✅ تم إنهاء المهمة بنجاح.")
 
-            time.sleep(15)
+            # بدلاً من رقم ثابت
+            time.sleep(random.randint(10, 20))
     except Exception as e:
-        print(f"❌ فشل المحرك: {e}")
+        print(f"❌ فشل المحرك: {str(e)}")
+        # بدلاً من الاكتفاء بالطباعة، ارفع الخطأ ليراه السيرفر
+        raise e
 
 
 def sync_to_supabase(row, content_type, post_id=None):
