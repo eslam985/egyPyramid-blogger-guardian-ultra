@@ -449,6 +449,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     smart_headers = get_smart_headers(url)
 
     # 2. بناء أمر الوحش المتطور
+    # 2. بناء أمر الوحش المتطور
     cmd = (
         [
             "yt-dlp",
@@ -461,10 +462,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "--add-header",
             "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
         ]
-        + smart_headers
-        + [  # هنا يتم حقن الهيدرز الذكية تلقائياً
+        + smart_headers  # الهيدرز الذكية
+        + [
+            # خيارات الأداء
             "--concurrent-fragments",
-            "10",  # رفعنا القوة لـ 15 قناة سحب للسرعة القصوى
+            "10",
             "--file-access-retries",
             "infinite",
             "--fragment-retries",
@@ -473,6 +475,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "--no-check-certificate",
             "--socket-timeout",
             "60",
+            # خيارات كسر حماية الـ JWPlayer (لا تضع Referer ثابت هنا حتى لا يفسد عمل الهيدرز الذكية)
+            "--extractor-args",
+            "jwplayer:base-url=https://vidtube.one/",
+            "--format",
+            "best[ext=mp4]/best",
             "-f",
             "best",
             f"{url}",
