@@ -249,6 +249,44 @@ def save_to_supabase(
         return None, meta_story, final_poster
 
 
+# قائمة "الخداع" للمواقع المختلفة - ضعها في أعلى الملف
+SITES_COOKBOOK = {
+    "topcinema": {
+        "Referer": "https://topcinema.rip/",
+        "Origin": "https://topcinema.rip",
+    },
+    "vidtube": {
+        "Referer": "https://vidtube.one/",
+        "Origin": "https://vidtube.one",
+    },
+    "vidsrc": {
+        "Referer": "https://vidsrc.me/",
+        "Origin": "https://vidsrc.me",
+    },
+    "upbam": {
+        "Referer": "https://upbam.org/",
+        "Origin": "https://upbam.org",
+    },
+}
+
+
+def get_smart_headers(url):
+    headers = []
+    # الهيدر الافتراضي في حال لم يكن الموقع في القائمة
+    found = False
+    for site, config in SITES_COOKBOOK.items():
+        if site in url:
+            for key, value in config.items():
+                headers.extend(["--add-header", f"{key}: {value}"])
+            found = True
+            break
+
+    # إذا لم يجد الموقع، يستخدم هيدر عام لتقليل خطر الحظر
+    if not found:
+        headers.extend(["--add-header", f"Referer: {url}"])
+    return headers
+
+
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # 1. تحديد المسار باحترافية (كشف التزييف)
     try:
@@ -406,50 +444,45 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
 
     print(f"📡 جاري فحص الرابط وبدء السحب...")
-    # 2. بناء أمر الوحش (نسخة كسر حماية الـ 9% والـ IP Block)
-    # 2. بناء أمر الوحش (نسخة كسر حماية الـ IP Block والتمويه الجغرافي)
-    # 1. تحديد المصدر (الذي يطلبه السيرفر عادةً)
-    # ملاحظة: سنثبت الـ Referer ليظهر كأننا قادمون من مشغل مشهور
-    fixed_referer = "https://vidtube.one/"
 
-    # 2. بناء أمر الوحش (النسخة التي كانت تسحب الـ m3u8 بنجاح)
-    cmd = [
-        "yt-dlp",
-        "-v",
-        "--no-playlist",
-        "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "--add-header",
-        "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
-        "--add-header",
-        "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
-        "--add-header",
-        f"Referer: {fixed_referer}",
-        "--add-header",
-        "Origin: https://vidtube.one",
-        # --- التعديل لرفع السرعة وضمان الاستمرار ---
-        "--concurrent-fragments",
-        "13",  # رفع القوة لـ 10 قنوات سحب
-        "--file-access-retries",
-        "infinite",  # محاولات لا نهائية للوصول للملف
-        "--fragment-retries",
-        "infinite",  # لو قطعة فشلت يعيدها فوراً
-        "--hls-use-mpegts",  # لضمان عدم الانقطاع عند 9%
-        # ----------------------------------------
-        "--no-check-certificate",
-        "--socket-timeout",
-        "60",
-        # تأكد أن البروكسي معطل (لان الرابط مربوط بـ IP جهازك حالياً)
-        # "--proxy", "socks5://127.0.0.1:9050",
-        "-f",
-        "best",
-        f"{url}",
-        "-o",
-        download_path_template,
-        "--newline",
-        "--progress-template",
-        "download:[%(progress._percent_str)s]",
-    ]
+    # 1. جلب الهيدرز الذكية بناءً على الرابط الممرر للدالة
+    smart_headers = get_smart_headers(url)
+
+    # 2. بناء أمر الوحش المتطور
+    cmd = (
+        [
+            "yt-dlp",
+            "-v",
+            "--no-playlist",
+            "--user-agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "--add-header",
+            "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
+            "--add-header",
+            "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
+        ]
+        + smart_headers
+        + [  # هنا يتم حقن الهيدرز الذكية تلقائياً
+            "--concurrent-fragments",
+            "10",  # رفعنا القوة لـ 15 قناة سحب للسرعة القصوى
+            "--file-access-retries",
+            "infinite",
+            "--fragment-retries",
+            "infinite",
+            "--hls-use-mpegts",
+            "--no-check-certificate",
+            "--socket-timeout",
+            "60",
+            "-f",
+            "best",
+            f"{url}",
+            "-o",
+            download_path_template,
+            "--newline",
+            "--progress-template",
+            "download:[%(progress._percent_str)s]",
+        ]
+    )
 
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
