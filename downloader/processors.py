@@ -692,9 +692,19 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
                         # إذا ظهر الرابط في حقل url يعني المهمة اكتملت
                         # التعديل هنا: سحب الـ id الفعلي للملف من نتيجة الفحص
+                        # التعديل: قنص المعرف الحقيقي (extid) بدلاً من معرف المهمة (id)
                         if task_info.get("url"):
-                            print(f"✅ Streamtape Success (Direct Match)!")
-                            final_id = task_info.get("id")  # هذا هو المعرف الأضمن للملف
+                            # نستخدم extid لأنه المعرف النهائي للملف القابل للمشاهدة
+                            final_id = task_info.get("extid")
+
+                            # في حال لم يتوفر extid، نقوم باستخراجه من حقل url البرمجي
+                            if not final_id:
+                                # الرابط يكون بصيغة https://streamtape.com/v/xxxxxxx/name.mp4
+                                final_id = (
+                                    task_info.get("url").split("/v/")[1].split("/")[0]
+                                )
+
+                            print(f"✅ Streamtape Success! Real File ID: {final_id}")
                             return f"https://streamtape.com/e/{final_id}"
                     except Exception:
                         pass
