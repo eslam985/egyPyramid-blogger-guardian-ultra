@@ -664,7 +664,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
         remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            add_url = f"https://api.streamtape.com/remotedl/add?login={login}&key={key}&url={remote_url}"
+            # نقوم بعمل quote للاسم لضمان وصول الحروف العربية للسيرفر بشكل سليم
+            safe_name = urllib.parse.quote(file_name)
+            add_url = f"https://api.streamtape.com/remotedl/add?login={login}&key={key}&url={remote_url}&name={safe_name}"
             res = await client.get(add_url)
             data = res.json()
 
@@ -704,8 +706,21 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                                     task_info.get("url").split("/v/")[1].split("/")[0]
                                 )
 
-                            print(f"✅ Streamtape Success! Real File ID: {final_id}")
-                            return f"https://streamtape.com/e/{final_id}"
+                            if final_id:
+                                # إرسال أمر فرض الاسم لضمان عدم ظهور new_upload
+                                try:
+                                    rename_url = f"https://api.streamtape.com/file/rename?login={login}&key={key}&file={final_id}&name={urllib.parse.quote(file_name)}"
+                                    await client.get(rename_url)
+                                    print(
+                                        f"✨ [Hunter] تم تثبيت الاسم بنجاح: {file_name}"
+                                    )
+                                except:
+                                    pass
+
+                                print(
+                                    f"✅ Streamtape Success! Real File ID: {final_id}"
+                                )
+                                return f"https://streamtape.com/e/{final_id}"
                     except Exception:
                         pass
 

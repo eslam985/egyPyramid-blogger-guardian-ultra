@@ -16,7 +16,7 @@ client_groq = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # --- لا تغير أي شيء آخر في الدوال، التعديل أعلاه سيصلح الخطأ ---
 
-# 2. استدعاء المفاتيح
+# 2. استدعاء المفاتيح   
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 
