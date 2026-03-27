@@ -377,6 +377,14 @@ SITES_COOKBOOK = {
         "Referer": "https://upbam.org/",
         "Origin": "https://upbam.org",
     },
+    "cdn-tube": {
+        "Referer": "https://vidtube.one/",
+        "Origin": "https://vidtube.one",
+    },
+    "vidtube": {
+        "Referer": "https://vidtube.one/",
+        "Origin": "https://vidtube.one",
+    },
 }
 
 
@@ -438,7 +446,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     original_task_name = str(name).strip()
 
     # استخراج الاسم النظيف للبحث في TMDB (بدلاً من البحث بالاسم الكامل مع رقم الحلقة)
-    search_query_clean, _, _, _ = get_clean_media_data(original_task_name)
+    # التعديل: إذا كان المدخل رابطاً، نمرره كما هو لـ get_movie_data ليتعامل معه
+    if "http" in original_task_name or original_task_name.startswith(("tt", "tmdb")):
+        search_query_clean = original_task_name
+    else:
+        search_query_clean, _, _, _ = get_clean_media_data(original_task_name)
+
     print(f"🔎 البحث عن: {search_query_clean} ...")
 
     (

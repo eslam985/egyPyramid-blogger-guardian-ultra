@@ -71,11 +71,7 @@ def get_movie_data(name):
     original_input = search_query
 
     # كشف لو المدخل رابط أو ID
-    is_url_or_id = (
-        "http" in search_query
-        or search_query.startswith("tt")
-        or search_query.startswith("tmdb")
-    )
+    is_url_or_id = "http" in search_query or search_query.startswith(("tt", "tmdb"))
 
     if "dramaboxdb.com" in search_query:
         print("⚡ DramaBox detected: Skipping browser simulation (Direct Fallback)...")
@@ -110,7 +106,7 @@ def get_movie_data(name):
             movie_id = id_match.group(1)
             content_kind = "tv"
     elif "omdbapi.com" in search_query:
-        id_match = re.search(r"i=(tt\d+)", search_query)
+        id_match = re.search(r"[iI]=(tt\d+)", search_query)
         if id_match:
             movie_id = id_match.group(1)
     elif search_query.startswith("tt"):
@@ -122,7 +118,7 @@ def get_movie_data(name):
         movie_id = search_query.replace("tmdb-", "")
         content_kind = "movie"
     elif search_query.startswith("tmdb"):
-        movie_id = search_query.replace("tmdb", "")
+        movie_id = re.sub(r"[^0-9]", "", search_query)
 
     # القيم الافتراضية
     title, story, poster, labels, duration = (
@@ -136,20 +132,21 @@ def get_movie_data(name):
 
     try:
         # 1. استخراج السنة والاسم (فصل السنة للبحث فقط دون حذفها من الأصل)
-        year_match = re.search(r"(\d{4})", search_query)
-        year = year_match.group(1) if year_match else None
+        # إذا كان المدخل رابطاً، نتجنب استخراج السنة منه لأنه قد يحتوي على IDs طويلة تخدع الـ Regex
+        if is_url_or_id:
+            year = None
+            query_for_search = search_query
+        else:
+            year_match = re.search(r"(\d{4})", search_query)
+            year = year_match.group(1) if year_match else None
+            query_for_search = (
+                re.sub(r"\d{4}", "", search_query)
+                .replace(":", "")
+                .replace("_", " ")
+                .strip()
+            )
 
-        # التعديل هنا: ننشئ متغير جديد للبحث (query_for_search)
-        # ونترك clean_query كما هي (تساوي search_query) للحفاظ على السنة
-        query_for_search = (
-            re.sub(r"\d{4}", "", search_query)
-            .replace(":", "")
-            .replace("_", " ")
-            .strip()
-        )
-        clean_query = (
-            search_query  # نضمن أن الاسم الأصلي بالسنة هو اللي هيفضل مكمل معانا
-        )
+        clean_query = search_query
 
         # --- المرحلة الأولى: TMDB (بحث بالـ ID أو الاسم) ---
         tmdb_final_id = None
@@ -412,7 +409,7 @@ def upload_poster_to_cloudinary(image_url):
         res = requests.post(cloudinary_api, data=payload).json()
         public_id = res.get("public_id")
         if public_id:
-            return f"https://res.cloudinary.com/{cloud_name}/image/upload/q_auto:eco,f_auto,w_600,h_900,c_fill,g_auto/{public_id}.f_avif"
+            return f"https://res.cloudinary.com/{cloud_name}/image/upload/q_auto:eco,f_auto,w_600,h_900,c_fill,g_auto/{public_id}.avif"
         return image_url
     except:
         return image_url
