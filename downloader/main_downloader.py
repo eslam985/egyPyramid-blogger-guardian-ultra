@@ -189,7 +189,6 @@ def save_to_supabase(
             # افتراض الموسم الأول لو لم يحدد (يمكن تطويره لاحقاً لاستخراج رقم الموسم من الاسم)
             season_number = 1
             season_slug = f"{generated_slug}-season-{season_number}"
-
             try:
                 # البحث عن الموسم أو إنشاؤه
                 existing_season = (
