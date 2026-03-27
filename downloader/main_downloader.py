@@ -78,12 +78,20 @@ def save_to_supabase(
         # نستخدم الاسم النظيف
         c_title, c_cat, actual_ep_no = get_clean_media_data(display_title)
 
+        # توليد slug تلقائي
+        generated_slug = c_title.lower().replace(" ", "-")
+        generated_slug = re.sub(
+            r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug
+        )  # دعم العربي في الـ slug
+
         media_payload = {
             "tmdb_id": str(tmdb_id) if tmdb_id else None,
             "title": c_title,
             "story": meta_story,
-            "poster_url": final_poster,  # استخدم المتغير الخارجي مباشرة
-            "category": c_cat,
+            "poster_url": final_poster,
+            "category": c_cat,  # movie or tv
+            "media_type": c_cat,  # نملأ media_type بنفس قيمة category كبداية ذكية
+            "slug": generated_slug,
             "year": str(meta_year),
             "rating": str(meta_rating),
             "labels": labels,
@@ -175,11 +183,50 @@ def save_to_supabase(
                     raise e  # لو فشل تماماً بعد 3 مرات يرمي الخطأ للـ Except الكبيرة
         # --- نهاية الجزء المحصن ---
 
+        # --- [تعديل جوهري]: إنشاء أو تحديث الموسم (Season) أولاً للمسلسلات ---
+        s_id = None
+        if c_cat == "tv":
+            # افتراض الموسم الأول لو لم يحدد (يمكن تطويره لاحقاً لاستخراج رقم الموسم من الاسم)
+            season_number = 1
+            season_slug = f"{generated_slug}-season-{season_number}"
+
+            try:
+                # البحث عن الموسم أو إنشاؤه
+                existing_season = (
+                    supabase.table("seasons")
+                    .select("id")
+                    .eq("media_id", m_id)
+                    .eq("season_number", season_number)
+                    .execute()
+                )
+                if existing_season.data:
+                    s_id = existing_season.data[0]["id"]
+                else:
+                    new_season = (
+                        supabase.table("seasons")
+                        .insert(
+                            {
+                                "media_id": m_id,
+                                "season_number": season_number,
+                                "slug": season_slug,
+                            }
+                        )
+                        .execute()
+                    )
+                    if new_season.data:
+                        s_id = new_season.data[0]["id"]
+            except Exception as se:
+                print(f"⚠️ خطأ في إنشاء الموسم: {se}")
+
         # --- [تعديل جوهري]: إنشاء أو تحديث الحلقة (Episode) قبل الروابط ---
         actual_ep_no = actual_ep_no if actual_ep_no else 1
+        ep_slug = f"{generated_slug}-episode-{actual_ep_no}"
+
         episode_payload = {
             "media_id": m_id,
+            "season_id": s_id,  # ربط الحلقة بالموسم
             "episode_number": actual_ep_no,
+            "slug": ep_slug,  # إضافة slug للحلقة
             "identifier": identifier,
             "status_message": "Waiting...",
             "progress_percent": 0,
@@ -196,13 +243,47 @@ def save_to_supabase(
 
         if existing_ep.data:
             e_id = existing_ep.data[0]["id"]
-            supabase.table("episodes").update({"identifier": identifier}).eq(
-                "id", e_id
-            ).execute()
+            supabase.table("episodes").update(
+                {"identifier": identifier, "season_id": s_id, "slug": ep_slug}
+            ).eq("id", e_id).execute()
         else:
             new_ep = supabase.table("episodes").insert(episode_payload).execute()
             if new_ep.data:
                 e_id = new_ep.data[0]["id"]
+
+        # --- [تعديل]: التعامل مع التصنيفات (Genres) تلقائياً ---
+        if labels and m_id:
+            genre_list = [g.strip() for g in labels.split(",") if g.strip()]
+            for g_name in genre_list:
+                try:
+                    g_slug = g_name.lower().replace(" ", "-")
+                    # 1. البحث عن التصنيف أو إنشاؤه
+                    genre_res = (
+                        supabase.table("genres")
+                        .select("id")
+                        .eq("name", g_name)
+                        .execute()
+                    )
+                    g_id = None
+                    if genre_res.data:
+                        g_id = genre_res.data[0]["id"]
+                    else:
+                        new_g = (
+                            supabase.table("genres")
+                            .insert({"name": g_name, "slug": g_slug})
+                            .execute()
+                        )
+                        if new_g.data:
+                            g_id = new_g.data[0]["id"]
+
+                    # 2. ربط التصنيف بالميديا في جدول media_genres
+                    if g_id:
+                        supabase.table("media_genres").upsert(
+                            {"media_id": m_id, "genre_id": g_id},
+                            on_conflict="media_id, genre_id",
+                        ).execute()
+                except Exception as ge:
+                    print(f"⚠️ خطأ في معالجة التصنيف {g_name}: {ge}")
 
         # 1. بناء القائمة الآن بعد التأكد من وجود e_id
         link_entries = []

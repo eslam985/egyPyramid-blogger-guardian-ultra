@@ -17,8 +17,8 @@
             <!-- جانب النماذج -->
             <div class="info-side flex-1">
                 <div class="edit-form-container">
-                    <!-- شبكة من عمودين للحقول القصيرة -->
-                    <div class="form-grid grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <!-- شبكة من 3 عواميد للحقول القصيرة -->
+                    <div class="form-grid grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <!-- عنوان العمل -->
                         <div class="form-group">
                             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">عنوان
@@ -31,6 +31,28 @@
                             <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">TMDB
                                 ID</label>
                             <input v-model="mediaData.tmdb_id"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
+                        </div>
+                        <!-- ID العمل (قراءة فقط) -->
+                        <div class="form-group">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">ID العمل
+                                (id)</label>
+                            <input v-model="mediaData.id" readonly
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 cursor-not-allowed">
+                        </div>
+                        <!-- Slug -->
+                        <div class="form-group">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">الرابط
+                                اللطيف
+                                (slug)</label>
+                            <input v-model="mediaData.slug"
+                                class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
+                        </div>
+                        <!-- نوع الميديا -->
+                        <div class="form-group">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">نوع الميديا
+                                (media_type)</label>
+                            <input v-model="mediaData.media_type"
                                 class="form-control w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100">
                         </div>
                         <!-- سنة الإنتاج -->

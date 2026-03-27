@@ -110,7 +110,8 @@ const isSaving = ref(false);
 // قائمة الحقول القصيرة (التي ستظهر في الشبكة)
 const shortFields = [
   'title', 'tmdb_id', 'year', 'duration_iso', 'labels',
-  'blogger_status', 'category', 'rating', 'runtime'
+  'blogger_status', 'category', 'rating', 'runtime',
+  'media_type', 'slug'
 ];
 
 const newMedia = ref({
@@ -124,7 +125,9 @@ const newMedia = ref({
   labels: '',
   blogger_status: 'draft',
   rating: '',
-  runtime: ''
+  runtime: '',
+  media_type: '',
+  slug: ''
 });
 
 // دوال مساعدة للعناوين والـ placeholders
@@ -138,7 +141,9 @@ const getLabel = (field) => {
     blogger_status: 'حالة البلوجر',
     category: 'النوع',
     rating: 'التقييم',
-    runtime: 'وقت العرض'
+    runtime: 'وقت العرض',
+    media_type: 'نوع الميديا',
+    slug: 'الرابط اللطيف (slug)'
   };
   return labels[field] || field;
 };

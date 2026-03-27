@@ -1,0 +1,663 @@
+[
+  {
+    "table_name": "episodes",
+    "column_name": "id",
+    "data_type": "bigint",
+    "constraint_name": "episodes_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "media_id",
+    "data_type": "bigint",
+    "constraint_name": "episodes_media_id_fkey",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "media_id",
+    "data_type": "bigint",
+    "constraint_name": "unique_episode_per_media",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "episode_number",
+    "data_type": "integer",
+    "constraint_name": "unique_episode_per_media",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "identifier",
+    "data_type": "text",
+    "constraint_name": "episodes_identifier_key",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "blogger_sync",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "is_synced",
+    "data_type": "boolean",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "blogger_status",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "status_message",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "progress_percent",
+    "data_type": "integer",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "download_speed",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "status",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "download_url",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "file_name",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "blogger_post_id",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "season_id",
+    "data_type": "bigint",
+    "constraint_name": "episodes_season_id_fkey",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "slug",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "genres",
+    "column_name": "id",
+    "data_type": "bigint",
+    "constraint_name": "genres_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "genres",
+    "column_name": "name",
+    "data_type": "text",
+    "constraint_name": "genres_name_key",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "genres",
+    "column_name": "slug",
+    "data_type": "text",
+    "constraint_name": "genres_slug_key",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "genres",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "id",
+    "data_type": "bigint",
+    "constraint_name": "links_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "episode_id",
+    "data_type": "bigint",
+    "constraint_name": "links_episode_id_fkey",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "links",
+    "column_name": "episode_id",
+    "data_type": "bigint",
+    "constraint_name": "unique_link_per_server",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "server_name",
+    "data_type": "text",
+    "constraint_name": "unique_link_per_server",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "url",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "link_type",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "links",
+    "column_name": "quality",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "media_genres",
+    "column_name": "media_id",
+    "data_type": "bigint",
+    "constraint_name": "media_genres_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "media_genres",
+    "column_name": "media_id",
+    "data_type": "bigint",
+    "constraint_name": "media_genres_media_id_fkey",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "media_genres",
+    "column_name": "genre_id",
+    "data_type": "bigint",
+    "constraint_name": "media_genres_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "media_genres",
+    "column_name": "genre_id",
+    "data_type": "bigint",
+    "constraint_name": "media_genres_genre_id_fkey",
+    "foreign_table_name": "genres",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "id",
+    "data_type": "bigint",
+    "constraint_name": "medias_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "tmdb_id",
+    "data_type": "text",
+    "constraint_name": "medias_tmdb_id_key",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "title",
+    "data_type": "text",
+    "constraint_name": "unique_title_year",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "story",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "poster_url",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "category",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "year",
+    "data_type": "text",
+    "constraint_name": "unique_title_year",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "rating",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "labels",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "runtime",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "blogger_link",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "blogger_post_id",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "blogger_status",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "duration_iso",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "slug",
+    "data_type": "text",
+    "constraint_name": "medias_slug_key",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "medias",
+    "column_name": "media_type",
+    "data_type": "text",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "id",
+    "data_type": "bigint",
+    "constraint_name": "seasons_pkey",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "media_id",
+    "data_type": "bigint",
+    "constraint_name": "unique_season_per_media",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "media_id",
+    "data_type": "bigint",
+    "constraint_name": "seasons_media_id_fkey",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "season_number",
+    "data_type": "integer",
+    "constraint_name": "unique_season_per_media",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "slug",
+    "data_type": "text",
+    "constraint_name": "seasons_slug_key",
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "constraint_name": null,
+    "foreign_table_name": null,
+    "foreign_column_name": null
+  }
+]
+
+[
+  {
+    "table_name": "medias",
+    "column_name": "id",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "id",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "identifier",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "identifier"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "media_id",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "links",
+    "column_name": "id",
+    "foreign_table_name": "links",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "links",
+    "column_name": "episode_id",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "title",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "title"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "title",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "year"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "year",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "title"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "year",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "year"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "media_id",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "episode_number"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "media_id",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "media_id"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "episode_number",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "episode_number"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "episode_number",
+    "foreign_table_name": "episodes",
+    "foreign_column_name": "media_id"
+  },
+  {
+    "table_name": "links",
+    "column_name": "episode_id",
+    "foreign_table_name": "links",
+    "foreign_column_name": "episode_id"
+  },
+  {
+    "table_name": "links",
+    "column_name": "episode_id",
+    "foreign_table_name": "links",
+    "foreign_column_name": "server_name"
+  },
+  {
+    "table_name": "links",
+    "column_name": "server_name",
+    "foreign_table_name": "links",
+    "foreign_column_name": "episode_id"
+  },
+  {
+    "table_name": "links",
+    "column_name": "server_name",
+    "foreign_table_name": "links",
+    "foreign_column_name": "server_name"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "tmdb_id",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "tmdb_id"
+  },
+  {
+    "table_name": "medias",
+    "column_name": "slug",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "slug"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "id",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "slug",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "slug"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "media_id",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "media_id"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "media_id",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "season_number"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "season_number",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "media_id"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "season_number",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "season_number"
+  },
+  {
+    "table_name": "seasons",
+    "column_name": "media_id",
+    "foreign_table_name": "medias",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "episodes",
+    "column_name": "season_id",
+    "foreign_table_name": "seasons",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "genres",
+    "column_name": "id",
+    "foreign_table_name": "genres",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "genres",
+    "column_name": "name",
+    "foreign_table_name": "genres",
+    "foreign_column_name": "name"
+  },
+  {
+    "table_name": "genres",
+    "column_name": "slug",
+    "foreign_table_name": "genres",
+    "foreign_column_name": "slug"
+  }
+]

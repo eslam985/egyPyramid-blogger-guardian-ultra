@@ -43,8 +43,8 @@ app.add_middleware(
 )
 
 # 2. إعداد المتغيرات الأساسية
-BLOG_ID = os.getenv("BLOG_ID")
-SECRET_KEY = os.getenv("SECRET_KEY")
+BLOG_ID: str = os.getenv("BLOG_ID") or ""
+SECRET_KEY: str = os.getenv("SECRET_KEY") or "default_secret_key_change_it"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 # 3. تهيئة الخدمات
@@ -108,10 +108,12 @@ def convert_vk_to_embed(url):
 
 @app.post("/api/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    if form_data.username != os.getenv(
-        "ADMIN_EMAIL"
-    ) or form_data.password != os.getenv("ADMIN_PASSWORD"):
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+
+    if form_data.username != admin_email or form_data.password != admin_password:
         raise HTTPException(status_code=400, detail="بيانات دخول خاطئة")
+
     token = jwt.encode({"sub": form_data.username}, SECRET_KEY, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer"}
 
@@ -120,11 +122,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 # ... (ضع الـ @app.post والـ @app.get الخاصة بك هنا) ...
 @app.get("/api/media/list", include_in_schema=True)
 async def get_media_list(
-    search: str = None, cat: str = None, status: str = None, page: int = 1
+    search: Optional[str] = None,
+    cat: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = 1,
 ):
-    # جلب البيانات من Supabase
+    # جلب البيانات من Supabase مع ضمان عدم تمرير None
     data, total_count = SupabaseService.get_media(
-        search_query=search, category=cat, status=status, page=page, limit=12
+        search_query=search or "",
+        category=cat or "",
+        status=status or "",
+        page=page,
+        limit=12,
     )
     return {"data": data or [], "total_count": total_count}
 
@@ -180,7 +189,9 @@ class MediaUpdate(BaseModel):
     labels: Optional[str] = None
     runtime: Optional[str] = None
     duration_iso: Optional[str] = None
-    blogger_status: Optional[str] = None  # لا تنسَ إضافة هذا الحقل!
+    blogger_status: Optional[str] = None
+    media_type: Optional[str] = None
+    slug: Optional[str] = None
 
 
 @app.post("/api/media/update/{media_id}")
@@ -207,19 +218,22 @@ async def add_new_work(
     # لا حاجة لاستخراج كل حقل على حدة
     new_media = SupabaseService.add_media(payload)
 
-    if new_media:
+    if new_media and blogger:
         media_id = new_media["id"]
         # إنشاء مسودة في بلوجر
-        blogger_res = blogger.create_post(
-            title=payload.get("title"),
-            content=f"<p>{payload.get('story')}</p>",
-            is_draft=True,
-        )
-
-        if blogger_res and "id" in blogger_res:
-            SupabaseService.update_media(
-                media_id, {"blogger_post_id": blogger_res["id"]}
+        try:
+            blogger_res = blogger.create_post(
+                title=payload.get("title"),
+                content=f"<p>{payload.get('story')}</p>",
+                is_draft=True,
             )
+
+            if blogger_res and "id" in blogger_res:
+                SupabaseService.update_media(
+                    media_id, {"blogger_post_id": blogger_res["id"]}
+                )
+        except Exception as e:
+            print(f"⚠️ Blogger Error: {e}")
 
     return {"status": "success", "data": new_media}
 
@@ -530,36 +544,149 @@ async def run_download_task(
         return {"status": "error", "message": str(e)}
 
 
-# 1. تحديد المسار بناءً على مكان ملف app.py (هذا يعمل في أي مكان)
+# --- مسارات إدارة قاعدة البيانات الشاملة ---
+
+
+@app.get("/api/db/tables")
+async def get_tables(user: str = Depends(authenticate)):
+    # هذه الجداول التي سنسمح بإدارتها
+    return ["medias", "episodes", "links", "genres", "seasons", "media_genres"]
+
+
+@app.get("/api/db/{table_name}")
+async def get_table_data(
+    table_name: str, page: int = 1, limit: int = 50, user: str = Depends(authenticate)
+):
+    try:
+        start = (page - 1) * limit
+        end = start + limit - 1
+
+        query = SupabaseService.client.table(table_name).select("*", count="exact")
+
+        # ترتيب ذكي: لو الجدول فيه id رتب بيه، لو لا (زي media_genres) رتب بأول عمود
+        if table_name == "media_genres":
+            res = query.order("media_id", desc=True).range(start, end).execute()
+        else:
+            res = query.order("id", desc=True).range(start, end).execute()
+
+        return {"data": res.data, "total": res.count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/db/{table_name}/insert")
+async def insert_table_data(
+    table_name: str, data: dict = Body(...), user: str = Depends(authenticate)
+):
+    try:
+        res = SupabaseService.client.table(table_name).insert(data).execute()
+        return {"status": "success", "data": res.data[0] if res.data else None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/db/{table_name}/update/{row_id}")
+async def update_table_row(
+    table_name: str,
+    row_id: int,
+    data: dict = Body(...),
+    user: str = Depends(authenticate),
+):
+    try:
+        res = (
+            SupabaseService.client.table(table_name)
+            .update(data)
+            .eq("id", row_id)
+            .execute()
+        )
+        return {"status": "success", "data": res.data[0] if res.data else None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/db/{table_name}/delete/composite")
+async def delete_composite_row(
+    table_name: str, data: dict = Body(...), user: str = Depends(authenticate)
+):
+    try:
+        # الحذف باستخدام المفاتيح المركبة (مثلاً media_id و genre_id)
+        query = SupabaseService.client.table(table_name).delete()
+        for key, value in data.items():
+            query = query.eq(key, value)
+        query.execute()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/db/{table_name}/delete/{row_id}")
+async def delete_table_row(
+    table_name: str, row_id: int, user: str = Depends(authenticate)
+):
+    try:
+        SupabaseService.client.table(table_name).delete().eq("id", row_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # 1. تحديد المسار بدقة
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIST = os.path.join(BASE_DIR, "static", "dist")
 
 if os.path.exists(STATIC_DIST):
-    # الطريقة الصحيحة: نربط المسار root بالملفات الموجودة داخل dist مباشرة
-    # هذا يجعل المتصفح يرى الملفات في /assets مباشرة عند طلبها
     app.mount(
         "/assets",
         StaticFiles(directory=os.path.join(STATIC_DIST, "assets")),
         name="assets",
     )
 
-    # 3. توجيه الصفحة الرئيسية للـ index.html
     @app.get("/")
     async def index():
         return FileResponse(os.path.join(STATIC_DIST, "index.html"))
 
-    # 4. توجيه الـ SPA (أي مسار غير موجود يرجع للـ index)
     @app.get("/{rest_of_path:path}")
     async def serve_spa(rest_of_path: str):
-        # إذا كان المسار يبدأ بـ /assets، دعه يمر للمجلد (إضافة احتياطية)
+        if rest_of_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API route not found")
         if rest_of_path.startswith("assets/"):
             return FileResponse(os.path.join(STATIC_DIST, rest_of_path))
-        # غير ذلك، أعد ملف الـ index للـ SPA
         return FileResponse(os.path.join(STATIC_DIST, "index.html"))
 
 else:
     print(f"⚠️ CRITICAL: STATIC_DIST not found at {STATIC_DIST}")
+
+
+# --- خدمة ملفات الفرونت إيند (يجب أن تظل في النهاية المطلقة) ---
+# تم نقل هذا الجزء لضمان عدم تعارضه مع أي مسار يبدأ بـ /api/
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIST = os.path.join(BASE_DIR, "static", "dist")
+
+if os.path.exists(STATIC_DIST):
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(STATIC_DIST, "assets")),
+        name="assets",
+    )
+
+    @app.get("/")
+    async def index():
+        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
+
+    @app.get("/{rest_of_path:path}")
+    async def serve_spa(rest_of_path: str):
+        # قاعدة صارمة: إذا كان المسار يبدأ بـ api، فلا ترجع ملف الـ index.html أبداً
+        if rest_of_path.startswith("api/") or rest_of_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="API Route Not Found")
+
+        if rest_of_path.startswith("assets/"):
+            return FileResponse(os.path.join(STATIC_DIST, rest_of_path))
+
+        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
+
+else:
+    print(f"⚠️ CRITICAL: STATIC_DIST not found at {STATIC_DIST}")
+
 
 if __name__ == "__main__":
     # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة

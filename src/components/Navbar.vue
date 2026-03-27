@@ -1,9 +1,9 @@
 <template>
 
-  <nav class=" flex items-center justify-between p-4 shadow-md  z-50 sticky top-px my-card">
+  <nav class="  grid  grid-cols-1 md:grid-cols-3 gap-10 p-4 shadow-md  z-50 sticky top-px my-card">
 
     <div
-      class="font-bold text-3xl text-yellow-500 tracking-[-0.5px] whitespace-nowrap px-4 py-1 rounded-lg shadow-md bg-[linear-gradient(135deg,#8a8000_0,#000000_80%)]">
+      class="font-bold max-w-50 text-3xl text-yellow-500 tracking-[-0.5px] whitespace-nowrap px-4 py-1 rounded-lg shadow-md bg-[linear-gradient(135deg,#8a8000_0,#000000_80%)]">
       EGY PYRMID
     </div>
 
@@ -22,6 +22,10 @@
     </div>
 
     <div class=" flex gap-2">
+      <router-link to="/database" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800 transition flex items-center gap-2">
+        <i class="fa fa-database"></i> قاعدة البيانات
+      </router-link>
+
       <button class=" relative z-60 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 cursor-pointer"
         @click="triggerOpen">
         <i class="fa fa-plus"></i> إضافة عمل

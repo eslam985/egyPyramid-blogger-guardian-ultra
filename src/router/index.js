@@ -1,12 +1,14 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import MediaDetails from '../views/MediaDetails.vue';
-import LoginView from '../views/LoginView.vue'; // 1. استيراد صفحة الدخول
+import LoginView from '../views/LoginView.vue';
+import DatabaseView from '../views/DatabaseView.vue'; // استيراد الصفحة الجديدة
 
 const routes = [
   { path: '/', name: 'Home', component: HomeView },
   { path: '/media/:id', name: 'MediaDetails', component: MediaDetails, props: true },
-  { path: '/login', name: 'Login', component: LoginView } // 2. إضافة المسار
+  { path: '/login', name: 'Login', component: LoginView },
+  { path: '/database', name: 'Database', component: DatabaseView } // إضافة المسار
 ];
 
 const router = createRouter({

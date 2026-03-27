@@ -1,4 +1,5 @@
 import os
+from typing import Optional, List, Tuple, Any
 from supabase import create_client, Client
 from postgrest.exceptions import APIError  # تأكد من إضافة هذا الاستيراد في الأعلى
 
@@ -8,7 +9,7 @@ RAW_KEY = os.getenv("SUPABASE_KEY")
 
 
 class SupabaseService:
-    client: Client = None
+    client: Optional[Client] = None
 
     # محاولة إنشاء الكلاينت مرة واحدة فقط بشكل سليم
     if RAW_URL and RAW_KEY:
@@ -22,12 +23,12 @@ class SupabaseService:
 
     @staticmethod
     def get_media(
-        search_query: str = None,
-        category: str = None,
-        status: str = None,
+        search_query: Optional[str] = None,
+        category: Optional[str] = None,
+        status: Optional[str] = None,
         page: int = 1,
         limit: int = 12,
-    ):
+    ) -> Tuple[List[Any], int]:
         if SupabaseService.client is None:
             return [], 0
 
