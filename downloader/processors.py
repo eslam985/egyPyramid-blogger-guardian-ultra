@@ -54,8 +54,29 @@ def minutes_to_iso(minutes):
     return f"PT{hours:02d}H{mins:02d}M"
 
 
+def is_mostly_english(text):
+    if not text:
+        return True
+    # إزالة الرموز والأرقام
+    clean_text = re.sub(r"[^a-zA-Z\u0600-\u06FF]", "", str(text))
+    if not clean_text:
+        return True
+    english_chars = len(re.findall(r"[a-zA-Z]", clean_text))
+    arabic_chars = len(re.findall(r"[\u0600-\u06FF]", clean_text))
+    return english_chars >= arabic_chars
+
+
 def get_movie_data(name):
     search_query = str(name).strip()
+    original_input = search_query
+
+    # كشف لو المدخل رابط أو ID
+    is_url_or_id = (
+        "http" in search_query
+        or search_query.startswith("tt")
+        or search_query.startswith("tmdb")
+    )
+
     if "dramaboxdb.com" in search_query:
         print("⚡ DramaBox detected: Skipping browser simulation (Direct Fallback)...")
         # استخراج الاسم من الرابط مباشرة
@@ -75,13 +96,23 @@ def get_movie_data(name):
 
     # استخراج ID من رابط IMDb أو TMDB أو كتابة يدوية
     if "imdb.com/title/" in search_query:
-        movie_id = re.search(r"tt\d+", search_query).group()
+        id_match = re.search(r"(tt\d+)", search_query)
+        if id_match:
+            movie_id = id_match.group(1)
     elif "themoviedb.org/movie/" in search_query:
-        movie_id = re.search(r"/movie/(\d+)", search_query).group(1)
-        content_kind = "movie"
+        id_match = re.search(r"/movie/(\d+)", search_query)
+        if id_match:
+            movie_id = id_match.group(1)
+            content_kind = "movie"
     elif "themoviedb.org/tv/" in search_query:
-        movie_id = re.search(r"/tv/(\d+)", search_query).group(1)
-        content_kind = "tv"
+        id_match = re.search(r"/tv/(\d+)", search_query)
+        if id_match:
+            movie_id = id_match.group(1)
+            content_kind = "tv"
+    elif "omdbapi.com" in search_query:
+        id_match = re.search(r"i=(tt\d+)", search_query)
+        if id_match:
+            movie_id = id_match.group(1)
     elif search_query.startswith("tt"):
         movie_id = search_query
     elif search_query.startswith("tmdb-tv-"):
@@ -245,17 +276,35 @@ def get_movie_data(name):
             ar_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}&language=ar"
             ar_data = requests.get(ar_url).json()
 
-            # القاعدة: الأولوية للاسم العربي، لو مش موجود نأخذ الإنجليزي، لو مش موجود ننظف الرابط
-            title = (
-                ar_data.get("title")
-                or ar_data.get("name")
-                or en_data.get("title")
-                or en_data.get("name")
-            )
+            # القاعدة الذكية: لو المدخل إنجليزي أو رابط، نفضل الاسم الإنجليزي من TMDB
+            # لو المدخل عربي صريح، نفضل الاسم العربي
+            if is_mostly_english(original_input) or is_url_or_id:
+                title = (
+                    en_data.get("title")
+                    or en_data.get("name")
+                    or ar_data.get("title")
+                    or ar_data.get("name")
+                )
+            else:
+                title = (
+                    ar_data.get("title")
+                    or ar_data.get("name")
+                    or en_data.get("title")
+                    or en_data.get("name")
+                )
 
             if not title or "http" in str(title):
-                title = search_query.split("/")[-1].replace("-", " ").title()
+                # إذا فشل كل شيء، نحاول استخراج الاسم من الرابط الأصلي
+                title = (
+                    original_input.split("/")[-1]
+                    .replace("-", " ")
+                    .replace("_", " ")
+                    .title()
+                )
+                # حذف أي أرقام تعريفية في بداية الاسم (مثل 123-movie-name)
                 title = re.sub(r"^\d+-", "", title).strip()
+                # حذف الـ query parameters لو موجودة
+                title = title.split("?")[0]
 
             print(f"✅ تم العثور على الاسم الرسمي: {title}")
             # --------------------------

@@ -82,10 +82,12 @@ def save_to_supabase(
         )
 
         # توليد slug تلقائي للميديا
-        generated_slug = c_title.lower().replace(" ", "-")
-        generated_slug = re.sub(
-            r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug
-        )  # دعم العربي في الـ slug
+        # إذا كان الاسم إنجليزي، نستخدم الحروف الإنجليزية، وإذا كان عربي نستخدم العربي
+        generated_slug = c_title.lower().strip().replace(" ", "-")
+        # تنظيف الـ slug من الرموز الغريبة مع الحفاظ على الحروف العربية والإنجليزية والأرقام والشرطة
+        generated_slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug)
+        # إزالة الشرطات المتكررة
+        generated_slug = re.sub(r"-+", "-", generated_slug).strip("-")
 
         media_payload = {
             "tmdb_id": str(tmdb_id) if tmdb_id else None,
@@ -562,40 +564,28 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # 1. جلب الهيدرز الذكية بناءً على الرابط الممرر للدالة
     smart_headers = get_smart_headers(url)
 
+    # التحقق لو الرابط مباشر (MP4 أو MKV)
+    is_direct_link = (
+        any(ext in url.lower() for ext in [".mp4", ".mkv", ".avi", ".ts"])
+        and "m3u8" not in url.lower()
+    )
+
     # 2. بناء أمر الوحش المتطور
-    # 2. بناء أمر الوحش المتطور
-    cmd = (
-        [
-            "yt-dlp",
-            "-v",
-            "--no-playlist",
-            "--user-agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "--add-header",
-            "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
-            "--add-header",
-            "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
-        ]
-        + smart_headers  # الهيدرز الذكية
-        + [
-            # خيارات الأداء
-            "--concurrent-fragments",
-            "10",
-            "--file-access-retries",
-            "infinite",
-            "--fragment-retries",
-            "infinite",
-            "--hls-use-mpegts",
-            "--no-check-certificate",
-            "--socket-timeout",
-            "60",
-            # خيارات كسر حماية الـ JWPlayer (لا تضع Referer ثابت هنا حتى لا يفسد عمل الهيدرز الذكية)
-            "--extractor-args",
-            "jwplayer:base-url=https://vidtube.one/",
-            "--format",
-            "best[ext=mp4]/best",
-            "-f",
-            "best",
+    base_cmd = [
+        "yt-dlp",
+        "-v",
+        "--no-playlist",
+        "--user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "--add-header",
+        "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
+        "--add-header",
+        "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
+    ]
+
+    if is_direct_link:
+        # للروابط المباشرة نستخدم إعدادات أبسط وأسرع
+        cmd = base_cmd + [
             f"{url}",
             "-o",
             download_path_template,
@@ -603,7 +593,36 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "--progress-template",
             "download:[%(progress._percent_str)s]",
         ]
-    )
+    else:
+        # للروابط المعقدة (HLS/Dash/JWPlayer) نستخدم الوحش الكامل
+        cmd = (
+            base_cmd
+            + smart_headers
+            + [
+                "--concurrent-fragments",
+                "10",
+                "--file-access-retries",
+                "infinite",
+                "--fragment-retries",
+                "infinite",
+                "--hls-use-mpegts",
+                "--no-check-certificate",
+                "--socket-timeout",
+                "60",
+                "--extractor-args",
+                "jwplayer:base-url=https://vidtube.one/",
+                "--format",
+                "best[ext=mp4]/best",
+                "-f",
+                "best",
+                f"{url}",
+                "-o",
+                download_path_template,
+                "--newline",
+                "--progress-template",
+                "download:[%(progress._percent_str)s]",
+            ]
+        )
 
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
