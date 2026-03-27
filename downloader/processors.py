@@ -412,7 +412,7 @@ def upload_poster_to_cloudinary(image_url):
         res = requests.post(cloudinary_api, data=payload).json()
         public_id = res.get("public_id")
         if public_id:
-            return f"https://res.cloudinary.com/{cloud_name}/image/upload/q_auto,f_auto,w_600,h_900,c_fill,g_auto/{public_id}.webp"
+            return f"https://res.cloudinary.com/{cloud_name}/image/upload/q_auto:eco,f_auto,w_600,h_900,c_fill,g_auto/{public_id}.f_avif"
         return image_url
     except:
         return image_url
