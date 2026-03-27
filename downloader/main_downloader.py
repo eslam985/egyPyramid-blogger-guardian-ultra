@@ -213,6 +213,7 @@ def save_to_supabase(
             # استخدام رقم الموسم المستخرج بدلاً من الهاردكود
             season_number = extracted_season_no if extracted_season_no else 1
             season_slug = f"{generated_slug}-season-{season_number}"
+            print(f"📡 جاري معالجة الموسم رقم {season_number} للميديا {m_id}...")
             try:
                 # البحث عن الموسم أو إنشاؤه
                 existing_season = (
@@ -224,7 +225,9 @@ def save_to_supabase(
                 )
                 if existing_season.data:
                     s_id = existing_season.data[0]["id"]
+                    print(f"✅ تم العثور على الموسم في القاعدة بـ ID: {s_id}")
                 else:
+                    print(f"🆕 الموسم {season_number} غير موجود، جاري إنشاؤه...")
                     new_season = (
                         supabase.table("seasons")
                         .insert(
@@ -238,6 +241,7 @@ def save_to_supabase(
                     )
                     if new_season.data:
                         s_id = new_season.data[0]["id"]
+                        print(f"✅ تم إنشاء موسم جديد بـ ID: {s_id}")
             except Exception as se:
                 print(f"⚠️ خطأ في إنشاء الموسم: {se}")
 
@@ -431,10 +435,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # احتفظ بالاسم الأصلي الذي كتبته في التاسك كخطة احتياطية
     original_task_name = str(name).strip()
 
-    # ابحث عن هذا الجزء (حوالي السطر 200) واستبدله بهذا:
+    # استخراج الاسم النظيف للبحث في TMDB (بدلاً من البحث بالاسم الكامل مع رقم الحلقة)
+    search_query_clean, _, _, _ = get_clean_media_data(original_task_name)
+    print(f"🔎 البحث عن: {search_query_clean} ...")
+
     (
-        tmdb_id_fetched,  # القيمة الجديدة
-        display_title,
+        tmdb_id_fetched,
+        display_title_tmdb,
         meta_story,
         final_poster,
         meta_labels,
@@ -442,27 +449,19 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_rating,
         meta_runtime,
         meta_year,
-    ) = get_movie_data(name)
+    ) = get_movie_data(search_query_clean if search_query_clean else name)
 
-    # --- التعديل الجذري لمنع عودة الروابط كأرقام ---
-    is_original_a_link = "http" in original_task_name
+    # دمج الاسم المجلوب مع تفاصيل الحلقة من التاسك الأصلي
+    display_title = display_title_tmdb if display_title_tmdb else original_task_name
 
-    if not display_title:
-        display_title = original_task_name
-
-    # لو الاسم المجلوب فيه أرقام وقصير، بس الاسم الأصلي "رابط"، نرفض الاستعادة
-    if any(char.isdigit() for char in display_title) and len(display_title) < 10:
-        if is_original_a_link:
-            print(
-                f"✅ تم الإبقاء على الاسم المجلوب {display_title} لأن البديل رابط مشوه."
-            )
-        else:
-            display_title = original_task_name
-            print(f"⚠️ تم استعادة الاسم الأصلي من التاسك: {display_title}")
-
-    # تأكد أن display_title لا يضيع منه رقم الحلقة
+    # التأكد من بقاء معلومات الموسم والحلقة في العنوان المعروض
+    if "الموسم" in original_task_name and "الموسم" not in display_title:
+        display_title = f"{display_title} {re.search(r'(الموسم\s*\d+)', original_task_name).group(1)}"
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
-        display_title = original_task_name
+        # استخراج "الحلقة X" وإضافتها
+        ep_match = re.search(r"(الحلقة\s*\d+|ح\s*\d+)", original_task_name)
+        if ep_match:
+            display_title = f"{display_title} {ep_match.group(1)}"
 
     # --- 2. نظام منع التكرار الاحترافي (Supabase) ---
     # 1. استخراج البيانات النظيفة فوراً قبل أي فحص
@@ -771,6 +770,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         if s_query.data:
                             s_id_l = s_query.data[0]["id"]
                             # البحث عن الحلقة
+                            # التعديل: نتحقق من وجود روابط حقيقية وليس مجرد وجود السجل
                             e_query = (
                                 supabase.table("episodes")
                                 .select("id")
@@ -780,10 +780,25 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                                 .execute()
                             )
                             if e_query.data:
-                                print(
-                                    f"✅ [تخطي]: الحلقة {c_ep_l} من الموسم {c_season_l} موجودة بالفعل!"
+                                # إذا وجدنا الحلقة، نتحقق هل لها روابط؟
+                                ep_id_found = e_query.data[0]["id"]
+                                links_query = (
+                                    supabase.table("links")
+                                    .select("id")
+                                    .eq("episode_id", ep_id_found)
+                                    .execute()
                                 )
-                                continue
+                                # إذا كانت هناك روابط، إذن هي مكررة فعلاً
+                                if links_query.data:
+                                    print(
+                                        f"✅ [تخطي]: الحلقة {c_ep_l} من الموسم {c_season_l} موجودة بالفعل ولها روابط!"
+                                    )
+                                    continue
+                                else:
+                                    # إذا لم تكن هناك روابط، فهذا يعني أنها الحلقة التي ننشئها الآن أو حلقة فشلت سابقاً
+                                    print(
+                                        f"🔄 [تحديث]: الحلقة {c_ep_l} موجودة بدون روابط، جاري العمل عليها..."
+                                    )
                 except Exception as e:
                     print(f"⚠️ فشل فحص تكرار الحلقة: {e}")
 
