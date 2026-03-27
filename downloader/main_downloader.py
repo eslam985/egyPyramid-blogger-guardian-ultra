@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from .processors import (
     tqdm,
+    normalize_title,
     get_clean_media_data,
     get_movie_data,
     upload_to_doodstream,
@@ -75,10 +76,12 @@ def save_to_supabase(
 ):
     try:
 
-        # نستخدم الاسم النظيف
-        c_title, c_cat, actual_ep_no = get_clean_media_data(display_title)
+        # نستخدم الاسم النظيف لاستخراج العنوان والنوع ورقم الموسم والحلقة
+        c_title, c_cat, extracted_season_no, actual_ep_no = get_clean_media_data(
+            display_title
+        )
 
-        # توليد slug تلقائي
+        # توليد slug تلقائي للميديا
         generated_slug = c_title.lower().replace(" ", "-")
         generated_slug = re.sub(
             r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug
@@ -129,18 +132,12 @@ def save_to_supabase(
                 )
 
                 # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
-                # 1. البحث عن الميديا (بالاسم "أو" بالـ ID) لضمان عدم التكرار
+                # 1. البحث عن الميديا (بالـ ID أولاً ثم بالاسم المنظف) لضمان عدم التكرار
                 m_id = None
+                query = None
 
-                # محاولة البحث بالاسم النظيف
-                # بدلاً من select("id")
-                query = (
-                    supabase.table("medias").select("*").eq("title", c_title).execute()
-                )
-
-                if not query.data and tmdb_id:
-                    # لو منفعش بالاسم ومعانا ID، نجرب بالـ ID
-                    # بدلاً من select("id")
+                # محاولة البحث بالـ ID لو متوفر
+                if tmdb_id:
                     query = (
                         supabase.table("medias")
                         .select("*")
@@ -148,7 +145,34 @@ def save_to_supabase(
                         .execute()
                     )
 
-                if query.data:
+                # لو مفيش ID أو منفعش، نبحث بالاسم الذكي
+                if not query or not query.data:
+                    # الخطوة 1: البحث المطابق المباشر
+                    query = (
+                        supabase.table("medias")
+                        .select("*")
+                        .eq("title", c_title)
+                        .eq("year", str(meta_year))
+                        .execute()
+                    )
+
+                    # الخطوة 2: لو لسه مش موجود، نجرب البحث بـ "like" للكلمات الأساسية
+                    if not query.data:
+                        # نجلب كل الأعمال اللي فيها جزء من الاسم ونفلترها برمجياً
+                        # ده حل "ذكي" للأعمال العربية اللي مش في TMDB
+                        search_results = (
+                            supabase.table("medias")
+                            .select("*")
+                            .ilike("title", f"%{c_title}%")
+                            .execute()
+                        )
+                        for row in search_results.data:
+                            if normalize_title(row["title"]) == c_title:
+                                query = search_results
+                                query.data = [row]  # نكتفي بهذا السجل
+                                break
+
+                if query and query.data:
                     # ✅ وجدناه! خذ الـ ID
                     m_id = query.data[0]["id"]
 
@@ -186,8 +210,8 @@ def save_to_supabase(
         # --- [تعديل جوهري]: إنشاء أو تحديث الموسم (Season) أولاً للمسلسلات ---
         s_id = None
         if c_cat == "tv":
-            # افتراض الموسم الأول لو لم يحدد (يمكن تطويره لاحقاً لاستخراج رقم الموسم من الاسم)
-            season_number = 1
+            # استخدام رقم الموسم المستخرج بدلاً من الهاردكود
+            season_number = extracted_season_no if extracted_season_no else 1
             season_slug = f"{generated_slug}-season-{season_number}"
             try:
                 # البحث عن الموسم أو إنشاؤه
@@ -440,48 +464,59 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
         display_title = original_task_name
 
-    # --- 2. نظام منع التكرار المطور (أفلام + حلقات مسلسلات) ---
     # --- 2. نظام منع التكرار الاحترافي (Supabase) ---
     # 1. استخراج البيانات النظيفة فوراً قبل أي فحص
-    clean_title_search, category_search, current_ep_no = get_clean_media_data(
-        display_title
+    clean_title_search, category_search, current_season_no, current_ep_no = (
+        get_clean_media_data(display_title)
     )
 
+    is_batch = False  # سنحددها لاحقاً بعد التحميل أو الفحص
+
+    # البحث الذكي عن الميديا (بالاسم المطابق أو المنظف)
     try:
-        is_duplicate = False
-        # البحث بالاسم النظيف وليس display_title
-        query = (
+        media_id = None
+        # الخطوة 1: البحث المباشر
+        m_query = (
             supabase.table("medias")
-            .select("id")
+            .select("id, title")
             .eq("title", clean_title_search)
             .eq("year", meta_year)
             .execute()
         )
 
-        if query.data:
-            media_id = query.data[0]["id"]
-            # الفحص الآن أصبح دقيقاً جداً بناءً على رقم الحلقة المستخرج
-            ep_query = (
-                supabase.table("episodes")
-                .select("id")
-                .eq("media_id", media_id)
-                .eq("episode_number", current_ep_no)
+        if m_query.data:
+            media_id = m_query.data[0]["id"]
+        else:
+            # الخطوة 2: البحث الذكي بالاسم المنظف (للمحتوى العربي غير المسجل في TMDB)
+            search_results = (
+                supabase.table("medias")
+                .select("id, title")
+                .ilike("title", f"%{clean_title_search}%")
                 .execute()
             )
+            for row in search_results.data:
+                if normalize_title(row["title"]) == clean_title_search:
+                    media_id = row["id"]
+                    break
 
-            if ep_query.data:
-                is_duplicate = True
-
-        if is_duplicate:
-            print(f"✅ [تخطي]: {display_title} موجود بالفعل في ساب باز!")
-            return
-        else:
-            print(f"🆕 مهمة جديدة: جاري معالجة {display_title} لضخها في ساب باز...")
-
+        if media_id:
+            if category_search == "movie":
+                # للأفلام: لو الميديا موجودة ولها حلقات (فيلم واحد)، إذن مكرر
+                ep_query = (
+                    supabase.table("episodes")
+                    .select("id")
+                    .eq("media_id", media_id)
+                    .execute()
+                )
+                if ep_query.data:
+                    print(f"✅ [تخطي]: الفيلم '{display_title}' موجود بالفعل!")
+                    return
+            # للمسلسلات: لا يمكننا الفحص هنا لأننا لا نعرف الحلقات الموجودة في الرابط بعد
+            # سيتم الفحص داخل لووب الحلقات لاحقاً
     except Exception as e:
-        print(f"⚠️ تنبيه: فشل فحص ساب باز، سأكمل كعمل جديد. الخطأ: {e}")
+        print(f"⚠️ فشل فحص التكرار الأولي: {e}")
 
-        # --- 3. حجز مكان في قاعدة البيانات قبل البدء ---
+    # --- 3. حجز مكان أولي (للمسلسلات سيتم تحديثه لاحقاً لكل حلقة) ---
     # إنشاء identifier مؤقت للتحميل
     temp_id = f"loading_{timestamp}"
 
@@ -685,11 +720,76 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         for idx, vid_path in enumerate(videos, 1):
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
+
+            # محاولة استخراج الاسم النظيف من اسم الملف الفعلي (خاصة في حالة تحميل سيزون كامل)
+            current_file_name = os.path.basename(vid_path)
+            # إذا كان هناك أكثر من ملف، نستخدم اسم الملف لاستخراج رقم الحلقة بدقة
+            if len(videos) > 1:
+                # ندمج اسم الميديا مع اسم الملف لضمان استخراج سياق كامل
+                loop_display_title = f"{display_title} {current_file_name}"
+            else:
+                loop_display_title = display_title
+
+            # --- فحص التكرار لكل حلقة في حالة المسلسلات ---
+            if category_search == "tv":
+                try:
+                    c_title_l, c_cat_l, c_season_l, c_ep_l = get_clean_media_data(
+                        loop_display_title
+                    )
+
+                    # البحث الذكي عن الميديا
+                    m_id_l = None
+                    m_query = (
+                        supabase.table("medias")
+                        .select("id, title")
+                        .eq("title", c_title_l)
+                        .execute()
+                    )
+                    if m_query.data:
+                        m_id_l = m_query.data[0]["id"]
+                    else:
+                        search_res = (
+                            supabase.table("medias")
+                            .select("id, title")
+                            .ilike("title", f"%{c_title_l}%")
+                            .execute()
+                        )
+                        for row in search_res.data:
+                            if normalize_title(row["title"]) == c_title_l:
+                                m_id_l = row["id"]
+                                break
+
+                    if m_id_l:
+                        # البحث عن الموسم
+                        s_query = (
+                            supabase.table("seasons")
+                            .select("id")
+                            .eq("media_id", m_id_l)
+                            .eq("season_number", c_season_l)
+                            .execute()
+                        )
+                        if s_query.data:
+                            s_id_l = s_query.data[0]["id"]
+                            # البحث عن الحلقة
+                            e_query = (
+                                supabase.table("episodes")
+                                .select("id")
+                                .eq("media_id", m_id_l)
+                                .eq("season_id", s_id_l)
+                                .eq("episode_number", c_ep_l)
+                                .execute()
+                            )
+                            if e_query.data:
+                                print(
+                                    f"✅ [تخطي]: الحلقة {c_ep_l} من الموسم {c_season_l} موجودة بالفعل!"
+                                )
+                                continue
+                except Exception as e:
+                    print(f"⚠️ فشل فحص تكرار الحلقة: {e}")
+
             file_name = f"{clean_name}.mp4"
             episode_label = (
-                f"{display_title}"
-                if len(videos) == 1
-                else f"{display_title} - الحلقة {idx}"
+                f"{loop_display_title}" if len(videos) == 1 else f"{loop_display_title}"
             )
             identifier = f"egy_pyr_{timestamp}_e{idx}"
             # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
@@ -904,7 +1004,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     voe_watch,
                     voe_down,
                     "Pending",
-                    display_title,
+                    loop_display_title,
                     original_task_name,
                     meta_story,
                     final_poster,
@@ -949,7 +1049,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     voe_watch,
                     voe_down,
                     vk_url,
-                    display_title,
+                    loop_display_title,
                     original_task_name,
                     meta_story,
                     final_poster,
@@ -972,7 +1072,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             try:
                 # نقوم بتحديث row_data يدوياً من المتغيرات الموجودة في الذاكرة
                 row_data_for_tg = {
-                    "title": display_title,
+                    "title": loop_display_title,
                     "story": meta_story if meta_story else "لا يوجد وصف متاح حالياً.",
                     "poster_url": final_poster,
                     "labels": meta_labels,

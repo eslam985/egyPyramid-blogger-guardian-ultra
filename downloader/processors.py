@@ -78,8 +78,18 @@ def get_movie_data(name):
         movie_id = re.search(r"tt\d+", search_query).group()
     elif "themoviedb.org/movie/" in search_query:
         movie_id = re.search(r"/movie/(\d+)", search_query).group(1)
+        content_kind = "movie"
+    elif "themoviedb.org/tv/" in search_query:
+        movie_id = re.search(r"/tv/(\d+)", search_query).group(1)
+        content_kind = "tv"
     elif search_query.startswith("tt"):
         movie_id = search_query
+    elif search_query.startswith("tmdb-tv-"):
+        movie_id = search_query.replace("tmdb-tv-", "")
+        content_kind = "tv"
+    elif search_query.startswith("tmdb-"):
+        movie_id = search_query.replace("tmdb-", "")
+        content_kind = "movie"
     elif search_query.startswith("tmdb"):
         movie_id = search_query.replace("tmdb", "")
 
@@ -859,31 +869,95 @@ async def upload_to_mixdrop(file_path, email, key):
         return None
 
 
+def normalize_title(title):
+    if not title:
+        return ""
+    # 1. تحويل للأحرف الصغيرة
+    t = str(title).lower()
+    # 2. إزالة الرموز والكلمات الزائدة الشائعة
+    t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
+    # 3. إزالة الكلمات التي لا تعبر عن جوهر العمل
+    stop_words = [
+        "مسلسل",
+        "فيلم",
+        "مترجم",
+        "مدبلج",
+        "كامل",
+        "حصريا",
+        "اونلاين",
+        "مشاهدة",
+        "تحميل",
+        "بجودة",
+        "عالية",
+        "hd",
+        "sd",
+        "4k",
+        "web-dl",
+        "bluray",
+        "season",
+        "episode",
+        "سيزون",
+        "حلقة",
+        "موسم",
+    ]
+    for w in stop_words:
+        # إزالة الكلمة فقط لو كانت مستقلة
+        t = re.sub(rf"\b{w}\b", " ", t)
+
+    # 4. توحيد المسافات
+    t = " ".join(t.split())
+    return t
+
+
 def get_clean_media_data(raw_name):
-    # 1. البحث عن النمط الأجنبي (S01E05) أو العربي المختصر (ح 5)
-    # أضفنا [ح] للبحث عن حرف ح يليه رقم
-    pattern = re.search(r"(?:[sS](\d+)[eE]|[ح]\s*)(\d+)", raw_name)
+    # 1. أنماط استخراج الموسم والحلقة
+    # نمط S01E05 أو S1E5
+    s_e_pattern = re.search(r"[sS](\d+)[eE](\d+)", raw_name)
+    # نمط الموسم X الحلقة Y (بالعربية)
+    ar_s_e_pattern = re.search(
+        r"(?:الموسم|موسم)\s*(\d+).*?(?:الحلقة|حلقة|ح)\s*(\d+)", raw_name
+    )
+    # نمط الحلقة X فقط (يفترض الموسم 1)
+    ep_only_pattern = re.search(r"(?:الحلقة|حلقة|ح)\s*(\d+)", raw_name)
+    # نمط الموسم X فقط
+    season_only_pattern = re.search(r"(?:الموسم|موسم)\s*(\d+)", raw_name)
 
-    # 2. البحث عن النمط العربي الطويل (الحلقة 5)
-    arabic_pattern = re.search(r"(?:الحلقة|حلقة)\s*(\d+)", raw_name)
+    category = "movie"
+    season_no = 1
+    ep_no = 1
+    clean_title = raw_name
 
-    if pattern:
+    if s_e_pattern:
         category = "tv"
-        ep_no = int(pattern.group(2))
-        # تنظيف الاسم من النمط المكتشف
-        clean_title = re.sub(r"(?:[sS]\d+[eE]|[ح]\s*)\d+.*", "", raw_name).strip()
-    elif arabic_pattern or any(word in raw_name for word in ["مسلسل", "موسم"]):
+        season_no = int(s_e_pattern.group(1))
+        ep_no = int(s_e_pattern.group(2))
+        clean_title = re.split(r"[sS]\d+[eE]\d+", raw_name)[0]
+    elif ar_s_e_pattern:
         category = "tv"
-        ep_no = int(arabic_pattern.group(1)) if arabic_pattern else 1
-        clean_title = re.sub(
-            r"[-–]?\s*(?:الحلقة|حلقة|الموسم|موسم)\s*\d+.*", "", raw_name
-        ).strip()
-    else:
-        category = "movie"
-        ep_no = 1
-        clean_title = raw_name.strip()
+        season_no = int(ar_s_e_pattern.group(1))
+        ep_no = int(ar_s_e_pattern.group(2))
+        clean_title = re.split(r"(?:الموسم|موسم)\s*\d+", raw_name)[0]
+    elif ep_only_pattern:
+        category = "tv"
+        ep_no = int(ep_only_pattern.group(1))
+        # التحقق إذا كان هناك موسم مذكور في مكان آخر
+        if season_only_pattern:
+            season_no = int(season_only_pattern.group(1))
+            clean_title = re.split(r"(?:الموسم|موسم)\s*\d+", raw_name)[0]
+        else:
+            clean_title = re.split(r"(?:الحلقة|حلقة|ح)\s*\d+", raw_name)[0]
+    elif season_only_pattern:
+        category = "tv"
+        season_no = int(season_only_pattern.group(1))
+        clean_title = re.split(r"(?:الموسم|موسم)\s*\d+", raw_name)[0]
+    elif any(word in raw_name for word in ["مسلسل", "موسم", "سيزون", "حلقة"]):
+        category = "tv"
+        clean_title = raw_name
 
-    return clean_title, category, ep_no
+    # تنظيف العنوان النهائي باستخدام دالة normalize_title
+    clean_title = normalize_title(clean_title)
+
+    return clean_title, category, season_no, ep_no
 
 
 def get_metadata_via_ai(name, year):
