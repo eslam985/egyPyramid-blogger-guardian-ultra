@@ -198,6 +198,26 @@ def save_to_supabase(
                     if new_media.data:
                         m_id = new_media.data[0]["id"]
 
+                # --- [تعديل جوهري]: تحديث الـ slug ليبدأ بـ ID الميديا لضمان توافق Next.js ---
+                if m_id:
+                    # نستخدم الـ generated_slug الأصلي ونضيف له الـ ID
+                    # نتأكد أولاً أن الـ slug الحالي لا يبدأ بالفعل بالـ ID الصحيح
+                    check_res = (
+                        supabase.table("medias").select("slug").eq("id", m_id).execute()
+                    )
+                    if check_res.data:
+                        current_db_slug = check_res.data[0]["slug"]
+                        target_slug = f"{m_id}-{generated_slug}"
+
+                        if current_db_slug != target_slug:
+                            print(f"🔗 تحديث الرابط (Slug) إلى: {target_slug}")
+                            supabase.table("medias").update({"slug": target_slug}).eq(
+                                "id", m_id
+                            ).execute()
+                            generated_slug = target_slug
+                        else:
+                            generated_slug = current_db_slug
+
                 break  # إذا وصلنا هنا بنجاح، نخرج من حلقة المحاولات
             except Exception as e:
                 if attempt < 2:

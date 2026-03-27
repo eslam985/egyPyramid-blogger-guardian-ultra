@@ -161,7 +161,7 @@ const getPlaceholder = (field) => {
 const saveNewMedia = async () => {
   isSaving.value = true;
   try {
-    await api.post('/media/create', newMedia.value);
+    await api.post('/media/add', newMedia.value);
     alert('✅ تم إضافة العمل بنجاح');
     emit('saved');
     emit('close');

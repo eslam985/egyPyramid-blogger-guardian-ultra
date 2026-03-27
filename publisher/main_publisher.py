@@ -372,7 +372,13 @@ def start_publishing_from_supabase():
 
                 # توليد الـ SEO والوصف (نفس اللوجيك القديم عندك)
                 auto_desc = generate_ai_seo_description(title, row.get("story", ""))
-                slug_name = generate_clean_slug(title)
+                
+                # التعديل: استخدام الـ slug من قاعدة البيانات (المحتوي على الـ ID) لضمان توافق Next.js
+                # وإذا لم يكن موجوداً، نقوم بتوليده كخطة احتياطية
+                slug_name = m_data.get("slug")
+                if not slug_name:
+                    slug_name = generate_clean_slug(title)
+                
                 current_template = (
                     HTML_TEMPLATE_SERIES if is_series else HTML_TEMPLATE_MOVIE
                 )

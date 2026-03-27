@@ -59,8 +59,21 @@ class SupabaseService:
 
     @staticmethod
     def add_media(data: dict):
+        # 1. إدخال الميديا أولاً للحصول على الـ ID
         result = SupabaseService.client.table("medias").insert(data).execute()
-        return result.data[0] if result.data else None
+        if result.data:
+            media = result.data[0]
+            m_id = media["id"]
+            original_slug = media.get("slug", "")
+            
+            # 2. تحديث الـ slug ليبدأ بـ ID لضمان توافق Next.js
+            if original_slug and not str(original_slug).startswith(f"{m_id}-"):
+                new_slug = f"{m_id}-{original_slug}"
+                SupabaseService.client.table("medias").update({"slug": new_slug}).eq("id", m_id).execute()
+                media["slug"] = new_slug
+            
+            return media
+        return None
 
     @staticmethod
     def update_media(media_id: int, data: dict):
