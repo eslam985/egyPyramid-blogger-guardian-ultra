@@ -483,7 +483,6 @@ def upload_to_vk_local(title, file_path):
                 print(
                     f"✅ VK Upload Success. Fetching Secure Embed Link (Retry Loop)..."
                 )
-
                 # محاولة جلب الرابط 3 مرات بفاصل 15 ثانية بين كل محاولة
                 for attempt in range(15):
                     time.sleep(20)
