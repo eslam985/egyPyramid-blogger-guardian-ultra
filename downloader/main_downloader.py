@@ -588,7 +588,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # ثانياً: تعريف قالب التحميل داخل المجلد المنشأ
     download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
 
- print(f"📡 جاري فحص الرابط وبدء السحب...")
+    print(f"📡 جاري فحص الرابط وبدء السحب...")
     # التعديل لإصلاح Error 2: تنظيف الهيدرز ووضع الرابط بشكل آمن
     referer_header = "https://cdn-tube.xyz/" if "cdn-tube" in url else url
 
