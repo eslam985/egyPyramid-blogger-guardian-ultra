@@ -579,46 +579,80 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         .strip()
         .replace(" ", "_")
     )
-    download_name = f"down_{timestamp}"
-    extract_dir = f"extracted_{timestamp}"
+
+    # أولاً: تعريف وإنشاء المجلد الفريد
+    # التعديل لضمان أن المجلد ينشأ في مكان مسموح
+    extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
     os.makedirs(extract_dir, exist_ok=True)
 
+    # ثانياً: تعريف قالب التحميل داخل المجلد المنشأ
+    download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
+
     print(f"📡 جاري فحص الرابط وبدء السحب...")
-    # التعديل لإصلاح Error 2: تنظيف الهيدرز ووضع الرابط بشكل آمن
-    referer_header = "https://cdn-tube.xyz/" if "cdn-tube" in url else url
 
+    # 1. جلب الهيدرز الذكية بناءً على الرابط الممرر للدالة
+    smart_headers = get_smart_headers(url)
 
-    # التعديل النهائي لتجاوز حماية الـ IP وتزوير هوية المتصفح
-    cmd = [
+    # التحقق لو الرابط مباشر (MP4 أو MKV)
+    is_direct_link = (
+        any(ext in url.lower() for ext in [".mp4", ".mkv", ".avi", ".ts"])
+        and "m3u8" not in url.lower()
+    )
+
+    # 2. بناء أمر الوحش المتطور
+    base_cmd = [
         "yt-dlp",
+        "-v",
         "--no-playlist",
-        "--concurrent-fragments",
-        "5",
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         "--add-header",
         "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
         "--add-header",
         "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
-        "--add-header",
-        "Referer: https://vidtube.one/",
-        "--add-header",
-        "Origin: https://vidtube.one",
-        "--no-check-certificate",
-        "--socket-timeout",
-        "60",
-        "-f",
-        "best",
-        f"{url}",
-        "-o",
-        download_name,
-        "--newline",
-        "--progress-template",
-        "download:[%(progress._percent_str)s]",
     ]
 
-    # أضف -v لإظهار تفاصيل المنع الحقيقية
-    cmd.insert(1, "-v")
+    if is_direct_link:
+        # للروابط المباشرة نستخدم إعدادات أبسط وأسرع
+        cmd = base_cmd + [
+            f"{url}",
+            "-o",
+            download_path_template,
+            "--newline",
+            "--progress-template",
+            "download:[%(progress._percent_str)s]",
+        ]
+    else:
+        # للروابط المعقدة (HLS/Dash/JWPlayer) نستخدم الوحش الكامل
+        cmd = (
+            base_cmd
+            + smart_headers
+            + [
+                "--concurrent-fragments",
+                "10",
+                "--file-access-retries",
+                "infinite",
+                "--fragment-retries",
+                "infinite",
+                "--hls-use-mpegts",
+                "--no-check-certificate",
+                "--socket-timeout",
+                "60",
+                "--extractor-args",
+                "jwplayer:base-url=https://vidtube.one/",
+                "--format",
+                "best[ext=mp4]/best",
+                "-f",
+                "best",
+                f"{url}",
+                "-o",
+                download_path_template,
+                "--newline",
+                "--progress-template",
+                "download:[%(progress._percent_str)s]",
+            ]
+        )
+
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
