@@ -492,7 +492,6 @@ def upload_to_vk_local(title, file_path):
                         "access_token": VK_ACCESS_TOKEN,
                         "v": "5.131",
                     }
-
                     try:
                         res_get = requests.get(get_api_url, params=get_params).json()
                         if "response" in res_get and res_get["response"].get("items"):
