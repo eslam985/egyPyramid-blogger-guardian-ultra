@@ -164,23 +164,43 @@ def get_movie_data(name):
         # إذا لم يتوفر ID، نبحث بالاسم والسنة كالعادة
         if not tmdb_final_id:
             # نستخدم query_for_search هنا عشان محرك البحث ميتلخبطش بالسنة
-            search_url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={query_for_search}&language=ar"
+            # الجديد: تحديد المسار بناءً على الكلمة المفتاحية في العنوان
+            if any(word in original_input for word in ["مسلسل", "موسم", "حلقة", "Series", "Season", "Episode", "TV", "tv", "season", "episode"]):
+                search_path = "tv"
+                content_kind = "tv"
+            else:
+                search_path = "movie"
+                content_kind = "movie"
+
+            search_url = f"https://api.themoviedb.org/3/search/{search_path}?api_key={TMDB_API_KEY}&query={query_for_search}&language=ar"
             if year:
                 search_url += f"&year={year}"
             res = requests.get(search_url).json()
             if res.get("results"):
-                first_res = res["results"][0]
-                # دعم تاريخ الأفلام (release_date) وتاريخ المسلسلات (first_air_date)
-                tmdb_date = (
-                    first_res.get("release_date")
-                    or first_res.get("first_air_date")
-                    or "0000"
-                )
-                tmdb_year = tmdb_date[:4]
-                if not year or tmdb_year == year:
-                    tmdb_final_id = first_res["id"]
-                    # تخزين نوع المحتوى عشان نطلبه صح (movie أو tv)
-                    content_kind = first_res.get("media_type", "movie")
+                # --- التعديل المنقذ: التأكد من تطابق الاسم لتجنب نتائج الأفلام العشوائية ---
+                best_match = None
+                for r in res["results"]:
+                    res_title = (r.get("name") or r.get("title") or "").lower()
+                    # لو الاسم اللي راجع فيه كلمة من اللي باحثين عنها، نعتبره هو الصح
+                    if query_for_search.lower() in res_title or res_title in query_for_search.lower():
+                        best_match = r
+                        break
+                
+                if best_match:
+                    first_res = best_match
+                    tmdb_date = (
+                        first_res.get("release_date")
+                        or first_res.get("first_air_date")
+                        or "0000"
+                    )
+                    tmdb_year = tmdb_date[:4]
+                    
+                    if not year or tmdb_year == year:
+                        tmdb_final_id = first_res["id"]
+                        # أهم سطر: نجبد نوع المحتوى بناءً على البحث (tv أو movie) وليس ما يقترحه TMDB
+                        content_kind = search_path 
+                else:
+                    print(f"⚠️ TMDB أعاد نتائج غير مطابقة للاسم: {query_for_search}. سيتم الانتقال للمرحلة الثالثة.")
 
         # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
         # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
@@ -232,27 +252,28 @@ def get_movie_data(name):
                     )
 
         # --- المرحلة الثالثة: الصرامة المطلقة (بديل البحث المرن والـ AI) ---
+        # --- المرحلة الثالثة: الصرامة المطلقة ---
         if not tmdb_final_id:
             print(f"🛑 لم يتم العثور على تطابق رسمي لـ '{search_query}'.")
 
-            # تنظيف ذكي جداً للاسم حتى لو فشل البحث تماماً
-            display_name = search_query
-            if "http" in str(search_query) or "/" in str(search_query):
-                # استخراج آخر جزء من الرابط وتنظيفه
+            # لو المدخل اسم يدوي مش رابط، خده زي ما هو فوراً
+            if not is_url_or_id:
+                display_name = original_input
+            else:
+                # لو رابط، نظفه وطلع منه اسم
                 display_name = str(search_query).split("/")[-1].split("?")[0]
                 display_name = display_name.replace("-", " ").replace("_", " ").title()
-                # حذف أي أرقام تعريفية في بداية الاسم (مثل 123-movie-name)
                 display_name = re.sub(r"^\d+-", "", display_name).strip()
 
-            # إذا ظل الاسم فارغاً لأي سبب، نضع الاسم الأصلي
+            # التأمين الأخير
             if not display_name:
-                display_name = search_query
+                display_name = original_input
 
             return (
                 None,
                 display_name,
-                None,  # خليه يرجع None عشان سوبابيز ما يمسحش القصة القديمة
-                None,  # خليه يرجع None عشان ما يمسحش البوستر القديم
+                None, 
+                None, 
                 "أفلام",
                 "PT01H30M",
                 "N/A",
@@ -322,10 +343,9 @@ def get_movie_data(name):
             )
 
             # مدة الحلقة أو الفيلم
+            # مدة الحلقة أو الفيلم
             runtime = en_data.get("runtime") or (
-                en_data.get("episode_run_time", [0])[0]
-                if en_data.get("episode_run_time")
-                else None
+                en_data.get("episode_run_time")[0] if en_data.get("episode_run_time") else None
             )
             if runtime:
                 # تحديث الـ ISO Format بناءً على الدقائق الحقيقية
@@ -392,7 +412,7 @@ def get_movie_data(name):
 
 
 def upload_poster_to_cloudinary(image_url):
-    """رفع البوستر ومعالجته لكلاود ناري"""
+    """رفع البوستر ومعالجته لكلاود ناري بترميز WebP المتوافق مع تليجرام وبلوجر"""
     cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
     upload_preset = os.getenv("CLOUDINARY_UPLOAD_PRESET")
 
@@ -408,11 +428,19 @@ def upload_poster_to_cloudinary(image_url):
         }
         res = requests.post(cloudinary_api, data=payload).json()
         public_id = res.get("public_id")
+        
         if public_id:
-            return f"https://res.cloudinary.com/{cloud_name}/image/upload/q_auto:eco,f_auto,w_600,h_900,c_fill,g_auto/{public_id}.avif"
+            # f_webp: تجعل كلاود ناري يسلم الصورة بصيغة WebP مهما كان الأصل
+            # q_auto:good: تعطي جودة ممتازة مع حجم صغير جداً
+            transform = "c_fill,g_auto,w_300,h_450,q_auto:good,f_webp"
+            
+            return f"https://res.cloudinary.com/{cloud_name}/image/upload/{transform}/v1/{public_id}.webp"
+            
         return image_url
-    except:
+    except Exception as e:
+        print(f"⚠️ خطأ في رفع الصورة لكلاود ناري: {e}")
         return image_url
+
 
 
 def upload_to_vk_local(title, file_path):
@@ -431,97 +459,59 @@ def upload_to_vk_local(title, file_path):
         }
         res_save = requests.get(api_url, params=params).json()
 
-        print(f"DEBUG: VK Save API Response: {res_save}")
+        if "response" not in res_save:
+            print(f"❌ فشل حجز مكان في VK: {res_save.get('error', {}).get('error_msg')}")
+            return None
 
-        if "response" in res_save:
-            upload_url = res_save["response"]["upload_url"]
-            video_id = res_save["response"]["video_id"]
-            owner_id = res_save["response"]["owner_id"]
+        upload_url = res_save["response"]["upload_url"]
+        video_id = res_save["response"]["video_id"]
+        owner_id = res_save["response"]["owner_id"]
 
-            file_size = os.path.getsize(file_path)
-            pbar_vk = tqdm_custom(
-                total=file_size,
-                desc=f"📡 VK Upload: {title}",
-                unit="B",
-                unit_scale=True,
-            )
-            stream = ProgressStream(file_path, pbar_vk)
-
-            # 2. الرفع المباشر مع تحديد نوع الملف
-            # Using 'files' parameter for multipart-encoded file upload
-            print(
-                f"📡 جاري ضخ بايتات الفيديو لـ VK (المسار المحلي) - URL: {upload_url}..."
-            )
-            # requests will set the correct Content-Type for multipart/form-data automatically
-            files = {"video_file": (os.path.basename(file_path), stream, "video/mp4")}
-            # تعديل: إضافة Session لثبات الاتصال ومحاولة الرفع مع التعامل مع أخطاء SSL
-            session = requests.Session()
-            adapter = requests.adapters.HTTPAdapter(
-                max_retries=3
-            )  # محاولة الرفع 3 مرات في حال الفشل
-            session.mount("https://", adapter)
-
-            try:
-                # أضفنا timeout معقول بدلاً من None لمنع التعليق اللانهائي
-                # verify=True للتأكد من شهادة الأمان، وإذا استمر الخطأ جرب تحويلها لـ False (كحل أخير)
-                response = session.post(
-                    upload_url, files=files, timeout=600, verify=True
-                )
-            except requests.exceptions.SSLError:
-                print("⚠️ فشل SSL، محاولة الرفع بدون تحقق (Insecure Mode)...")
-                response = session.post(
-                    upload_url, files=files, timeout=600, verify=False
-                )
-
-            pbar_vk.close()
-            stream.close()
-
-            print(f"DEBUG: VK File Upload Response Status: {response.status_code}")
-            print(f"DEBUG: VK File Upload Response Text: {response.text}")
-
-            if response.status_code == 200:
-                print(
-                    f"✅ VK Upload Success. Fetching Secure Embed Link (Retry Loop)..."
-                )
-                # محاولة جلب الرابط 3 مرات بفاصل 15 ثانية بين كل محاولة
-                for attempt in range(15):
-                    time.sleep(20)
-                    get_api_url = "https://api.vk.com/method/video.get"
-                    get_params = {
-                        "videos": f"{owner_id}_{video_id}",
-                        "access_token": VK_ACCESS_TOKEN,
-                        "v": "5.131",
-                    }
-                    try:
-                        res_get = requests.get(get_api_url, params=get_params).json()
-                        if "response" in res_get and res_get["response"].get("items"):
-                            video_data = res_get["response"]["items"][0]
-                            embed_url = video_data.get("player")
-
-                            if embed_url:
-                                embed_url = embed_url.replace("vk.com", "vkvideo.ru")
-                                connector = "&" if "?" in embed_url else "?"
-                                embed_url += f"{connector}hd=2&autoplay=0"
-
-                                print(f"✅ VK Embed Captured & Fixed: {embed_url}")
-                                return embed_url
-
-                        print(
-                            f"⚠️ محاولة {attempt+1}: الفيديو قيد المعالجة، إعادة المحاولة..."
-                        )
-                    except Exception as e:
-                        print(f"⚠️ خطأ في المحاولة {attempt+1}: {e}")
-
-                # بناء رابط Embed يدوي في حال فشل الـ API في إرجاع player
-                access_key = res_save["response"].get("access_key", "")
-                fallback_url = f"https://vkvideo.ru/video_ext.php?oid={owner_id}&id={video_id}&hash={access_key}&hd=2"
-                print(
-                    f"⚠️ فشل استخراج Embed بعد 60 محاولات، تم بناء رابط احتياطي: {fallback_url}"
-                )
-                return fallback_url
-            else:
-                print(f"❌ فشل رفع ملف VK: Status {response.status_code}")
+        # --- [ مرحلة الضخ السريع ] ---
+        print(f"📡 جاري ضخ الفيديو لـ VK بنظام Stream (المسار المحلي)...")
+        try:
+            with open(file_path, 'rb') as f:
+                files = {"video_file": (os.path.basename(file_path), f, "video/mp4")}
+                response = requests.post(upload_url, files=files, timeout=600)
+            
+            if response.status_code != 200:
+                print(f"❌ فشل ضخ الملف لـ VK: Status {response.status_code}")
                 return None
+            print("   ✅ انتهى الضخ بنجاح. يبدأ الآن فحص المعالجة وقنص الرابط...")
+        except Exception as e:
+            print(f"   ❌ خطأ أثناء الضخ المحلي: {str(e)}")
+            return None
+
+        # --- [ مرحلة القنص الذكي - Polling ] ---
+        for check_attempt in range(1, 31):
+            time.sleep(30)
+            get_url = "https://api.vk.com/method/video.get"
+            get_params = {
+                "videos": f"{owner_id}_{video_id}",
+                "access_token": VK_ACCESS_TOKEN,
+                "v": "5.131",
+            }
+            try:
+                res_get = requests.get(get_url, params=get_params).json()
+                if "response" in res_get and res_get["response"].get("items"):
+                    video_data = res_get["response"]["items"][0]
+                    embed_url = video_data.get("player")
+                    if embed_url:
+                        final_url = embed_url.replace("vk.com", "vkvideo.ru")
+                        connector = "&" if "?" in final_url else "?"
+                        final_url += f"{connector}hd=2&autoplay=0"
+                        print(f"✅ تم القنص بنجاح لـ VK! | الرابط: {final_url}")
+                        return final_url
+                print(f"⏳ VK يعالج الفيديو حالياً ({check_attempt}/30)...")
+            except Exception as e:
+                print(f"⚠️ خطأ في فحص المعالجة: {e}")
+
+        # --- [ الحل الاحتياطي الأخير لو الفحص فشل بعد 15 دقيقة ] ---
+        access_key = res_save["response"].get("access_key", "")
+        fallback_url = f"https://vkvideo.ru/video_ext.php?oid={owner_id}&id={video_id}&hash={access_key}&hd=2"
+        print(f"⚠️ فشل استخراج Embed تلقائياً، تم بناء رابط احتياطي: {fallback_url}")
+        return fallback_url
+
     except Exception as e:
         print(f"⚠️ فشل VK المحلي: {e}")
         return None
@@ -634,13 +624,14 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                 add_url = f"https://{domain}/api/upload/url?key={api_key}&url={remote_url}&new_title={safe_title}"
                 response = await client.get(add_url)
                 data = response.json()
-                if data.get("msg") == "OK":
+                # بدلاً من الشرط الحالي، خليه أشمل:
+                if data.get("msg") == "OK" or data.get("success") is True:
                     print(f"✅ DoodStream: تم قبول الأمر عبر {domain}")
                     break
             except Exception:
                 continue
 
-        if not data or data.get("msg") != "OK":
+        if not data or (data.get("msg") != "OK" and not data.get("success")):
             return None
 
         # التعديل وفقاً للتوثيق: المفتاح هو filecode والنتيجة قاموس
@@ -662,9 +653,11 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                     # إذا رد السيرفر بمعلومات الملف وكان الـ status 200 (أي الملف موجود)
                     if info_data.get("status") == 200:
                         result = info_data.get("result", [{}])[0]
-                        # التأكد أن الملف ليس "ممسوحاً" أو "قيد المعالجة الصعبة"
+                        # بمجرد وجود الـ file_code والحجم (حتى لو لسه 0 أو بيزيد) نعتبره نجاح
                         if result.get("file_code") == f_code:
-                            print(f"✅ DoodStream Success (Found via File Info)!")
+                            raw_size = result.get("size", 0)
+                            size_mb = float(raw_size) / (1024 * 1024)
+                            print(f"✅ DoodStream Success: الملف موجود وبدأ المعالجة ({size_mb:.2f} MB)")
                             return f"https://myvidplay.com/e/{f_code}"
 
                     # إذا فشل Info، جرب الـ Status التقليدي
@@ -675,10 +668,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                         check_data = res.json()
 
                         if check_data.get("status") == 200:
-                            # التوثيق يقول النتيجة قائمة والوضع Active
                             results = check_data.get("result", [])
-                            if results and results[0].get("status") == "Active":
-                                print(f"✅ DoodStream Success (File is Active)!")
+                            if results: # أي نتيجة ترجع للملف ده يعني السيرفر شافه
+                                print(f"✅ DoodStream Success (File Found in Check)!")
                                 return f"https://myvidplay.com/e/{f_code}"
                     except:
                         continue
@@ -749,32 +741,25 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                         # إذا ظهر الرابط في حقل url يعني المهمة اكتملت
                         # التعديل هنا: سحب الـ id الفعلي للملف من نتيجة الفحص
                         # التعديل: قنص المعرف الحقيقي (extid) بدلاً من معرف المهمة (id)
-                        if task_info.get("url"):
-                            # نستخدم extid لأنه المعرف النهائي للملف القابل للمشاهدة
-                            final_id = task_info.get("extid")
+                        # 1. القنص الذكي للمعرف (من extid أو من الـ url مباشرة)
+                        file_code = task_info.get("extid") or task_info.get("fileid")
+                        
+                        if not file_code and task_info.get("url"):
+                            try:
+                                # استخراج المعرف من الرابط في حالة عدم وجود extid
+                                file_code = task_info.get("url").split("/v/")[1].split("/")[0]
+                            except: pass
 
-                            # في حال لم يتوفر extid، نقوم باستخراجه من حقل url البرمجي
-                            if not final_id:
-                                # الرابط يكون بصيغة https://streamtape.com/v/xxxxxxx/name.mp4
-                                final_id = (
-                                    task_info.get("url").split("/v/")[1].split("/")[0]
-                                )
+                        # 2. إذا تم العثور على المعرف، المهمة اكتملت
+                        if file_code:
+                            # تثبيت الاسم لضمان الاحترافية
+                            try:
+                                rename_url = f"https://api.streamtape.com/file/rename?login={login}&key={key}&file={file_code}&name={urllib.parse.quote(file_name)}"
+                                await client.get(rename_url)
+                            except: pass
 
-                            if final_id:
-                                # إرسال أمر فرض الاسم لضمان عدم ظهور new_upload
-                                try:
-                                    rename_url = f"https://api.streamtape.com/file/rename?login={login}&key={key}&file={final_id}&name={urllib.parse.quote(file_name)}"
-                                    await client.get(rename_url)
-                                    print(
-                                        f"✨ [Hunter] تم تثبيت الاسم بنجاح: {file_name}"
-                                    )
-                                except:
-                                    pass
-
-                                print(
-                                    f"✅ Streamtape Success! Real File ID: {final_id}"
-                                )
-                                return f"https://streamtape.com/e/{final_id}"
+                            print(f"✅ Streamtape Success! File ID: {file_code}")
+                            return f"https://streamtape.com/e/{file_code}"
                     except Exception:
                         pass
 
@@ -994,7 +979,7 @@ def get_clean_media_data(raw_name):
         category = "tv"
         season_no = int(season_only_pattern.group(1))
         clean_title = re.split(r"(?:الموسم|موسم)\s*\d+", raw_name)[0]
-    elif any(word in raw_name for word in ["مسلسل", "موسم", "سيزون", "حلقة"]):
+    elif any(word in raw_name for word in ["مسلسل", "موسم","الموسم", "حلقة", "Series", "Season", "Episode", "TV", "tv", "season", "episode"]):
         category = "tv"
         clean_title = raw_name
 
