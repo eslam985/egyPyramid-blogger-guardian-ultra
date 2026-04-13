@@ -253,9 +253,11 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                                 print(
                                     f"🔗 تم ربط رابط التليجرام بالحلقة {episode_id} في جدول links"
                                 )
+                                return direct_link  # هذا السطر هو الذي سينقذ السيرفرات الخمسة
 
         except Exception as e:
             print(f"❌ فشل في عملية التليجرام: {e}")
+            return None
         finally:
             if tracker.pbar:
                 tracker.pbar.close()
@@ -447,7 +449,7 @@ def send_to_telegram(row, content_type, action_text, post_url, lang_val="لغة 
     final_url = (
         post_url
         if str(post_url).startswith("http")
-        else "https://egy-pyramid-drama.blogspot.com/"
+        else "https://egypyramid.vercel.app/"  # رابط احتياطي في حال كان post_url غير صالح
     )
 
     keyboard = {

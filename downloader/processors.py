@@ -604,7 +604,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         "doodapi.com",
         "dood.to",
         "dood.stream",
-        "myvidplay.com",
+        "playmogo.com",
         "doodstream.com",
     ]
     clean_file_name = urllib.parse.quote(file_name)
@@ -658,7 +658,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                             raw_size = result.get("size", 0)
                             size_mb = float(raw_size) / (1024 * 1024)
                             print(f"✅ DoodStream Success: الملف موجود وبدأ المعالجة ({size_mb:.2f} MB)")
-                            return f"https://myvidplay.com/e/{f_code}"
+                            return f"https://playmogo.com/e/{f_code}"
 
                     # إذا فشل Info، جرب الـ Status التقليدي
                     try:
@@ -671,7 +671,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                             results = check_data.get("result", [])
                             if results: # أي نتيجة ترجع للملف ده يعني السيرفر شافه
                                 print(f"✅ DoodStream Success (File Found in Check)!")
-                                return f"https://myvidplay.com/e/{f_code}"
+                                return f"https://playmogo.com/e/{f_code}"
                     except:
                         continue
 
@@ -696,7 +696,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                             print(
                                 f"✅ DoodStream Found by Precise Arabic Name Match: {server_title}"
                             )
-                            return f"https://myvidplay.com/e/{f.get('file_code')}"
+                            return f"https://playmogo.com/e/{f.get('file_code')}"
                 except:
                     pass
         return None

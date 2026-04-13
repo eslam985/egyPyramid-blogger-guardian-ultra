@@ -2,10 +2,12 @@ import os
 import time
 import re
 import shutil
-import subprocess
 import nest_asyncio
 from urllib.parse import unquote
 import asyncio
+import arabic_reshaper
+from bidi.algorithm import get_display
+import subprocess
 from internetarchive import upload as archive_upload
 from urllib.parse import urlparse
 
@@ -62,6 +64,7 @@ st_login = os.getenv("STREAMTAPE_LOGIN")
 st_key = os.getenv("STREAMTAPE_KEY")
 mix_user = os.getenv("MIXDROP_EMAIL")
 mix_key = os.getenv("MIXDROP_API_KEY")
+
 
 def save_to_supabase(
     current_voe,
@@ -536,7 +539,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     TOOLS_DIR = os.path.join(BASE_PATH, "tools")
     os.makedirs(TOOLS_DIR, exist_ok=True)
 
-    LOGO_URL = "https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_70,h_70,c_fill,r_max/blogger/logo.webp"
+    LOGO_URL = "https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_80,h_80,c_fill,r_max/blogger/logo.webp"
     LOGO_FILE = os.path.join(TOOLS_DIR, "watermark.webp")  # تغيير المسار لـ TOOLS_DIR
 
     if not os.path.exists(LOGO_FILE):
@@ -807,9 +810,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 break
 
             line_str = line.decode().strip()
-            print(
-                f"DEBUG_LOG: {line_str}"
-            )  # السطر ده هيخليك تشوف الـ yt-dlp بيقول إيه بالظبط وهو بيفشل
+            # print(f"DEBUG_LOG: {line_str}")      # السطر ده هيخليك تشوف الـ yt-dlp بيقول إيه بالظبط وهو بيفشل
 
             # استخراج النسبة
             match = re.search(r"(\d+(?:\.\d+)?)%", line_str)
@@ -1022,12 +1023,36 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 print(f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}")
 
                 # تأكد أن LOGO_FILE معرف في بداية السكريبت
+                # أولاً: نحصل على مدة الفيديو بالثواني (لإظهار النص في نصف الوقت بالضبط)
+
+                def get_duration(file):
+                    cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{file}"'
+                    return float(subprocess.check_output(cmd, shell=True))
+
+                # تجهيز النص العربي
+                raw_text = "To see more, please search on Google for EGY PYRAMID"
+                reshaped_text = arabic_reshaper.reshape(raw_text)
+                bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
+
+                duration = get_duration(vid_path)
+                mid_time = duration / 2
+
+                # ثانياً: أمر FFmpeg المطور
                 ffmpeg_cmd = (
                     f'ffmpeg -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
-                    f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.02:contrast=1.01[bg]; '  # تمويه بصري
-                    f"[bg]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt]; "  # اللوجو يظهر أول 10 ثواني فوق الفيلم نفسه
-                    f'[txt][1:v]overlay=W-w-20:20" '  # اللوجو الصغير المستمر
-                    f"-c:v libx264 -preset ultrafast -crf 30 -pix_fmt yuv420p "
+                    f'"[0:v]setpts=0.99*PTS,scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.03:contrast=1.02[v_speed]; '
+                    # اللوجو النصي (أول 10 ثواني)
+                    f"[v_speed]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
+                    # النص العربي (منتصف الفيلم)
+                    f"[txt1]drawtext=text='{bidi_text}':fontfile=/content/arial.ttf:fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
+                    f"enable='between(t,{mid_time},{mid_time+10})'[txt2]; "
+                    # سطر التحكم في شفافية اللوجو الصوري (1.0 تعني ظهور كامل بدون باهتان)
+                    f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
+                    f"[txt2][logo_bright]overlay=W-w-20:20[outv]; "
+                    f'[0:a]atempo=1.0101[outa]" '
+                    f'-map "[outv]" -map "[outa]" '
+                    f"-r 23.976 "
+                    f"-c:v libx264 -preset superfast -crf 24 -maxrate 2.1M -bufsize 4.2M -pix_fmt yuv420p "
                     f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
                 )
 
@@ -1133,9 +1158,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             episode_label = (
                 f"{loop_display_title}" if len(videos) == 1 else f"{loop_display_title}"
             )
-            identifier = f"egy-pyr_{media_id}_{e_id}_{idx}"
+            identifier = f"egy-pyr-{media_id}-{e_id}-{idx}".replace("_", "-").replace(" ", "-")
             # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
-
 
             # 3. الرفع للأرشيف (بالاسم النظيف)
             # 3. الرفع للأرشيف
@@ -1185,7 +1209,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 )
                 stream.close()
                 pbar_archive.close()
-                archive_url = f"https://archive.org/details/{identifier}"  # Get the archive URL after successful upload
+                archive_url = f"https://archive.org/download/{identifier}/{final_file_name}"  # Get the archive URL after successful upload
                 direct_download_url = (
                     f"https://archive.org/download/{identifier}/{final_file_name}"
                 )
@@ -1201,7 +1225,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 print(f"✅ تم ربط الرابط المباشر في سوبابيز: {direct_download_url}")
             except Exception as e:
                 print(f"❌ خطأ أرشيف: {e}")
-
+                
+            telegram_direct = None  # تعريف أولي لضمان عدم حدوث NameError
             # 4. الرفع لتليجرام (بالاسم النظيف) مع حماية كاملة
             try:
                 if e_id:
@@ -1240,9 +1265,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         os.remove(part2)
                 else:
                     # رفع الملف ككتلة واحدة إذا كان أصغر من 1.9 جيجا
-                    await upload_to_telegram_only(
-                        vid_path, episode_label, episode_id=e_id
-                    )
+                    # رفع الملف واستقبال الرابط المباشر في المتغير المطلوب
+                    telegram_direct = await upload_to_telegram_only(vid_path, episode_label, episode_id=e_id)
 
             except Exception as e:
                 print(f"❌ فشل رفع تليجرام: {e}")
@@ -1278,25 +1302,43 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                             "progress_percent": 90,
                         }
                     ).eq("id", e_id).execute()
-
+                # --- ⚡ التحول للحل البديل (Telegram Fallback) ⚡ ---
+                # نتحقق: هل الأرشيف نجح؟ (لو archive_url لا يحتوي على رابط صحيح، نستخدم تليجرام)
+                if archive_url and "archive.org" in archive_url:
+                    remote_source = identifier
+                    print(f"✅ المصدر المعتمد للرفع: Archive.org ({identifier})")
+                elif telegram_direct:
+                    remote_source = telegram_direct
+                    print(f"⚠️ تحذير: الأرشيف معطل.. تم استخدام رابط Telegram المباشر كمصدر!")
+                else:
+                    remote_source = None
+                    print("❌ خطأ قاتل: لا يوجد مصدر (أرشيف أو تليجرام) للرفع المتوازي!")
+                    
+                    
                 await asyncio.sleep(10)
-                # 1. تحضير مهام الريموت (تستهلك طلبات HTTP فقط)
-                task_voe = upload_to_voe_api(vid_path, identifier)
-                await asyncio.sleep(30)
-                task_dood = upload_to_doodstream(dood_api_key, identifier, file_name)
-                await asyncio.sleep(30)
-                task_tape = upload_to_streamtape(
-                    st_login, st_key, identifier, file_name
-                )
-                await asyncio.sleep(30)
-                task_lulu = upload_to_lulustream(lu_key, identifier, file_name)
+                # 1. تحضير مهام الريموت باستخدام المصدر المتاح (أرشيف أو تليجرام)
+                if remote_source:
+                    task_voe = upload_to_voe_api(vid_path, remote_source)
+                    await asyncio.sleep(30)
+                    task_dood = upload_to_doodstream(
+                        dood_api_key, remote_source, final_file_name
+                    )
+                    await asyncio.sleep(30)
+                    task_tape = upload_to_streamtape(
+                        st_login, st_key, remote_source, final_file_name
+                    )
+                    await asyncio.sleep(30)
+                    task_lulu = upload_to_lulustream(lu_key, remote_source, final_file_name)
+                else:
+                    # في حالة انعدام المصادر، نضع مهام وهمية تعيد None
+                    task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(0, result=None)
 
-                # 2. تحضير مهمة VK (رفع محلي ثقيل) - تشغيلها في Thread منفصل لعدم تعطيل الـ Event Loop
+                # 2. تحضير مهمة VK (رفع محلي ثقيل لا يحتاج لرابط ريموت)
                 loop = asyncio.get_event_loop()
                 task_vk = loop.run_in_executor(
                     None, upload_to_vk_local, episode_label, vid_path
                 )
-
+                
                 # 3. إطلاق الصواريخ الخمسة معاً وانتظار الجميع
                 # الترتيب مهم جداً لاستلام النتائج بشكل صحيح
                 vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
@@ -1384,9 +1426,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
 
-                mix_url = await upload_to_mixdrop(
-                    vid_path, mix_user, mix_key
-                )
+                mix_url = await upload_to_mixdrop(vid_path, mix_user, mix_key)
                 if mix_url:
                     supabase.table("links").upsert(
                         {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
