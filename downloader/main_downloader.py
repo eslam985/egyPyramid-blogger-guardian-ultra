@@ -777,12 +777,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # التأكد من بقاء معلومات الموسم والحلقة في العنوان المعروض
     if "الموسم" in original_task_name and "الموسم" not in display_title:
-        display_title = f"{display_title} {re.search(r'(الموسم\s*\d+)', original_task_name).group(1)}"
+        season_match = re.search(r'(الموسم\s*\d+)', original_task_name)
+        if season_match:
+            display_title = display_title + " " + season_match.group(1)
+            
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
         # استخراج "الحلقة X" وإضافتها
         ep_match = re.search(r"(الحلقة\s*\d+|ح\s*\d+)", original_task_name)
         if ep_match:
-            display_title = f"{display_title} {ep_match.group(1)}"
+            display_title = display_title + " " + ep_match.group(1)
 
     # --- 2. نظام منع التكرار الاحترافي (Supabase) ---
     # 1. استخراج البيانات النظيفة فوراً قبل أي فحص
