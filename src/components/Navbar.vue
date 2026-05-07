@@ -68,7 +68,7 @@ const loadingWorker = ref(false);
 // دالة لجلب حالة الووركر الحقيقية عند فتح الصفحة
 const getStatus = async () => {
   try {
-    const res = await api.get('/api/worker/status');
+    const res = await api.get('/worker/status');
     isWorkerRunning.value = !res.data.should_stop;
   } catch (e) {
     console.error("Status check failed");
