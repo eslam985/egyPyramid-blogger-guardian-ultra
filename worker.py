@@ -13,24 +13,23 @@ log = get_beast_logger("GuardianWorker")
 log.info(f"🚀 تم تشغيل الووركر بنجاح من المسار: {PROJECT_ROOT}")
 # سيتم قراءة SUPABASE_URL و SUPABASE_KEY تلقائياً من Environment Variables في السبيس
 # 1. تحديد البيئة والمسار آلياً وبدقة
-# استيراد الخدمات مباشرة لأننا في جذر المشروع
-try:
-    from services.supabase_db import SupabaseService
-    from downloader.main_downloader import pyramid_ultimate_beast
-
-    log.info("✅ تم تحميل محرك الوحش وسوبابيز بنجاح!")
-except ImportError as e:
-    log.error(f"❌ خطأ في استيراد المكتبات: {e}")
+# تم نقل الاستيرادات لداخل الدالة لتجنب تعليق الـ Startup
 
 
 # 5. دالة التشغيل (باسم عام بدلاً من kaggle_worker)
 # 5. دالة التشغيل المحسنة مع تأكيد الجاهزية (Worker Mode)
 def ultimate_beast_worker():
-    # منع تعارض الـ Loops في بيئة FastAPI
+    log.info("⚙️ بدء تشغيل محرك الووركر...")
     try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        nest_asyncio.apply()
+        from services.supabase_db import SupabaseService
+        from downloader.main_downloader import pyramid_ultimate_beast
+
+        log.info("✅ تم تحميل المكتبات بنجاح داخل الـ Thread")
+    except Exception as e:
+        log.error(f"❌ فشل تحميل المكتبات: {e}")
+        return
+
+    nest_asyncio.apply()
     log.info(f"🚀 الوحش مستعد في {os.getcwd()} وينتظر الأوامر...")
 
     while True:
@@ -84,11 +83,10 @@ def ultimate_beast_worker():
                 # 3. تشغيل الوحش (pyramid_ultimate_beast)
                 # التعديل: التأكد من انتظار العملية بالكامل (Await)
                 log.info(f"⏳ جاري تشغيل المحرك لـ {file_name}...")
-
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(
-                    pyramid_ultimate_beast(url, file_name, task_id=job_id)
-                )
+                try:
+                    asyncio.run(pyramid_ultimate_beast(url, file_name, task_id=job_id))
+                except Exception as run_err:
+                    log.error(f"❌ خطأ أثناء تشغيل المحرك: {run_err}")
 
                 # --- [هام جداً]: لا تضع أي أكواد تحديث "Success" هنا إلا لو كنت متأكد إن الدالة رجعت بنجاح ---
 
