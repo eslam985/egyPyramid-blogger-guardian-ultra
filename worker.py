@@ -14,10 +14,11 @@ log.info(f"🚀 تم تشغيل الووركر بنجاح من المسار: {PR
 
 should_stop_worker = False
 
+
 def ultimate_beast_worker():
     global should_stop_worker
     log.info("⚙️ بدء تشغيل محرك الووركر...")
-    
+
     # تأكد من تصفير الحالة عند كل تشغيل جديد
     should_stop_worker = False
 
@@ -41,7 +42,7 @@ def ultimate_beast_worker():
         # فحص إضافي للتأكد
         if should_stop_worker:
             break
-            
+
         # كود سحب المهام (fetch tasks)...
         try:
 
@@ -98,19 +99,27 @@ def ultimate_beast_worker():
                     )
                 except Exception as run_err:
                     log.error(f"❌ خطأ أثناء تشغيل المحرك: {run_err}")
-                    # --- 🧹 تنظيف الأشباح فور الفشل ---
+                    # --- 🧹 تنظيف الأشباح فور الفشل (تحديث بناءً على الشيما) ---
                     try:
-                        # بنمسح الميديا اللي اتكريت وليها نفس العنوان وحالتها لسه pending
-                        SupabaseService.client.table("medias").delete().eq("status", "pending").ilike("title", f"%{file_name}%").execute()
-                        log.info(f"🧹 تم تنظيف سجل الميديا الفارغ لـ: {file_name}")
+                        # 1. جلب ID الميديا أولاً باستخدام العنوان
+                        media_res = SupabaseService.client.table("medias").select("id").ilike("title", f"%{file_name}%").limit(1).execute()
+                        
+                        if media_res.data:
+                            m_id = media_res.data[0]["id"]
+                            # 2. حذف الحلقات المرتبطة أولاً (بسبب الـ Foreign Key لو موجود)
+                            SupabaseService.client.table("episodes").delete().eq("media_id", m_id).execute()
+                            # 3. حذف سجل الميديا نفسه
+                            SupabaseService.client.table("medias").delete().eq("id", m_id).execute()
+                            log.info(f"🧹 تم تنظيف سجل الميديا والحلقات الفارغة لـ: {file_name}")
 
-                        # تحديث المهمة للفشل عشان متفضلش عالقة
+                        # 4. تحديث المهمة للفشل
                         SupabaseService.client.table("download_tasks").update({
                             "status": "failed",
                             "status_message": f"❌ فشل: {str(run_err)[:50]}",
                         }).eq("id", job_id).execute()
                     except Exception as clean_err:
                         log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
+                        
 
                 # --- [هام جداً]: لا تضع أي أكواد تحديث "Success" هنا إلا لو كنت متأكد إن الدالة رجعت بنجاح ---
 
@@ -162,13 +171,13 @@ def ultimate_beast_worker():
 
         except Exception as e:
             log.error(f"⚠️ خطأ في الـ Worker: {e}")
-            # في حالة الخطأ، لا تترك المهمة عالقة بوضع processing
+            # في حالة الخطأ العام، نعيد المهمة لـ idle لتجربتها لاحقاً أو تعليمها بالفشل
             try:
                 if "job_id" in locals():
                     SupabaseService.client.table("download_tasks").update(
                         {
-                            "status": "idle",
-                            "status_message": f"❌ فشل الوحش: {str(e)[:100]}",
+                            "status": "failed",  # تغيير لـ failed أفضل عشان ميدخلش في Loop لا نهائي لو الرابط ميت
+                            "status_message": f"❌ خطأ فني بالووركر: {str(e)[:100]}",
                         }
                     ).eq("id", job_id).execute()
             except:

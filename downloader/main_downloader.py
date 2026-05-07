@@ -987,6 +987,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         cmd.extend(["--extractor-args", "jwplayer:base-url=https://vidtube.one/"])
     cmd.extend(
         [
+            "--quiet",
+            "--no-warnings",
             "-f",
             # الشرط الجديد: ابحث عن أي جودة يكون البُعد الأصغر فيها (width أو height) لا يتعدى 720 أو 1080
             "(bestvideo[width<=720][height<=1280]/bestvideo[height<=720][width<=1280]+bestaudio/best[width<=720][height<=1280]/best[height<=720][width<=1280]) / "
