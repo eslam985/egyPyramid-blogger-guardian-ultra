@@ -691,11 +691,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "/kaggle/working" if os.path.exists("/kaggle/working") else os.getcwd()
         )
 
-    BASE_DIR = os.path.join(BASE_PATH, "project")
+    # 1. تحديد المسار الجذري الحقيقي للمشروع
+    current_root = os.getcwd()
+    # إذا كان المسار الحالي ينتهي بـ "project" بالفعل، لا تضفه مرة أخرى
+    if current_root.endswith("project"):
+        BASE_DIR = current_root
+    else:
+        BASE_DIR = os.path.join(current_root, "project")
 
-    # 2. التأكد من إنشاء المجلد والدخول إليه
+    # 2. التأكد من إنشاء المجلد والدخول إليه "بذكاء"
     os.makedirs(BASE_DIR, exist_ok=True)
-    os.chdir(BASE_DIR)
+    if os.getcwd() != BASE_DIR:
+        os.chdir(BASE_DIR)
 
     # --- 🟢 تجهيز اللوجو (مرة واحدة لكل عملية) ---
     # مجلد خاص للأدوات الثابتة (اللوجو) بعيد عن مجلد العمليات
@@ -998,20 +1005,20 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
         )
 
-        # استبدل الجزء القديم بهذا
-        from tqdm.notebook import (
-            tqdm as tqdm_notebook,
-        )  # لضمان عملها بشكل تفاعلي في كولاب
+        # استخدام tqdm العادية المتوافقة مع السيرفرات وكولاب معاً
+        from tqdm import tqdm as tqdm_std
 
-        pbar_dl = tqdm_notebook(
+        pbar_dl = tqdm_std(
             total=0,
-            desc=f"📥 جاري التحميل: {display_title[:20]}",
+            desc=f"📥 {display_title[:20]}",
             unit="B",
             unit_scale=True,
             unit_divisor=1024,
-            # التعديل الجذري: إزالة الألوان المسببة للرموز الغريبة وتوسيع الشريط
-            bar_format="{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
-            ascii=True,  # استخدام التنسيق القياسي لضمان الوضوح التام
+            bar_format="{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ascii=True, # إجبار استخدام نصوص ASCII فقط
+            force_ascii=True,
+            dynamic_ncols=False,
+            mininterval=5.0 # تحديث اللوجات كل 5 ثواني لتقليل الزحمة
         )
 
         last_db_update = 0
@@ -1882,7 +1889,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         if os.path.exists(extract_dir):
             shutil.rmtree(extract_dir)
         log.info(f"\n✨ المهمة انتهت بنجاح!")
-        time.sleep(30)  # انتظار 20 ثانية قبل الاغلاق
+        await asyncio.sleep(5) # انتظار قصير جداً للسماح للوجات بالخروج
 
 
 async def run_pyramid_tasks(task_list):
@@ -1918,11 +1925,10 @@ async def start_download_process(url, name):
         else:
             target_path = os.getcwd()  # لو شغال على جهازك الشخصي
 
-        # 2. تغيير المسار والطباعة للتأكد
-        os.chdir(target_path)
-        log.info(f"📂 بيئة العمل الحالية: {os.getcwd()}")
+        # 2. طباعة البيئة المكتشفة فقط بدون تغيير المسار هنا
+        log.info(f"📂 البيئة المكتشفة: {target_path}")
 
-        # 3. انطلاق المحرك
+        # 3. انطلاق المحرك (المحرك هو المسؤول عن تنظيم مجلداته)
         await pyramid_ultimate_beast(url, name)
 
     except Exception as e:

@@ -42,9 +42,8 @@ except ImportError:
 tqdm_custom = partial(
     tqdm_base, 
     dynamic_ncols=False, 
-    mininterval=5.0, # زيادة المدة لتقليل زحمة اللوجات
-    ascii=True,      # إجبار نمط النصوص العادي
-    disable=False, 
+    mininterval=10.0, # تقليل اللوجات جداً
+    ascii=True,       # نصوص فقط
     force_ascii=True
 )
 

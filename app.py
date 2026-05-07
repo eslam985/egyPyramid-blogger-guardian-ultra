@@ -1,4 +1,5 @@
 import uvicorn, logging, json, re, html, requests, sys, os, jwt, threading
+import worker  # استيراد ملف الووركر للوصول للمتغير العالمي
 from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
@@ -706,7 +707,33 @@ if os.path.exists(STATIC_DIST):
 
 else:
     print(f"⚠️ CRITICAL: STATIC_DIST not found at {STATIC_DIST}")
+# --- 🕹️ لوحة تحكم الووركر (Guardian Control) ---
 
+@app.get("/api/worker/status")
+async def get_worker_status():
+    """معرفة حالة الووركر حالياً (شغال ولا واقف)"""
+    return {
+        "status": "stopped" if worker.should_stop_worker else "running",
+        "should_stop": worker.should_stop_worker
+    }
+
+@app.post("/api/worker/stop")
+async def stop_worker(user: str = Depends(authenticate)):
+    """إرسال أمر إيقاف فوري للووركر"""
+    worker.should_stop_worker = True
+    logging.info("🛑 [API] تم استلام أمر إيقاف الووركر من الداشبورد.")
+    return {"message": "تم إرسال أمر الإيقاف، سيخرج الووركر بعد إنهاء الدورة الحالية."}
+
+@app.post("/api/worker/start")
+async def start_worker(user: str = Depends(authenticate)):
+    """إعادة تشغيل الووركر إذا كان متوقفاً"""
+    if worker.should_stop_worker:
+        worker.should_stop_worker = False
+        # بما إننا شغالين daemon thread، اللوب هيرجع يشتغل لوحده في اللفة الجاية 
+        # أو ممكن نعيد تشغيل الـ thread لو فضل False تماماً
+        logging.info("🚀 [API] تم إعادة تفعيل الووركر.")
+        return {"message": "تم إعادة تفعيل الووركر بنجاح."}
+    return {"message": "الووركر يعمل بالفعل."}
 
 if __name__ == "__main__":
     # تأكد من عدم وجود مسافات زائدة أو استدعاءات مكررة

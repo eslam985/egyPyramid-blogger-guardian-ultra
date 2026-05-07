@@ -22,6 +22,12 @@
         @click="triggerPublisher">
         🚀 تشغيل محرك النشر
       </button>
+      <button :class="isWorkerRunning ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'"
+        class="text-white px-4 py-0 rounded cursor-pointer transition-all flex items-center gap-2 font-bold"
+        @click="toggleWorker" :disabled="loadingWorker">
+        <span v-if="loadingWorker">🔄</span>
+        <span v-else>{{ isWorkerRunning ? '🛑 إيقاف الوحش' : '🦾 تشغيل الوحش' }}</span>
+      </button>
       <button @click="logout" class="bg-red-500 text-white px-4 py-2 rounded">
         تسجيل خروج
       </button>
@@ -54,7 +60,39 @@
 <script setup>
 import { ref } from 'vue';
 import api from '../services/api';
+import { onMounted } from 'vue'; // ضيف onMounted هنا
 
+const isWorkerRunning = ref(true); // بنفترض إنه شغال في البداية
+const loadingWorker = ref(false);
+
+// دالة لجلب حالة الووركر الحقيقية عند فتح الصفحة
+const getStatus = async () => {
+  try {
+    const res = await api.get('/api/worker/status');
+    isWorkerRunning.value = !res.data.should_stop;
+  } catch (e) {
+    console.error("Status check failed");
+  }
+};
+
+const toggleWorker = async () => {
+  loadingWorker.value = true;
+  const endpoint = isWorkerRunning.value ? '/api/worker/stop' : '/api/worker/start';
+  try {
+    const res = await api.post(endpoint);
+    isWorkerRunning.value = !isWorkerRunning.value; // اعكس الحالة
+    alert("✅ " + res.data.message);
+  } catch (e) {
+    alert("❌ فشل في التحكم في الووركر");
+  } finally {
+    loadingWorker.value = false;
+  }
+};
+
+// أول ما المكون يفتح، شيك على الحالة
+onMounted(() => {
+  getStatus();
+});
 const searchQuery = ref('');
 const isPublishing = ref(false);
 const emit = defineEmits(['update-search', 'open-add-modal']);

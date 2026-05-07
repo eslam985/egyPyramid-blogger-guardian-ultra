@@ -11,15 +11,15 @@ PROJECT_ROOT = os.getcwd()
 log = get_beast_logger("GuardianWorker")
 
 log.info(f"🚀 تم تشغيل الووركر بنجاح من المسار: {PROJECT_ROOT}")
-# سيتم قراءة SUPABASE_URL و SUPABASE_KEY تلقائياً من Environment Variables في السبيس
-# 1. تحديد البيئة والمسار آلياً وبدقة
-# تم نقل الاستيرادات لداخل الدالة لتجنب تعليق الـ Startup
 
+should_stop_worker = False
 
-# 5. دالة التشغيل (باسم عام بدلاً من kaggle_worker)
-# 5. دالة التشغيل المحسنة مع تأكيد الجاهزية (Worker Mode)
 def ultimate_beast_worker():
+    global should_stop_worker
     log.info("⚙️ بدء تشغيل محرك الووركر...")
+    
+    # تأكد من تصفير الحالة عند كل تشغيل جديد
+    should_stop_worker = False
 
     # 1. إنشاء وتثبيت Event Loop خاص بهذا الـ Thread فوراً
     loop = asyncio.new_event_loop()
@@ -37,7 +37,12 @@ def ultimate_beast_worker():
     nest_asyncio.apply()
     log.info(f"🚀 الوحش مستعد في {os.getcwd()} وينتظر الأوامر...")
 
-    while True:
+    while not should_stop_worker:
+        # فحص إضافي للتأكد
+        if should_stop_worker:
+            break
+            
+        # كود سحب المهام (fetch tasks)...
         try:
 
             # 1. سحب المهمة (الأقدم أولاً)
