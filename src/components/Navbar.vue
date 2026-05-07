@@ -77,7 +77,7 @@ const getStatus = async () => {
 
 const toggleWorker = async () => {
   loadingWorker.value = true;
-  const endpoint = isWorkerRunning.value ? '/api/worker/stop' : '/api/worker/start';
+  const endpoint = isWorkerRunning.value ? '/worker/stop' : '/worker/start';
   try {
     const res = await api.post(endpoint);
     isWorkerRunning.value = !isWorkerRunning.value; // اعكس الحالة
