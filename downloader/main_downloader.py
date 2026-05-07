@@ -1041,30 +1041,25 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 eta = progress_match.group(4)
                 percent_int = int(float(percent))
 
-                # --- السحر هنا: التحديث في سطر واحد فقط في الـ Logs ---
-                # نستخدم \r للرجوع لأول السطر و \033[K لمسح الكلام القديم
-                sys.stdout.write(
-                    f"\r📥 {display_title[:15]}.. | {percent}% of {total} | ⚡ {speed} | ⏳ ETA: {eta} \033[K"
-                )
-                sys.stdout.flush()
-
-                # 2. تحديث قاعدة البيانات كل 5 ثواني (عشان منضغطش على Supabase)
+                # --- التعديل لضمان الظهور في لوجات Hugging Face ---
+                # بدلاً من sys.stdout، سنستخدم print عادية لكن بشرط النسبة
+                # سنطبع فقط عند كل 5% أو كل 10 ثواني عشان اللوج ميتمليش
                 now = time.time()
-                if task_id and (now - last_db_update > 10 or int(float(percent)) != last_percent_log):
+                if percent_int % 5 == 0 and percent_int != last_percent_log:
+                    # هذه ستظهر كسطر جديد ومنظم كل 5%
+                    log.info(f"📥 {display_title[:15]}.. | {percent_int}% of {total} | ⚡ {speed} | ⏳ ETA: {eta}")
+                    last_percent_log = percent_int
+                
+                # لتحديث الـ UI الخاص بـ Supabase (بدون طباعة)
+                if task_id and (now - last_db_update > 15):
                     try:
-                        percent_int = int(float(percent))
-                        supabase.table("download_tasks").update(
-                            {
-                                "progress_percent": percent_int,
-                                "status_message": f"📥 جاري التحميل: {percent_int}% (ETA: {eta})",
-                                "download_speed": speed,
-                                "status": "processing",
-                            }
-                        ).eq("id", task_id).execute()
+                        supabase.table("download_tasks").update({
+                            "progress_percent": percent_int,
+                            "status_message": f"📥 جاري التحميل: {percent_int}%",
+                            "download_speed": speed,
+                        }).eq("id", task_id).execute()
                         last_db_update = now
-                        last_percent_log = percent_int  # <--- ضيف السطر ده هنا ضروري!
-                    except:
-                        pass
+                    except: pass
             # 3. طباعة الأخطاء الحقيقية فقط في سطر جديد
             elif any(x in line_str.upper() for x in ["ERROR", "WARNING", "FAILED"]):
                 print(
