@@ -952,11 +952,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # 2. بناء أمر الوحش الموحد لضمان تجاوز الحماية في كل الحالات
     cmd = [
         "yt-dlp",
-        "--impersonate",
-        "chrome",  # تفعيل محاكاة المتصفح باستخدام curl_cffi
         "-v",
         "--no-playlist",
-        "--geo-bypass",  # محاولة تخطي الحظر الجغرافي
+        "--geo-bypass",
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         "--add-header",
@@ -1000,8 +998,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "1950M",
             "--post-overwrites",
             "--no-check-certificate",  # زيادة أمان للروابط المحمية
-            "--max-filesize",
-            "1950M",
             f"{url}",
             "-o",
             download_path_template,
