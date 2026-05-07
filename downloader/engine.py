@@ -113,10 +113,11 @@ async def ensure_dependencies():
             shell=True,
         )
 
-    # إضافة فحص unrar و ffprobe
+    # إضافة فحص unrar و ffprobe مع دعم مستودعات non-free
     if not shutil.which("unrar") or not shutil.which("ffprobe"):
-        print("📥 unrar أو ffprobe مفقود، جاري التثبيت...")
-        subprocess.run("apt-get update && apt-get install -y unrar ffmpeg", shell=True)
+        print("📥 جاري تجهيز المستودعات وتثبيت unrar/ffmpeg...")
+        cmd = "apt-get update && apt-get install -y software-properties-common && apt-get install -y unrar-free ffmpeg || apt-get install -y unrar ffmpeg"
+        subprocess.run(cmd, shell=True)
 
     print("✅ جميع الأدوات جاهزة للعمل.")
 
@@ -132,12 +133,24 @@ class ProgressStream:
         chunk = self.fd.read(size)
         if chunk:
             self.pbar.update(len(chunk))
+            now = time.time()
+            total = self.pbar.total if self.pbar.total else 1
+            percent = int((self.pbar.n / total) * 100)
 
-            # التعديل: زيادة وقت التحديث ليكون كل 5 ثواني بدلاً من 2
-            # وإضافة فحص إضافي لمنع الإفراط في الاتصال بـ Supabase
-            if self.episode_id and (time.time() - self.last_update_time > 5):
-                total = self.pbar.total if self.pbar.total else 1
-                percent = int((self.pbar.n / total) * 100)
+            # تحديث فقط كل 5% "و" بشرط مرور 5 ثوانٍ
+            if self.episode_id and (now - self.last_update_time > 5) and (percent % 5 == 0):
+                try:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": f"📥 جاري السحب للأرشيف... {percent}%",
+                            "progress_percent": percent,
+                            "download_speed": "Downloading...",
+                        }
+                    ).eq("id", self.episode_id).execute()
+                    self.last_update_time = now
+                except:
+                    pass
+        return chunk
 
                 # استخدام ThreadPoolExecutor أو أي وسيلة غير بلوكية سيكون أفضل
                 # لكن حالياً، على الأقل زدنا الوقت ليقل الضغط
