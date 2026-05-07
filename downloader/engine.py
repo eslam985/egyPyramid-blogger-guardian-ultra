@@ -14,7 +14,6 @@ from functools import partial  # استيراد واحد يكفي
 from datetime import datetime
 from groq import Groq
 
-
 try:
     from tqdm import tqdm as tqdm_base
 except ImportError:
@@ -70,34 +69,53 @@ class PyrogramProgress:
         self.episode_id = episode_id
         self.dest_info = f"({current_dest}/{dest_count})"
         self.last_update_time = 0
+        self.last_percent = -1  # لإضافة طبقة حماية ثانية
 
     def update(self, current, total):
+        # 1. إنشاء الشريط الأخضر (مرة واحدة فقط)
         if not self.pbar:
-            self.pbar = tqdm_custom(
+            from tqdm.auto import tqdm
+
+            self.pbar = tqdm(
                 total=total,
                 desc=f"📤 {self.dest_info} {self.name}",
                 unit="B",
                 unit_scale=True,
-                mininterval=2.0,  # التعديل هنا: تحديث كل ثانيتين
+                ascii=" █",
+                colour="green",
             )
 
+        # 2. تحديث الشريط في كولاب (محلياً - لا يسبب Flood)
         self.pbar.update(current - self.pbar.n)
 
-        # الحقيقة الصارمة: تحديث واحد فقط كل ثانيتين يكفي جداً
+        # 3. ⚡️ فلتر منع الـ Flood ⚡️
         now = time.time()
-        if self.episode_id and (now - self.last_update_time > 2):
-            percent = int((current / total) * 100)
+        percent = int((current / total) * 100)
+
+        # لا ترسل تحديثاً إلا لو مر 3 ثواني "أو" لو النسبة المئوية اتغيرت (حماية مضاعفة)
+        if (now - self.last_update_time < 3.0) and (percent == self.last_percent):
+            return
+
+        # تحديث قاعدة البيانات فقط لو فيه تغيير حقيقي في النسبة
+        if self.episode_id and percent != self.last_percent:
             try:
                 supabase.table("episodes").update(
                     {
-                        "status_message": f"📤 رفع تليجرام {self.dest_info}",
+                        "status_message": f"📤 رفع تليجرام {self.dest_info} - {percent}%",
                         "progress_percent": percent,
-                        "download_speed": "Telegram",
+                        "download_speed": "Uploading...",
                     }
                 ).eq("id", self.episode_id).execute()
+
                 self.last_update_time = now
+                self.last_percent = percent
             except:
                 pass
+
+    # الدالة اللي كانت ناقصة ومسببة المشكلة:
+    def close(self):
+        if self.pbar:
+            self.pbar.close()
 
 
 async def ensure_dependencies():
@@ -128,11 +146,14 @@ class ProgressStream:
         if chunk:
             self.pbar.update(len(chunk))
 
-            # تحديث كل ثانيتين لضمان استقرار الاتصال وسلاسة الواجهة
-            if self.episode_id and (time.time() - self.last_update_time > 2):
-                # حماية من القسمة على صفر إذا لم يكتمل تحميل الـ pbar
+            # التعديل: زيادة وقت التحديث ليكون كل 5 ثواني بدلاً من 2
+            # وإضافة فحص إضافي لمنع الإفراط في الاتصال بـ Supabase
+            if self.episode_id and (time.time() - self.last_update_time > 5):
                 total = self.pbar.total if self.pbar.total else 1
                 percent = int((self.pbar.n / total) * 100)
+
+                # استخدام ThreadPoolExecutor أو أي وسيلة غير بلوكية سيكون أفضل
+                # لكن حالياً، على الأقل زدنا الوقت ليقل الضغط
                 try:
                     supabase.table("episodes").update(
                         {
@@ -168,43 +189,47 @@ class ProgressStream:
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     print(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
 
-    # 1. جلب المفاتيح الخام وتحويل الـ API_ID لرقم
-    try:
-        f_api_id = int(TELE_ID_RAW) if TELE_ID_RAW else None
-        f_api_hash = TELE_HASH_RAW
-    except (ValueError, TypeError):
-        print("❌ خطأ: TELEGRAM_API_ID يجب أن يكون رقماً صحيحاً.")
-        return None
+    # 1. جلب القيم من بيئة النظام (التي قمت بحقنها في الخلية السابقة)
+    t_id = os.environ.get("TELEGRAM_API_ID") or os.environ.get("API_ID")
+    t_hash = os.environ.get("TELEGRAM_API_HASH") or os.environ.get("API_HASH")
+    tele_string = os.environ.get("TELEGRAM_STRING_SESSION")
 
-    if not f_api_id or not f_api_hash:
-        print("❌ خطأ: مفاتيح Telegram (API_ID/HASH) مفقودة.")
-        return None
-
-    # 2. جلب كود الجلسة (String Session)
-    tele_string = os.getenv("TELEGRAM_STRING_SESSION")
-
-    if not tele_string:
+    # 2. محاولة جلبها من userdata فقط إذا كانت مفقودة (كخيار احتياطي)
+    if not t_id or not t_hash or not tele_string:
         try:
             from google.colab import userdata
 
-            tele_string = userdata.get("TELEGRAM_STRING_SESSION")
-            # حجر الزاوية: حقن المتغير في النظام لضمان استمراره
-            if tele_string:
-                os.environ["TELEGRAM_STRING_SESSION"] = tele_string
-        except Exception:
+            t_id = t_id or userdata.get("TELEGRAM_API_ID")
+            t_hash = t_hash or userdata.get("TELEGRAM_API_HASH")
+            tele_string = tele_string or userdata.get("TELEGRAM_STRING_SESSION")
+        except:
             pass
 
-    if not tele_string:
-        print("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود في الـ Secrets!")
+    # 3. التحقق النهائي وتحويل النوع
+    try:
+        f_api_id = int(t_id) if t_id else None
+        f_api_hash = t_hash
+    except Exception as e:
+        print(f"❌ خطأ في معالجة أرقام الـ ID: {e}")
         return None
 
+    if not f_api_id or not f_api_hash:
+        print("❌ خطأ: مفاتيح Telegram مفقودة في النظام وفي الـ Secrets.")
+        return None
+
+    if not tele_string:
+        print("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود!")
+        return None
+
+    # استكمال بقية الكود (الوحش يدخل الآن)...
+
     # 3. الوحش يدخل الآن "In-Memory"
+    # 3. الوحش يدخل الآن "In-Memory" وبدون اسم ثابت لمنع التداخل
     async with Client(
-        "egy_pyramid_session",
+        name=":memory:",  # 👈 التعديل الجوهري هنا: استخدام الذاكرة كاسم للجلسة
         session_string=tele_string,
         api_id=f_api_id,
         api_hash=f_api_hash,
-        in_memory=True,
     ) as app:
 
         # 1. الرفع للمخزن (أول وجهة في القائمة)
@@ -219,7 +244,7 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                 caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
                 progress=lambda c, t: tracker.update(c, t),
             )
-
+            tracker.close()  # 👈 ضرورية جداً هنا
             if sent_video:
                 print(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
                 # 2. عمل Forward لبوت الاستخراج
@@ -256,8 +281,9 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                                 return direct_link  # هذا السطر هو الذي سينقذ السيرفرات الخمسة
 
         except Exception as e:
-            print(f"❌ فشل في عملية التليجرام: {e}")
-            return None
+            # بنطبع التحذير وبنرجع None عشان السكريبت يروح للـ Parallel Upload فوراً
+            print(f"⚠️ تليجرام وقع بس الوحش مبيقفش.. مكملين للسيرفرات الخمسة: {e}")
+            return "failed_but_continue"
         finally:
             if tracker.pbar:
                 tracker.pbar.close()
@@ -334,16 +360,27 @@ def generate_facebook_template(row, human_date, content_type, action_text, lang_
     # 1. إزالة النجوم (Markdown)
     clean_title_no_stars = clean_title.replace("*", "")
 
-    # 1. ذكاء تحديد النوع (فيلم أم مسلسل)
+    # --- ذكاء تحديد النوع (المطور) ---
     all_text_to_check = (raw_title + " " + str(row.get("labels", ""))).lower()
-    is_movie = (
-        "فيلم" in all_text_to_check
-        or "movie" in all_text_to_check
-        or content_type == "MOVIE"
+
+    # 1. التحقق من الـ labels القادمة من TMDB (الأكثر دقة)
+    # عادة TMDB يضع "أفلام" أو "TV Series"
+    is_movie_label = any(
+        word in all_text_to_check for word in ["فيلم", "أفلام", "movie"]
     )
 
-    # تصحيح النوع لو العنوان فيه كلمة "مسلسل" بشكل صريح
-    if "مسلسل" in all_text_to_check or "series" in all_text_to_check:
+    # 2. التحقق من content_type الممرر من سكرابيت التحميل
+    # (نحولها لـ lower للتأكد من المطابقة)
+    is_movie_type = str(content_type).lower() == "movie"
+
+    # المنطق النهائي: هو فيلم إذا وجدنا كلمة فيلم OR إذا كان النوع القادم من المحرك "movie"
+    # بشرط ألا يحتوي العنوان على كلمة "مسلسل" أو "حلقة"
+    is_movie = is_movie_label or is_movie_type
+
+    if any(
+        word in all_text_to_check
+        for word in ["مسلسل", "حلقة", "موسم", "series", "episode"]
+    ):
         is_movie = False
 
     type_label = "🎞️ فيلم" if is_movie else "🌟 مسلسل"

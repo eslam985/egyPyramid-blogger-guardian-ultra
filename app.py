@@ -1,4 +1,4 @@
-import uvicorn, logging, json, re, html, requests, sys, os, jwt
+import uvicorn, logging, json, re, html, requests, sys, os, jwt, threading
 from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
@@ -34,6 +34,26 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 # 1. تهيئة التطبيق والميدلوير (يجب أن يكونا أول شيء)
 app = FastAPI()
+
+
+# تشغيل "الوحش" في خلفية النظام عند بدء التشغيل
+@app.on_event("startup")
+async def startup_event():
+    try:
+        from worker import ultimate_beast_worker
+
+        # daemon=True تضمن إغلاق الووركر إذا توقف السيرفر
+        thread = threading.Thread(target=ultimate_beast_worker, daemon=True)
+        thread.start()
+        print(
+            "🚀 [Background] Guardian Monster has been unleashed in the background..."
+        )
+    except ImportError:
+        print("⚠️ [Warning] worker.py not found. Monster is still in the cage.")
+    except Exception as e:
+        print(f"❌ [Error] Failed to start background worker: {e}")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

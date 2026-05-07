@@ -1,16 +1,42 @@
-fastapi
-uvicorn
-supabase
-python-multipart
-python-dotenv
-requests
-deep-translator
-beautifulsoup4
+# --- المكتبات الأساسية والذكاء الاصطناعي ---
+google-generativeai==0.8.3
+groq
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 google-auth
-groq
-PyJWT
-httpx
+
+# --- التعامل مع تليجرام ---
+telethon
+pyrogram
+tgcrypto
+
+# --- التحميل والمعالجة (الوحش) ---
+yt-dlp
+curl_cffi
+playwright
 nest-asyncio
+ffmpeg-python
+
+# --- قاعدة البيانات والويب ---
+supabase==1.2.0
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+requests
+httpx
+beautifulsoup4
+PyJWT
+
+# --- اللغة والتنسيق ---
+googletrans
+arabic-reshaper
+python-bidi
+deep-translator
+rich
+tqdm
+aiohttp
+
+# --- الأرشفة والخطوط ---
+internetarchive

@@ -12,6 +12,12 @@ from functools import partial
 from .engine import ProgressStream
 import traceback
 
+try:
+    from .logger_setup import get_beast_logger
+except ImportError:
+    import sys
+    import os
+log = get_beast_logger("GuardianUltra")
 # 1. استيراد القاعدة الأساسية أولاً
 try:
     from tqdm.auto import tqdm as tqdm_base
@@ -66,7 +72,34 @@ def is_mostly_english(text):
     return english_chars >= arabic_chars
 
 
-def get_movie_data(name):
+genre_map = {
+    "Action": "أكشن",
+    "Adventure": "مغامرة",
+    "Animation": "رسوم متحركة",
+    "Comedy": "كوميديا",
+    "Crime": "جريمة",
+    "Documentary": "وثائقي",
+    "Drama": "دراما",
+    "Family": "عائلي",
+    "Fantasy": "فانتازيا",
+    "History": "تاريخ",
+    "Horror": "رعب",
+    "Music": "موسيقى",
+    "Mystery": "غموض",
+    "Romance": "رومانسي",
+    "Science Fiction": "خيال علمي",
+    "TV Movie": "فيلم تلفزيوني",
+    "Thriller": "إثارة",
+    "War": "حرب",
+    "Western": "غرب أمريكي",
+    "Sport": "رياضة",
+    "Short": "قصير",
+    "Sci-Fi": "خيال علمي",
+    "Biography": "سيرة شخصية",
+}
+
+
+def get_movie_data(name, year=None):  # <--- أضفنا year هنا
     search_query = str(name).strip()
     original_input = search_query
 
@@ -133,18 +166,29 @@ def get_movie_data(name):
     try:
         # 1. استخراج السنة والاسم (فصل السنة للبحث فقط دون حذفها من الأصل)
         # إذا كان المدخل رابطاً، نتجنب استخراج السنة منه لأنه قد يحتوي على IDs طويلة تخدع الـ Regex
+        # استخراج السنة والاسم
         if is_url_or_id:
-            year = None
+            extracted_year = None
             query_for_search = search_query
         else:
-            year_match = re.search(r"(\d{4})", search_query)
-            year = year_match.group(1) if year_match else None
+            # المحاولة الأولى: لو في سنة مبعوتة للدالة من بره نستخدمها
+            if year:
+                extracted_year = str(year)
+            else:
+                # المحاولة الثانية: لو مفيش، نستخرجها من الاسم بالـ Regex
+                year_match = re.search(r"(\d{4})", search_query)
+                extracted_year = year_match.group(1) if year_match else None
+
+            # تنظيف الكويري من أي سنين عشان البحث في TMDB يكون دقيق بالاسم فقط
             query_for_search = (
                 re.sub(r"\d{4}", "", search_query)
                 .replace(":", "")
                 .replace("_", " ")
                 .strip()
             )
+
+        # الآن نعتمد السنة النهائية للبحث
+        final_year = extracted_year
 
         clean_query = search_query
 
@@ -165,7 +209,21 @@ def get_movie_data(name):
         if not tmdb_final_id:
             # نستخدم query_for_search هنا عشان محرك البحث ميتلخبطش بالسنة
             # الجديد: تحديد المسار بناءً على الكلمة المفتاحية في العنوان
-            if any(word in original_input for word in ["مسلسل", "موسم", "حلقة", "Series", "Season", "Episode", "TV", "tv", "season", "episode"]):
+            if any(
+                word in original_input
+                for word in [
+                    "مسلسل",
+                    "موسم",
+                    "حلقة",
+                    "Series",
+                    "Season",
+                    "Episode",
+                    "TV",
+                    "tv",
+                    "season",
+                    "episode",
+                ]
+            ):
                 search_path = "tv"
                 content_kind = "tv"
             else:
@@ -173,8 +231,8 @@ def get_movie_data(name):
                 content_kind = "movie"
 
             search_url = f"https://api.themoviedb.org/3/search/{search_path}?api_key={TMDB_API_KEY}&query={query_for_search}&language=ar"
-            if year:
-                search_url += f"&year={year}"
+            if final_year:  # <--- تأكد إنها بتستخدم السنة المختارة
+                search_url += f"&year={final_year}"
             res = requests.get(search_url).json()
             if res.get("results"):
                 # --- التعديل المنقذ: التأكد من تطابق الاسم لتجنب نتائج الأفلام العشوائية ---
@@ -182,10 +240,13 @@ def get_movie_data(name):
                 for r in res["results"]:
                     res_title = (r.get("name") or r.get("title") or "").lower()
                     # لو الاسم اللي راجع فيه كلمة من اللي باحثين عنها، نعتبره هو الصح
-                    if query_for_search.lower() in res_title or res_title in query_for_search.lower():
+                    if (
+                        query_for_search.lower() in res_title
+                        or res_title in query_for_search.lower()
+                    ):
                         best_match = r
                         break
-                
+
                 if best_match:
                     first_res = best_match
                     tmdb_date = (
@@ -194,62 +255,101 @@ def get_movie_data(name):
                         or "0000"
                     )
                     tmdb_year = tmdb_date[:4]
-                    
+
                     if not year or tmdb_year == year:
                         tmdb_final_id = first_res["id"]
                         # أهم سطر: نجبد نوع المحتوى بناءً على البحث (tv أو movie) وليس ما يقترحه TMDB
-                        content_kind = search_path 
-                else:
-                    print(f"⚠️ TMDB أعاد نتائج غير مطابقة للاسم: {query_for_search}. سيتم الانتقال للمرحلة الثالثة.")
-
-        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
-        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
-        if not tmdb_final_id and year:
-            print(f"⚠️ TMDB فشل بالسنة.. جاري فحص OMDb بالاسم والسنة: {year}")
-            # لضمان أن البحث في OMDb نظيف تماماً من أي رموز
-            omdb_query = query_for_search.replace(" ", "+")
-            omdb_url = (
-                f"http://www.omdbapi.com/?apikey={OMDB_API_KEY}&t={omdb_query}&y={year}"
-            )
-            res_o = requests.get(omdb_url).json()
-
-            if res_o.get("Response") == "True":
-                omdb_title = res_o.get("Title", "").lower()
-                # فلتر القناص: التأكد أن الكلمة الأولى من بحثك موجودة في عنوان OMDb
-                search_first_word = clean_query.strip().split(" ")[0].lower()
-
-                if search_first_word in omdb_title:
-                    raw_story = res_o.get("Plot", "")
-                    try:
-                        story = (
-                            translator.translate(raw_story)
-                            if raw_story != "N/A"
-                            else "لا يوجد وصف"
-                        )
-                    except:
-                        story = raw_story
-
-                    # --- التعديل هنا: رفع بوستر OMDb قبل الخروج ---
-                    omdb_poster = res_o.get("Poster")
-                    if omdb_poster and omdb_poster != "N/A":
-                        print(f"☁️ جاري رفع بوستر OMDb لكلاود ناري...")
-                        omdb_poster = upload_poster_to_cloudinary(omdb_poster)
-
-                    return (
-                        res_o.get("imdbID"),  # ID
-                        res_o.get("Title"),  # Title
-                        story,  # Story
-                        omdb_poster,  # Poster المرفوع
-                        "أفلام",  # Labels
-                        "PT02H00M",  # Duration ISO
-                        res_o.get("imdbRating"),  # Rating
-                        res_o.get("Runtime"),  # Runtime String
-                        res_o.get("Year"),  # Year
-                    )
+                        content_kind = search_path
                 else:
                     print(
-                        f"🛑 رفض النتيجة: OMDb أعاد '{omdb_title}' وهي لا تطابق '{clean_query}'"
+                        f"⚠️ TMDB أعاد نتائج غير مطابقة للاسم: {query_for_search}. سيتم الانتقال للمرحلة الثالثة."
                     )
+
+        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
+        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
+        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
+        if not tmdb_final_id and final_year:
+            print(f"⚠️ TMDB فشل بالسنة.. جاري فحص OMDb بالاسم والسنة: {final_year}")
+
+            # 1. السطر الناقص: تنفيذ طلب البحث في OMDb
+            omdb_query = query_for_search.replace(" ", "+")
+            omdb_url = f"http://www.omdbapi.com/?apikey={OMDB_API_KEY}&t={omdb_query}&y={final_year}"
+
+            try:
+                res_o = requests.get(omdb_url).json()  # هنا تم تعريف res_o
+
+                if res_o.get("Response") == "True":
+                    omdb_title = res_o.get("Title", "").lower()
+                    search_first_word = query_for_search.strip().split(" ")[0].lower()
+
+                    if search_first_word in omdb_title:
+                        # 1. جلب القصة (Story)
+                        raw_story = res_o.get("Plot", "")
+                        try:
+                            story = (
+                                translator.translate(raw_story)
+                                if raw_story != "N/A"
+                                else "لا يوجد وصف"
+                            )
+                        except:
+                            story = raw_story
+
+                        # 2. جلب التصنيفات (Genres) - مترجمة لتجنب مشاكل الـ Duplicate Key
+                        raw_genres = res_o.get("Genre", "أفلام").split(", ")
+                        # نستخدم القاموس للترجمة، وإذا لم يوجد نأخذ الكلمة كما هي
+                        translated_list = [
+                            genre_map.get(g.strip(), g.strip()) for g in raw_genres
+                        ]
+                        labels = ", ".join(translated_list)
+
+                        # 3. جلب مدة العمل (Runtime) - من IMDb
+                        raw_runtime = res_o.get("Runtime", "N/A")
+                        runtime_str = "غير محدد"
+                        duration = "PT01H30M"
+
+                        if raw_runtime != "N/A":
+                            runtime_str = raw_runtime
+                            minutes_match = re.search(r"(\d+)", raw_runtime)
+                            if minutes_match:
+                                m = int(minutes_match.group(1))
+                                duration = f"PT{m//60:02d}H{m%60:02d}M"
+                                hours = m // 60
+                                mins = m % 60
+                                runtime_str = (
+                                    f"{hours} ساعة و {mins} دقيقة"
+                                    if hours > 0
+                                    else f"{m} دقيقة"
+                                )
+
+                        # 4. جلب التقييم وسنة العرض - ضمان تحويل التقييم لنص رقمي
+                        raw_rating = res_o.get("imdbRating", "0")
+                        rating = str(raw_rating) if raw_rating != "N/A" else "0.0"
+                        release_year = res_o.get("Year", final_year or "2026")
+
+                        # 5. معالجة البوستر
+                        omdb_poster = res_o.get("Poster")
+                        if omdb_poster and omdb_poster != "N/A":
+                            print(f"☁️ جاري رفع بوستر IMDb (عبر OMDb) لكلاود ناري...")
+                            omdb_poster = upload_poster_to_cloudinary(omdb_poster)
+
+                        return (
+                            res_o.get("imdbID"),  # ID
+                            res_o.get("Title"),  # Title
+                            story,  # Story (المترجمة)
+                            omdb_poster,  # Poster المرفوع
+                            labels,  # التصنيفات (المترجمة عربي)
+                            duration,  # ISO Duration
+                            rating,  # التقييم (الذي أصلحناه)
+                            runtime_str,  # الوقت المقروء
+                            release_year,  # السنة
+                        )
+                    else:
+                        print(
+                            f"🛑 رفض النتيجة: OMDb أعاد '{omdb_title}' وهي لا تطابق '{query_for_search}'"
+                        )
+
+            except Exception as e:
+                print(f"⚠️ خطأ أثناء الاتصال بـ OMDb: {e}")
 
         # --- المرحلة الثالثة: الصرامة المطلقة (بديل البحث المرن والـ AI) ---
         # --- المرحلة الثالثة: الصرامة المطلقة ---
@@ -272,8 +372,8 @@ def get_movie_data(name):
             return (
                 None,
                 display_name,
-                None, 
-                None, 
+                None,
+                None,
                 "أفلام",
                 "PT01H30M",
                 "N/A",
@@ -345,7 +445,9 @@ def get_movie_data(name):
             # مدة الحلقة أو الفيلم
             # مدة الحلقة أو الفيلم
             runtime = en_data.get("runtime") or (
-                en_data.get("episode_run_time")[0] if en_data.get("episode_run_time") else None
+                en_data.get("episode_run_time")[0]
+                if en_data.get("episode_run_time")
+                else None
             )
             if runtime:
                 # تحديث الـ ISO Format بناءً على الدقائق الحقيقية
@@ -428,19 +530,18 @@ def upload_poster_to_cloudinary(image_url):
         }
         res = requests.post(cloudinary_api, data=payload).json()
         public_id = res.get("public_id")
-        
+
         if public_id:
             # f_webp: تجعل كلاود ناري يسلم الصورة بصيغة WebP مهما كان الأصل
             # q_auto:good: تعطي جودة ممتازة مع حجم صغير جداً
-            transform = "c_fill,g_auto,w_300,h_450,q_auto:good,f_webp"
-            
-            return f"https://res.cloudinary.com/{cloud_name}/image/upload/{transform}/v1/{public_id}.webp"
-            
+            transform = "c_fill,g_auto,w_300,h_450,q_auto:good,f_avif"
+
+            return f"https://res.cloudinary.com/{cloud_name}/image/upload/{transform}/v1/{public_id}.avif"
+
         return image_url
     except Exception as e:
         print(f"⚠️ خطأ في رفع الصورة لكلاود ناري: {e}")
         return image_url
-
 
 
 def upload_to_vk_local(title, file_path):
@@ -460,7 +561,9 @@ def upload_to_vk_local(title, file_path):
         res_save = requests.get(api_url, params=params).json()
 
         if "response" not in res_save:
-            print(f"❌ فشل حجز مكان في VK: {res_save.get('error', {}).get('error_msg')}")
+            print(
+                f"❌ فشل حجز مكان في VK: {res_save.get('error', {}).get('error_msg')}"
+            )
             return None
 
         upload_url = res_save["response"]["upload_url"]
@@ -470,10 +573,10 @@ def upload_to_vk_local(title, file_path):
         # --- [ مرحلة الضخ السريع ] ---
         print(f"📡 جاري ضخ الفيديو لـ VK بنظام Stream (المسار المحلي)...")
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 files = {"video_file": (os.path.basename(file_path), f, "video/mp4")}
                 response = requests.post(upload_url, files=files, timeout=600)
-            
+
             if response.status_code != 200:
                 print(f"❌ فشل ضخ الملف لـ VK: Status {response.status_code}")
                 return None
@@ -522,15 +625,29 @@ async def upload_to_voe_api(file_path, identifier):
         async with httpx.AsyncClient(timeout=30.0) as client:  # أضف هذا السطر هنا
 
             file_name = os.path.basename(file_path).replace(" ", "%20")
-            remote_url = f"https://archive.org/download/{identifier}/{file_name}"
+            if str(identifier).startswith("http"):
+                remote_url = identifier
+            else:
+                remote_url = f"https://archive.org/download/{identifier}/{file_name}"
             params = {"key": VOE_API_KEY, "url": remote_url}
 
-            # 1. طلب الرفع
-            response = await client.get(
-                "https://voe.sx/api/upload/url", params=params, timeout=30
-            )
-            res = response.json()
+            # 1. طلب الرفع مع محاولات إعادة في حال تذبذب الرابط
+            res = {}
+            for attempt in range(3):
+                try:
+                    response = await client.get(
+                        "https://voe.sx/api/upload/url", params=params, timeout=30
+                    )
+                    res = response.json()
+                    if res.get("status") == 200:
+                        break
+                except Exception as e:
+                    log.warning(f"⚠️ Voe: فشل اتصال في المحاولة {attempt+1}: {e}")
+                
+                await asyncio.sleep(5)
+
             if res.get("status") != 200:
+                log.error(f"❌ Voe: فشل الرفع نهائياً: {res}")
                 return None
 
             file_code = res.get("result", {}).get("file_code")
@@ -608,7 +725,10 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         "doodstream.com",
     ]
     clean_file_name = urllib.parse.quote(file_name)
-    remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+    if str(identifier).startswith("http"):
+        remote_url = identifier
+    else:
+        remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
     headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -629,6 +749,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                     print(f"✅ DoodStream: تم قبول الأمر عبر {domain}")
                     break
             except Exception:
+                await asyncio.sleep(2) # انتظار بسيط قبل تجربة نطاق آخر
                 continue
 
         if not data or (data.get("msg") != "OK" and not data.get("success")):
@@ -639,9 +760,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         print(f"🔍 DoodStream Task ID: {f_code}")
 
         # محاولات الفحص (نزيد الوقت قليلاً لضمان عدم الحظر)
-        for i in range(1, 51):
+        for i in range(1, 21):
             await asyncio.sleep(20)  # 15 ثانية وقت مثالي للملفات الصغيرة
-            print(f"🔄 DoodStream Polling Attempt {i}/50...")
+            print(f"🔄 DoodStream Polling Attempt {i}/20...")
 
             for domain in api_domains:
                 try:
@@ -657,7 +778,9 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                         if result.get("file_code") == f_code:
                             raw_size = result.get("size", 0)
                             size_mb = float(raw_size) / (1024 * 1024)
-                            print(f"✅ DoodStream Success: الملف موجود وبدأ المعالجة ({size_mb:.2f} MB)")
+                            print(
+                                f"✅ DoodStream Success: الملف موجود وبدأ المعالجة ({size_mb:.2f} MB)"
+                            )
                             return f"https://playmogo.com/e/{f_code}"
 
                     # إذا فشل Info، جرب الـ Status التقليدي
@@ -669,7 +792,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
 
                         if check_data.get("status") == 200:
                             results = check_data.get("result", [])
-                            if results: # أي نتيجة ترجع للملف ده يعني السيرفر شافه
+                            if results:  # أي نتيجة ترجع للملف ده يعني السيرفر شافه
                                 print(f"✅ DoodStream Success (File Found in Check)!")
                                 return f"https://playmogo.com/e/{f_code}"
                     except:
@@ -707,14 +830,28 @@ async def upload_to_streamtape(login, key, identifier, file_name):
     print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
-        remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+        if str(identifier).startswith("http"):
+            remote_url = identifier
+        else:
+            remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             # نقوم بعمل quote للاسم لضمان وصول الحروف العربية للسيرفر بشكل سليم
             safe_name = urllib.parse.quote(file_name)
             add_url = f"https://api.streamtape.com/remotedl/add?login={login}&key={key}&url={remote_url}&name={safe_name}"
-            res = await client.get(add_url)
-            data = res.json()
+            # محاولة قنص الرابط مع إعادة المحاولة في حال تذبذب البوت
+            data = {}  # تعريف أولي فارغ
+            for attempt in range(3):
+                try:
+                    res = await client.get(add_url)
+                    data = res.json()
+                    if data.get("status") == 200:
+                        break
+                except Exception as e:
+                    log.warning(f"⚠️ خطأ في الاتصال: {e}")
+
+                log.warning(f"⚠️ محاولة فاشلة ({attempt+1}/3)...")
+                await asyncio.sleep(5)
 
             # التأكد من قبول السيرفر للأمر
             # التأكد من قبول السيرفر للأمر
@@ -727,9 +864,9 @@ async def upload_to_streamtape(login, key, identifier, file_name):
 
                 target = clean_it(file_name.split(".")[0])
 
-                for i in range(1, 51):
+                for i in range(1, 21):
                     await asyncio.sleep(20)
-                    print(f"🔄 Streamtape Polling Attempt {i}/50...")
+                    print(f"🔄 Streamtape Polling Attempt {i}/20...")
 
                     # 1. الفحص المباشر عبر الـ ID (الأولوية القصوى حسب الديكومنتيشن)
                     try:
@@ -743,12 +880,15 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                         # التعديل: قنص المعرف الحقيقي (extid) بدلاً من معرف المهمة (id)
                         # 1. القنص الذكي للمعرف (من extid أو من الـ url مباشرة)
                         file_code = task_info.get("extid") or task_info.get("fileid")
-                        
+
                         if not file_code and task_info.get("url"):
                             try:
                                 # استخراج المعرف من الرابط في حالة عدم وجود extid
-                                file_code = task_info.get("url").split("/v/")[1].split("/")[0]
-                            except: pass
+                                file_code = (
+                                    task_info.get("url").split("/v/")[1].split("/")[0]
+                                )
+                            except:
+                                pass
 
                         # 2. إذا تم العثور على المعرف، المهمة اكتملت
                         if file_code:
@@ -756,7 +896,8 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                             try:
                                 rename_url = f"https://api.streamtape.com/file/rename?login={login}&key={key}&file={file_code}&name={urllib.parse.quote(file_name)}"
                                 await client.get(rename_url)
-                            except: pass
+                            except:
+                                pass
 
                             print(f"✅ Streamtape Success! File ID: {file_code}")
                             return f"https://streamtape.com/e/{file_code}"
@@ -802,19 +943,32 @@ async def upload_to_lulustream(key, identifier, file_name):
         # التعديل هنا: إضافة www لتجنب خطأ الـ 301
         base_api = "https://www.lulustream.com/api"
         clean_file_name = urllib.parse.quote(file_name)
-        remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+        if str(identifier).startswith("http"):
+            remote_url = identifier
+        else:
+            remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
 
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
-            res = await client.get(add_url)
 
-            if res.status_code != 200:
-                print(f"❌ خطأ اتصال (Code {res.status_code}): {res.text}")
-                return None
+            data = {}
+            for attempt in range(3):
+                try:
+                    res = await client.get(add_url)
+                    if res.status_code == 200:
+                        data = res.json()
+                        if data.get("status") == 200:
+                            break
+                    log.warning(
+                        f"⚠️ LuluStream: محاولة فاشلة ({attempt+1}/3).. الرمز: {res.status_code}"
+                    )
+                except Exception as e:
+                    log.warning(f"⚠️ LuluStream: خطأ اتصال: {e}")
 
-            data = res.json()
+                await asyncio.sleep(5)
+
             if data.get("status") != 200:
-                print(f"❌ رفض السيرفر الطلب: {data}")
+                print(f"❌ LuluStream: فشل الطلب نهائياً بعد المحاولات: {data}")
                 return None
 
             file_code = data["result"].get("filecode")
@@ -901,11 +1055,17 @@ async def upload_to_mixdrop(file_path, email, key):
 def normalize_title(title):
     if not title:
         return ""
-    # 1. تحويل للأحرف الصغيرة
+
     t = str(title).lower()
-    # 2. إزالة الرموز والكلمات الزائدة الشائعة
+
+    # --- الخطوة الناقصة والضرورية ---
+    # حذف أي سنة (19xx أو 20xx) قبل أي عملية تنظيف تانية
+    t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
+    # --------------------------------
+
+    # تنظيف الرموز (الأرقام اللي هتفضل هنا هي أرقام الأجزاء فقط مثل John Wick 4)
     t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
-    # 3. إزالة الكلمات التي لا تعبر عن جوهر العمل
+
     stop_words = [
         "مسلسل",
         "فيلم",
@@ -928,12 +1088,12 @@ def normalize_title(title):
         "سيزون",
         "حلقة",
         "موسم",
+        "اون",
+        "لاين",
     ]
     for w in stop_words:
-        # إزالة الكلمة فقط لو كانت مستقلة
         t = re.sub(rf"\b{w}\b", " ", t)
 
-    # 4. توحيد المسافات
     t = " ".join(t.split())
     return t
 
@@ -979,7 +1139,22 @@ def get_clean_media_data(raw_name):
         category = "tv"
         season_no = int(season_only_pattern.group(1))
         clean_title = re.split(r"(?:الموسم|موسم)\s*\d+", raw_name)[0]
-    elif any(word in raw_name for word in ["مسلسل", "موسم","الموسم", "حلقة", "Series", "Season", "Episode", "TV", "tv", "season", "episode"]):
+    elif any(
+        word in raw_name
+        for word in [
+            "مسلسل",
+            "موسم",
+            "الموسم",
+            "حلقة",
+            "Series",
+            "Season",
+            "Episode",
+            "TV",
+            "tv",
+            "season",
+            "episode",
+        ]
+    ):
         category = "tv"
         clean_title = raw_name
 

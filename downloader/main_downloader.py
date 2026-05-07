@@ -11,6 +11,15 @@ import subprocess
 from internetarchive import upload as archive_upload
 from urllib.parse import urlparse
 
+try:
+    from .logger_setup import get_beast_logger
+except ImportError:
+    import sys
+    import os
+
+    sys.path.append(os.path.dirname(__file__))
+    from logger_setup import get_beast_logger
+# استدعاء اللوجر باسم المشروع
 from .processors import (
     tqdm,
     normalize_title,
@@ -34,11 +43,13 @@ from .engine import (
     send_to_telegram,
 )
 
+log = get_beast_logger("GuardianUltra")
+
 # 3. تنظيف استيراد سوبابيز
 try:
     from supabase import create_client, Client as SupabaseClient
 except ImportError:
-    print("❌ خطأ: مكتبة supabase غير مثبتة.")
+    log.error("❌ خطأ: مكتبة supabase غير مثبتة.")
 
 # تفعيل nest_asyncio
 nest_asyncio.apply()
@@ -198,7 +209,6 @@ def save_to_supabase(
                                 break
 
                 if query and query.data:
-                    # ✅ وجدناه! خذ الـ ID
                     m_id = query.data[0]["id"]
 
                     # --- التعديل: قراءة البيانات "لحساب" المتغيرات وليس للتعديل ---
@@ -210,14 +220,17 @@ def save_to_supabase(
                     if existing_data.get("poster_url"):
                         final_poster = existing_data["poster_url"]
 
-                    print(
+                    log.info(
                         f"🛡️ [حماية]: تم العثور على '{c_title}' (ID: {m_id})، تم سحب البيانات للأرشفة دون تعديل."
                     )
                 else:
-                    # ✨ مش موجود خالص؟ إذن أنشئه "مرة واحدة فقط"
-                    print(f"🆕 [إنشاء]: سجل جديد لـ '{c_title}'...")
-                    # هنا نستخدم insert وليس upsert ليكون أكثر أماناً
-                    new_media = supabase.table("medias").insert(media_payload).execute()
+                    # استخدام upsert لضمان أنه في حالة "السباق اللحظي" لا يحدث خطأ 23505
+                    log.info(f"🆕 [إنشاء]: سجل جديد لـ '{c_title}'...")
+                    new_media = (
+                        supabase.table("medias")
+                        .upsert(media_payload, on_conflict="title, year")
+                        .execute()
+                    )
                     if new_media.data:
                         m_id = new_media.data[0]["id"]
 
@@ -233,7 +246,7 @@ def save_to_supabase(
                         target_slug = f"{m_id}-{generated_slug}"
 
                         if current_db_slug != target_slug:
-                            print(f"🔗 تحديث الرابط (Slug) إلى: {target_slug}")
+                            log.info(f"🔗 تحديث الرابط (Slug) إلى: {target_slug}")
                             supabase.table("medias").update({"slug": target_slug}).eq(
                                 "id", m_id
                             ).execute()
@@ -244,7 +257,7 @@ def save_to_supabase(
                 break  # إذا وصلنا هنا بنجاح، نخرج من حلقة المحاولات
             except Exception as e:
                 if attempt < 2:
-                    print(
+                    log.warning(
                         f"⚠️ سوبابيز متعثر في مرحلة التعريف (502)، محاولة {attempt+1}..."
                     )
                     time.sleep(3)
@@ -258,7 +271,7 @@ def save_to_supabase(
             # استخدام رقم الموسم المستخرج بدلاً من الهاردكود
             season_number = extracted_season_no if extracted_season_no else 1
             season_slug = f"{generated_slug}-season-{season_number}"
-            print(f"📡 جاري معالجة الموسم رقم {season_number} للميديا {m_id}...")
+            log.info(f"📡 جاري معالجة الموسم رقم {season_number} للميديا {m_id}...")
             try:
                 # البحث عن الموسم أو إنشاؤه
                 existing_season = (
@@ -270,9 +283,9 @@ def save_to_supabase(
                 )
                 if existing_season.data:
                     s_id = existing_season.data[0]["id"]
-                    print(f"✅ تم العثور على الموسم في القاعدة بـ ID: {s_id}")
+                    log.info(f"✅ تم العثور على الموسم في القاعدة بـ ID: {s_id}")
                 else:
-                    print(f"🆕 الموسم {season_number} غير موجود، جاري إنشاؤه...")
+                    log.info(f"🆕 الموسم {season_number} غير موجود، جاري إنشاؤه...")
                     new_season = (
                         supabase.table("seasons")
                         .insert(
@@ -286,9 +299,9 @@ def save_to_supabase(
                     )
                     if new_season.data:
                         s_id = new_season.data[0]["id"]
-                        print(f"✅ تم إنشاء موسم جديد بـ ID: {s_id}")
+                        log.info(f"✅ تم إنشاء موسم جديد بـ ID: {s_id}")
             except Exception as se:
-                print(f"⚠️ خطأ في إنشاء الموسم: {se}")
+                log.warning(f"⚠️ خطأ في إنشاء الموسم: {se}")
 
         # --- [تعديل جوهري]: إنشاء أو تحديث الحلقة (Episode) قبل الروابط ---
         actual_ep_no = actual_ep_no if actual_ep_no else 1
@@ -355,7 +368,7 @@ def save_to_supabase(
                             on_conflict="media_id, genre_id",
                         ).execute()
                 except Exception as ge:
-                    print(f"⚠️ خطأ في معالجة التصنيف {g_name}: {ge}")
+                    log.warning(f"⚠️ خطأ في معالجة التصنيف {g_name}: {ge}")
 
         # 1. بناء القائمة الآن بعد التأكد من وجود e_id
         link_entries = []
@@ -388,17 +401,17 @@ def save_to_supabase(
                     break  # نجح الأمر، اخرج من حلقة المحاولات لهذا الرابط
                 except Exception as link_err:
                     if attempt < 2:
-                        print(
+                        log.warning(
                             f"⚠️ سوبابيز مشغول (502/Timeout)، محاولة رقم {attempt+1} خلال 3 ثوانٍ..."
                         )
                         time.sleep(3)
                     else:
-                        print(
+                        log.error(
                             f"❌ فشل تسجيل رابط {entry['server_name']} بعد 3 محاولات: {link_err}"
                         )
         return e_id, m_id, meta_story, final_poster
     except Exception as e:
-        print(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
+        log.error(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
         return None, None, meta_story, final_poster
 
 
@@ -453,8 +466,12 @@ SITES_COOKBOOK = {
         "Origin": "https://myvidplay.com/",
     },
     "lulustream": {
-        "Referer": "https://lulustream.com/",
-        "Origin": "https://lulustream.com/  ",
+        "Referer": "https://topcinemaa.com/",  # الخداع بأننا جايين من موقع الأفلام
+        "Origin": "https://topcinemaa.com",
+    },
+    "luluvdo": {
+        "Referer": "https://topcinemaa.com/",
+        "Origin": "https://topcinemaa.com",
     },
     "mixdrop": {
         "Referer": "https://mixdrop.top/",
@@ -471,10 +488,6 @@ SITES_COOKBOOK = {
     "huggingface": {
         "Referer": "https://huggingface.co/",
         "Origin": "https://huggingface.co/",
-    },
-    "luluvdo": {
-        "Referer": "https://luluvdo.com/",
-        "Origin": "https://luluvdo.com/",
     },
     "ok": {
         "Referer": "https://ok.ru",
@@ -496,6 +509,10 @@ SITES_COOKBOOK = {
         "Referer": "https://geo.dailymotion.com/",
         "Origin": "https://geo.dailymotion.com/",
     },
+    "goodstream": {
+        "Referer": "https://goodstream.one/",
+        "Origin": "https://goodstream.one",
+    },
 }
 
 
@@ -514,6 +531,152 @@ def get_smart_headers(url):
     if not found:
         headers.extend(["--add-header", f"Referer: {url}"])
     return headers
+
+
+# --- 1. إضافة دالة الصيد في أعلى ملف سكربت التحميل ---
+async def get_direct_link_via_playwright(embed_url):
+
+    from playwright.async_api import async_playwright
+
+    # تحويل الرابط للمسار المطلوب
+    target_url = embed_url.replace("embed-", "d/").replace(".html", "_h")
+
+    log.info(f"🔍 جاري محاكاة مستخدم حقيقي لصيد الرابط من: {target_url}")
+
+    async with async_playwright() as p:
+        # إعدادات المتصفح لتبدو كجهاز حقيقي
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
+
+        try:
+            # 1. الذهاب للصفحة
+            await page.goto(target_url, wait_until="networkidle", timeout=45000)
+
+            # 2. التعامل مع العداد التنازلي (لو موجود)
+            # هننتظر الزرار يظهر حتى لو اتأخر 15 ثانية
+            btn_selector = "a.btn-gradient.submit-btn"
+
+            log.info("⏳ ننتظر ظهور زر التحميل (قد يستغرق 10 ثوانٍ بسبب العداد)...")
+            await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
+
+            # 3. استخراج الرابط
+            direct_link = await page.get_attribute(btn_selector, "href")
+
+            # تأكيد إضافي: لو الرابط عبارة عن "javascript:void(0)" أو "#"
+            # ده معناه إنه بيحتاج "نقرة" لتوليده
+            if (
+                not direct_link
+                or direct_link.startswith("#")
+                or "javascript" in direct_link
+            ):
+                log.info("🖱️ الرابط يحتاج لنقرة لتوليده، جاري النقر...")
+                await page.click(btn_selector)
+                # ننتظر ثانية لتحديث الرابط
+                await page.wait_for_timeout(2000)
+                direct_link = await page.get_attribute(btn_selector, "href")
+
+            await browser.close()
+
+            if direct_link and "http" in direct_link:
+                log.info(f"✅ تم صيد الكنز بنجاح: {direct_link[:60]}...")
+                return direct_link
+            else:
+                log.error("❌ الرابط المستخرج غير صالح.")
+                return None
+
+        except Exception as e:
+            log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
+            await browser.close()
+            return None
+
+
+async def get_mixdrop_direct_link(embed_url):
+    from playwright.async_api import async_playwright
+
+    target_url = embed_url.replace("/e/", "/f/")
+    if "?download" not in target_url:
+        target_url += "?download"
+
+    log.info(f"🕵️ محاكاة سلوك بشري على: {target_url}")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True
+        )  # يمكن جعلها False لو بتجرب محلياً
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
+
+        try:
+            await page.goto(target_url, wait_until="domcontentloaded")
+            btn_selector = "a.download-btn"
+
+            # رفعنا المدى لـ 10 لضمان وجود محاولات كافية بعد الـ Reload
+            for i in range(1, 11):
+                try:
+                    await page.wait_for_selector(
+                        btn_selector, state="visible", timeout=10000
+                    )
+                    log.info(f"🖱️ نقرة رقم {i}...")
+
+                    # --- ⚡ تعديل الـ Reload الذكي ⚡ ---
+                    if i == 5:
+                        log.info(
+                            "🔄 الموقع يبدو متجمداً.. جاري إعادة تحميل الصفحة (Reload) للتنشيط..."
+                        )
+                        await page.reload(wait_until="domcontentloaded")
+                        await page.wait_for_timeout(3000)
+                        continue
+                    # ----------------------------------
+
+                    try:
+                        async with context.expect_page(timeout=10000) as new_page_info:
+                            await page.click(btn_selector)
+
+                        ad_page = await new_page_info.value
+                        log.info(f"📺 إعلان ظهر، ننتظره قليلاً...")
+                        await page.wait_for_timeout(5000)
+                        await ad_page.close()
+                    except Exception:
+                        log.warning(f"⚠️ النقرة {i} لم تفتح إعلاناً.")
+                    # ----------------------------------
+
+                    await page.bring_to_front()
+
+                    # فحص الرابط المباشر - صيد الدومينات الفرعية الجديدة
+                    href = await page.get_attribute(btn_selector, "href")
+
+                    if href and href.startswith("http"):
+                        # فحص ذكي: هل الرابط يحتوي على كلمة mxcontent (بأي شكل) أو ليس له علاقة بـ mixdrop؟
+                        is_valid_direct = "mxcontent" in href or (
+                            not ("?download" in href or "mixdrop" in href)
+                        )
+
+                        if is_valid_direct:
+                            log.info(f"✅ تم صيد الرابط بنجاح: {href[:60]}...")
+
+                            await browser.close()
+                            return href
+
+                    log.info("⏳ الرابط لم يظهر بعد، ننتظر ثواني للنقرة التالية...")
+                    await page.wait_for_timeout(
+                        5000
+                    )  # زودنا الانتظار لـ 5 ثواني عشان ندي فرصة للسيرفر
+                except Exception as e:
+                    log.warning(f"⚠️ خطأ في المحاولة {i}: {str(e)}")
+                    continue  # لو محاولة فشلت يكمل للي بعدها ميفصلش السكريبت
+
+            await browser.close()
+            return None
+
+        except Exception as e:
+            log.error(f"❌ خطأ أثناء المحاكاة البشرية: {str(e)}")
+            await browser.close()
+            return None
 
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
@@ -550,11 +713,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 resp = client.get(LOGO_URL)
                 with open(LOGO_FILE, "wb") as f:
                     f.write(resp.content)
-            print("✅ اللوجو جاهز ومؤمن في مجلد الأدوات.")
+            log.info("✅ اللوجو جاهز ومؤمن في مجلد الأدوات.")
         except:
             pass
     # هذا السطر سيطبع الآن المسار الحقيقي الصحيح (/content/project في كولاب)
-    print(f"🛠️ مسار العمل الحالي للوحش: {os.getcwd()}")
+    log.info(f"🛠️ مسار العمل الحالي للوحش: {os.getcwd()}")
     # باقي الكود كما هو...
 
     await ensure_dependencies()
@@ -571,19 +734,30 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             else decoded.split("/")[-2].replace("-", " ").replace("فيلم", "").title()
         )
 
-    print(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
+    log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
     # احتفظ بالاسم الأصلي الذي كتبته في التاسك كخطة احتياطية
     original_task_name = str(name).strip()
 
     # استخراج الاسم النظيف للبحث في TMDB (بدلاً من البحث بالاسم الكامل مع رقم الحلقة)
     # التعديل: إذا كان المدخل رابطاً، نمرره كما هو لـ get_movie_data ليتعامل معه
+    # 1. استخراج السنة من الاسم الأصلي (Task Name) لاستخدامها في البحث الدقيق
+    year_match = re.search(r"\b((?:19|20)\d{2})\b", original_task_name)
+    extracted_year = year_match.group(1) if year_match else None
+
     if "http" in original_task_name or original_task_name.startswith(("tt", "tmdb")):
         search_query_clean = original_task_name
     else:
+        # هنا get_clean_media_data ترجع الاسم بدون سنة
         search_query_clean, _, _, _ = get_clean_media_data(original_task_name)
 
-    print(f"🔎 البحث عن: {search_query_clean} ...")
+    log.info(
+        f"🔎 البحث عن: {search_query_clean} "
+        + (f"({extracted_year})" if extracted_year else "")
+        + " ..."
+    )
 
+    # 2. تعديل استدعاء get_movie_data ليدعم السنة (إذا كانت الدالة تدعم ذلك)
+    # ملاحظة: سنمرر السنة للدالة لضمان دقة البحث
     (
         tmdb_id_fetched,
         display_title_tmdb,
@@ -594,7 +768,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         meta_rating,
         meta_runtime,
         meta_year,
-    ) = get_movie_data(search_query_clean if search_query_clean else name)
+    ) = get_movie_data(
+        search_query_clean if search_query_clean else name, year=extracted_year
+    )
 
     # دمج الاسم المجلوب مع تفاصيل الحلقة من التاسك الأصلي
     display_title = display_title_tmdb if display_title_tmdb else original_task_name
@@ -613,9 +789,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     clean_title_search, category_search, current_season_no, current_ep_no = (
         get_clean_media_data(display_title)
     )
-
-    is_batch = False  # سنحددها لاحقاً بعد التحميل أو الفحص
-
     # البحث الذكي عن الميديا (بالاسم المطابق أو المنظف)
     try:
         media_id = None
@@ -653,12 +826,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     .execute()
                 )
                 if ep_query.data:
-                    print(f"✅ [تخطي]: الفيلم '{display_title}' موجود بالفعل!")
+                    log.info(f"✅ [تخطي]: الفيلم '{display_title}' موجود بالفعل!")
                     return
             # للمسلسلات: لا يمكننا الفحص هنا لأننا لا نعرف الحلقات الموجودة في الرابط بعد
             # سيتم الفحص داخل لووب الحلقات لاحقاً
     except Exception as e:
-        print(f"⚠️ فشل فحص التكرار الأولي: {e}")
+        log.warning(f"⚠️ فشل فحص التكرار الأولي: {e}")
 
     # --- 3. حجز مكان أولي (للمسلسلات سيتم تحديثه لاحقاً لكل حلقة) ---
     # إنشاء identifier مؤقت للتحميل
@@ -685,7 +858,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     )
 
     if not e_id:
-        print("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")
+        log.warning("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")
 
     # --- 3. استكمال العمل في حال كان الفيلم جديداً ---
     clean_name = (
@@ -700,10 +873,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     timestamp = int(time.time())
 
     if is_local_file:
-        print(f"♻️ اكتشاف ملف محلي: {url} - سيتم تخطي التحميل.")
+        log.info(f"♻️ اكتشاف ملف محلي: {url} - سيتم تخطي التحميل.")
         actual_downloaded_path = url
     else:
-        print(f"📡 رابط ويب، جاري التجهيز للسحب...")
+        log.info(f"📡 رابط ويب، جاري التجهيز للسحب...")
 
     # إنشاء مجلد العمل
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
@@ -713,7 +886,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
     # --------------------------------------------------------
 
-    print(f"📡 جاري فحص الرابط وبدء السحب...")
+    log.info(f"📡 جاري فحص الرابط وبدء السحب...")
 
     # ══════════════════════════════════════════════════════════════
     # فحص مبكر للرابط مع نظام المحاولات المتكررة (Retries)
@@ -722,20 +895,45 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # بدء عملية التحميل مباشرة (بدون فحص مبكر)
     # ══════════════════════════════════════════════════════════════
     if not is_local_file:
-        print(f"   🚀 [Direct Start] الرابط معتمد — جاري التحميل فوراً...")
+        log.info(f"   🚀 [Direct Start] الرابط معتمد — جاري التحميل فوراً...")
 
     # هنا ييجي كود الـ yt-dlp بتاعك مباشرة
 
     # 1. جلب الهيدرز الذكية بناءً على الرابط الممرر للدالة
+    # --- 2. دمج المنطق داخل دالة التحميل الأساسية ---
+
+    # 1. معالجة روابط VidTube/Lulu
+    if "vidtube.one" in url or "cdn-tube" in url:
+        log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
+        direct_link = await get_direct_link_via_playwright(url)
+        if direct_link:
+            log.info(f"✅ تم صيد الرابط بنجاح! سيتم التحميل الآن.")
+            url = direct_link
+        else:
+            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
+
+    # 2. معالجة روابط MixDrop (باستخدام elif لزيادة الكفاءة)
+    elif "mixdrop" in url:
+        log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
+        direct_link = await get_mixdrop_direct_link(url)
+        if direct_link:
+            log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
+            url = direct_link
+        else:
+            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
+
+    # الآن يكمل الكود بناء الـ cmd بالرابط الجديد (url)
     smart_headers = get_smart_headers(url)
+    # ... باقي كود بناء الـ cmd اللي عندك ...
 
     # 2. بناء أمر الوحش الموحد لضمان تجاوز الحماية في كل الحالات
     cmd = [
         "yt-dlp",
         "--impersonate",
-        "chrome",
+        "chrome",  # تفعيل محاكاة المتصفح باستخدام curl_cffi
         "-v",
         "--no-playlist",
+        "--geo-bypass",  # محاولة تخطي الحظر الجغرافي
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         "--add-header",
@@ -743,8 +941,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "--add-header",
         "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
         "--no-check-certificate",
+        "--retries",
+        "infinite",
         "--socket-timeout",
-        "60",
+        "120",
         "--concurrent-fragments",
         "10",
         "--file-access-retries",
@@ -753,24 +953,28 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         "infinite",
         "--hls-use-mpegts",
     ]
-
     # دمج هيدرز الخداع من الـ Cookbook
     cmd.extend(smart_headers)
-
+    # --- المكاااااان الصحيح للكود الجديد هنا ---
+    if "lulu" in url:
+        # بنجبره يستخدم الـ Referer بتاع موقع الأفلام عشان يفتح السيرفر
+        cmd.extend(["--referer", "https://topcinemaa.com/"])
+        # ملاحظة: شيل سطر الـ cookies لو شغال على Colab لأنه مش هيلاقي كروم هناك
+    # ------------------------------------------
     # دعم إضافي لسيرفرات vidtube و cdn-tube
     if "vidtube" in url or "cdn-tube" in url:
         cmd.extend(["--extractor-args", "jwplayer:base-url=https://vidtube.one/"])
-
-    # إضافة الرابط والمخرجات النهائية
-    # إضافة الرابط والمخرجات النهائية مع ضمان دمج أفضل فيديو وأفضل صوت
-    # تحديد الجودة بذكاء: 1080p بحد أقصى 2GB، وإلا 720p
-    # تحديد الجودة بذكاء: 1080p بمعدل نقل بيانات منخفض، أو 720p كخيار آمن جداً
     cmd.extend(
         [
             "-f",
-            "(bestvideo[height<=1080][filesize<1950M]+bestaudio/best[height<=1080][filesize<1950M]) / (bestvideo[height<=720][filesize<1950M]+bestaudio/best[height<=720][filesize<1950M]) / (bestvideo[height<=480]+bestaudio/best[height<=480]) / best",
+            # الشرط الجديد: ابحث عن أي جودة يكون البُعد الأصغر فيها (width أو height) لا يتعدى 720 أو 1080
+            "(bestvideo[width<=720][height<=1280]/bestvideo[height<=720][width<=1280]+bestaudio/best[width<=720][height<=1280]/best[height<=720][width<=1280]) / "
+            "(bestvideo[width<=1080][height<=1920][filesize<1950M]+bestaudio/best[width<=1080][height<=1920][filesize<1950M]) / "
+            "best",
             "--merge-output-format",
             "mp4",
+            "--max-filesize",
+            "1950M",
             "--post-overwrites",
             "--no-check-certificate",  # زيادة أمان للروابط المحمية
             "--max-filesize",
@@ -779,62 +983,89 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "-o",
             download_path_template,
             "--newline",
-            "--progress-template",
-            "download:[%(progress._percent_str)s]",
         ]
     )
 
     # --- 🟢 منطق التحميل والتعامل الذكي (Async الكامل - الحل الجذري) ---
     if not is_local_file:
-        print(f"🌐 رابط ويب، جاري التحميل بنظام Async Subprocess...")
+        log.info(f"🌐 رابط ويب، جاري التحميل بنظام Async Subprocess...")
 
         # استخدام asyncio لضمان السيطرة الكاملة على العملية
         process = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
         )
 
-        pbar_dl = tqdm(
-            total=100,
+        # استبدل الجزء القديم بهذا
+        from tqdm.notebook import (
+            tqdm as tqdm_notebook,
+        )  # لضمان عملها بشكل تفاعلي في كولاب
+
+        pbar_dl = tqdm_notebook(
+            total=0,
             desc=f"📥 جاري التحميل: {display_title[:20]}",
-            unit="%",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-            mininterval=1.0,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+            # التعديل الجذري: إزالة الألوان المسببة للرموز الغريبة وتوسيع الشريط
+            bar_format="{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
+            ascii=True,  # استخدام التنسيق القياسي لضمان الوضوح التام
         )
 
         last_db_update = 0
 
-        # قراءة المخرجات بشكل غير متزامن (مستحيل يهرب للسطر اللي بعده)
+        # قراءة المخرجات واستخراج البيانات الكاملة (المرونة القصوى)
         while True:
             line = await process.stdout.readline()
             if not line:
                 break
-
             line_str = line.decode().strip()
-            # print(f"DEBUG_LOG: {line_str}")      # السطر ده هيخليك تشوف الـ yt-dlp بيقول إيه بالظبط وهو بيفشل
 
-            # استخراج النسبة
-            match = re.search(r"(\d+(?:\.\d+)?)%", line_str)
-            if match:
-                current_percent = float(match.group(1))
-                pbar_dl.n = current_percent
+            # 1. استخراج النسبة والحجم الكلي لـ tqdm
+            # نمط يدعم: 10.5% of 100.00MiB
+            progress_match = re.search(
+                r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|B)",
+                line_str,
+            )
+            if progress_match:
+                percent = float(progress_match.group(1))
+                total_val = float(progress_match.group(2))
+                unit = progress_match.group(3)
+                mult = {"GiB": 1024**3, "MiB": 1024**2, "KiB": 1024, "B": 1}.get(
+                    unit, 1024**2
+                )
+
+                if pbar_dl.total == 0 or pbar_dl.total != total_val * mult:
+                    pbar_dl.total = total_val * mult
+                pbar_dl.n = (percent / 100) * pbar_dl.total
                 pbar_dl.refresh()
 
-                # تحديث سوبابيز كل 3 ثواني
-                if task_id and (time.time() - last_db_update > 3):
-                    speed_match = re.search(r"(\d+\.?\d+\w+/s)", line_str)
-                    speed_str = (
-                        speed_match.group(1) if speed_match else "Downloading..."
-                    )
+            # 2. تحديث قاعدة البيانات بالسرعة والوقت المتبقي كل 3 ثواني
+            if task_id and (time.time() - last_db_update > 3):
+                speed_match = re.search(r"at\s+([\d\.]+(?:k|M|G)?B/s)", line_str)
+                eta_match = re.search(r"ETA\s+([\d:]+)", line_str)
 
+                percent_now = int(percent) if "percent" in locals() else 0
+                speed_now = speed_match.group(1) if speed_match else "Downloading..."
+                status_txt = f"📥 جاري التحميل: {percent_now}%"
+                if eta_match:
+                    status_txt += f" (متبقي {eta_match.group(1)})"
+
+                try:
                     supabase.table("download_tasks").update(
                         {
-                            "progress_percent": int(current_percent),
-                            "status_message": f"📥 جاري التحميل: {int(current_percent)}%",
-                            "download_speed": speed_str,
+                            "progress_percent": percent_now,
+                            "status_message": status_txt,
+                            "download_speed": speed_now,
                             "status": "processing",
                         }
                     ).eq("id", task_id).execute()
                     last_db_update = time.time()
+                except:
+                    pass
+
+            # 3. فلترة الطباعة: أخطاء فقط
+            if any(x in line_str.upper() for x in ["ERROR", "WARNING", "FAILED"]):
+                log.warning(f"⚠️ ALERT_LOG: {line_str}")
 
         # الانتظار الحقيقي والمطلق لانتهاء العملية
         # الانتظار الحقيقي والمطلق لانتهاء العملية
@@ -843,7 +1074,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         # سطر أمان إضافي: اطبع مخرجات الخطأ لو العملية فشلت
         if process.returncode != 0:
-            print(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
+            log.error(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
         # --- ⚡ التعديل المنقذ للوحش ⚡ ---
 
         await asyncio.sleep(5)
@@ -873,16 +1104,36 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 break  # وجدنا الملف! اخرج من اللوب
 
         if actual_downloaded_path:
-            print(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
+            log.info(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
         else:
-            # طباعة المحتوى للمساعدة في التشخيص لو فشل تاني
-            print(
+            log.error(
                 f"❌ فشل التحميل: المجلد فارغ! المحتوى الموجود: {os.listdir(extract_dir)}"
             )
 
+            # --- 🧹 تنظيف الأشباح فور الفشل ---
+            if media_id:
+                try:
+                    # حذف الميديا لأن التحميل فشل
+                    supabase.table("medias").delete().eq("id", media_id).execute()
+                    log.info(f"🧹 تم حذف سجل الميديا الفارغ (ID: {media_id})")
+
+                    if task_id:
+                        supabase.table("download_tasks").update(
+                            {
+                                "status": "failed",
+                                "status_message": "❌ فشل: المجلد فارغ (رابط مكسور)",
+                            }
+                        ).eq("id", task_id).execute()
+                except Exception as clean_err:
+                    log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
+
+            # بدلاً من continue اللي سببت المشكلة، هنستخدم return
+            # عشان نخرج من "الدالة الحالية" وننهي معالجة الفيلم ده بسلام
+            return
+
     else:
         # حالة الملف المحلي
-        print(f"⚡ تخطي التحميل: الملف موجود محلياً في {url}")
+        log.info(f"⚡ تخطي التحميل: الملف موجود محلياً في {url}")
         actual_downloaded_path = url
 
         # تعريف متغير وهمي للعملية لتجنب خطأ الـ NameError لاحقاً
@@ -909,16 +1160,16 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         is_rar = "rar archive" in file_info or "zip archive" in file_info
 
         if is_rar and not is_local_file:
-            print("🔓 تم اكتشاف ملف مضغوط حقيقي، جاري البدء في فك التجميع...")
+            log.info("🔓 تم اكتشاف ملف مضغوط حقيقي، جاري البدء في فك التجميع...")
             # (كود فك الضغط واستدعاء run_pyramid_tasks هنا)
         else:
             if is_local_file:
-                print(f"🎥 معالجة ملف الفيديو المحلي الجاهز: {name}")
+                log.info(f"🎥 معالجة ملف الفيديو المحلي الجاهز: {name}")
             else:
-                print(f"🎥 تم تحميل فيديو مباشر بنجاح: {name}")
+                log.info(f"🎥 تم تحميل فيديو مباشر بنجاح: {name}")
 
         if is_rar:
-            print(f"🔓 تم اكتشاف ملف مضغوط حقيقي، جاري فك الضغط...")
+            log.info(f"🔓 تم اكتشاف ملف مضغوط حقيقي، جاري فك الضغط...")
             subprocess.run(
                 [
                     "unrar",
@@ -932,7 +1183,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             if os.path.exists(actual_downloaded_path):
                 os.remove(actual_downloaded_path)
         else:
-            print(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
+            log.info(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
             # نقل الفيديو وتغيير اسمه للاسم النظيف للعمل
             # بدلاً من فرض .mp4، استخرج الامتداد الأصلي
             _, file_extension = os.path.splitext(actual_downloaded_path)
@@ -946,7 +1197,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         # 1. جرد الفيديوهات المفكوكة
         # 1. جرد الفيديوهات بذكاء
         all_contents = os.listdir(extract_dir)
-        print(f"DEBUG: فحص المجلد {extract_dir} وجدنا فيه: {all_contents}")
+        # #print(f"DEBUG: فحص المجلد {extract_dir} وجدنا فيه: {all_contents}")
 
         videos = [
             os.path.join(extract_dir, f)
@@ -961,18 +1212,22 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             for f in all_contents:
                 full_p = os.path.join(extract_dir, f)
                 if os.path.isfile(full_p) and os.path.getsize(full_p) > 5 * 1024 * 1024:
-                    print(f"🎯 تم العثور على الفيديو بالحجم وليس الامتداد: {f}")
+                    log.info(f"🎯 تم العثور على الفيديو بالحجم وليس الامتداد: {f}")
                     videos.append(full_p)
 
         videos.sort()
-        print(f"DEBUG: الملفات الموجودة في المجلد حالياً: {os.listdir(extract_dir)}")
+        log.debug(
+            f"DEBUG: الملفات الموجودة في المجلد حالياً: {os.listdir(extract_dir)}"
+        )
         if not videos:
-            print("❌ لم يتم العثور على فيديوهات!")
+            log.error("❌ لم يتم العثور على فيديوهات!")
             return
 
         # --- ⚡ التعديل الجوهري: تحويل المسار لو اكتشفنا أكتر من حلقة ⚡ ---
         if len(videos) > 1:
-            print(f"🎊 كنز! تم اكتشاف {len(videos)} حلقة. جاري إعادة توزيع المهام...")
+            log.info(
+                f"🎊 كنز! تم اكتشاف {len(videos)} حلقة. جاري إعادة توزيع المهام..."
+            )
 
             new_task_list = []
             for vid in videos:
@@ -1005,9 +1260,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             return  # إنهاء الدالة الحالية هنا لأنها "فرخت" مهام جديدة
         # --- نهاية التعديل ---
         # 2. جلب البيانات الذكية (الاعتماد الكلي على قاعدة البيانات)
-        print(f"✅ تم اعتماد البيانات المجلوبة مسبقاً لـ: {display_title}")
+        log.info(f"✅ تم اعتماد البيانات المجلوبة مسبقاً لـ: {display_title}")
 
-        print(
+        log.info(
             f"✅ تم اكتشاف {len(videos)} ملف. جاري المعالجة والرفع باسم: {display_title}"
         )
         # 3. تحديد الحجم الكلي لكل حلقة
@@ -1020,7 +1275,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     extract_dir_current, f"disguised_{idx}.mp4"
                 )
 
-                print(f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}")
+                log.info(
+                    f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}"
+                )
 
                 # تأكد أن LOGO_FILE معرف في بداية السكريبت
                 # أولاً: نحصل على مدة الفيديو بالثواني (لإظهار النص في نصف الوقت بالضبط)
@@ -1040,19 +1297,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 # ثانياً: أمر FFmpeg المطور
                 ffmpeg_cmd = (
                     f'ffmpeg -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
-                    f'"[0:v]setpts=0.99*PTS,scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.03:contrast=1.02[v_speed]; '
+                    f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.05:contrast=1.03[v_final]; '
                     # اللوجو النصي (أول 10 ثواني)
-                    f"[v_speed]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
+                    f"[v_final]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
                     # النص العربي (منتصف الفيلم)
                     f"[txt1]drawtext=text='{bidi_text}':fontfile=/content/arial.ttf:fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
                     f"enable='between(t,{mid_time},{mid_time+10})'[txt2]; "
-                    # سطر التحكم في شفافية اللوجو الصوري (1.0 تعني ظهور كامل بدون باهتان)
+                    # سطر التحكم في شفافية اللوجو الصوري
                     f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
-                    f"[txt2][logo_bright]overlay=W-w-20:20[outv]; "
-                    f'[0:a]atempo=1.0101[outa]" '
-                    f'-map "[outv]" -map "[outa]" '
-                    f"-r 23.976 "
-                    f"-c:v libx264 -preset superfast -crf 24 -maxrate 2.1M -bufsize 4.2M -pix_fmt yuv420p "
+                    f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
+                    f'" '  # قفلنا الفلتر كومبلكس هنا
+                    f'-map "[outv]" -map 0:a '  # سحبنا الصوت الأصلي (0:a) كما هو لضمان التزامن 100%
+                    f"-c:v libx264 -preset ultrafast -crf 26 -maxrate 1.8M -bufsize 3.6M -threads 0 -pix_fmt yuv420p "
                     f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
                 )
 
@@ -1063,10 +1319,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 if os.path.exists(disguised_file):
                     os.remove(vid_path)
                     os.rename(disguised_file, vid_path)
-                    print(f"✅ تم تحصين الحلقة {idx} بنجاح!")
+                    log.info(f"✅ تم تحصين الحلقة {idx} بنجاح!")
 
             except Exception as e:
-                print(f"⚠️ خطأ في التمويه، سيتم الرفع الأصلي: {e}")
+                log.warning(f"⚠️ خطأ في التمويه، سيتم الرفع الأصلي: {e}")
             # --- [ نهاية منطقة التحصين - السكربت سيكمل الرفع الآن بالملف الجديد ] ---
 
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
@@ -1142,90 +1398,115 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                                 )
                                 # إذا كانت هناك روابط، إذن هي مكررة فعلاً
                                 if links_query.data:
-                                    print(
+                                    log.info(
                                         f"✅ [تخطي]: الحلقة {c_ep_l} من الموسم {c_season_l} موجودة بالفعل ولها روابط!"
                                     )
                                     continue
                                 else:
                                     # إذا لم تكن هناك روابط، فهذا يعني أنها الحلقة التي ننشئها الآن أو حلقة فشلت سابقاً
-                                    print(
+                                    log.info(
                                         f"🔄 [تحديث]: الحلقة {c_ep_l} موجودة بدون روابط، جاري العمل عليها..."
                                     )
                 except Exception as e:
-                    print(f"⚠️ فشل فحص تكرار الحلقة: {e}")
+                    log.warning(f"⚠️ فشل فحص تكرار الحلقة: {e}")
 
             file_name = f"{clean_name}.mp4"
             episode_label = (
                 f"{loop_display_title}" if len(videos) == 1 else f"{loop_display_title}"
             )
-            identifier = f"egy-pyr-{media_id}-{e_id}-{idx}".replace("_", "-").replace(" ", "-")
-            # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
+            import random
+            import string
+
+            # توليد 4 رموز عشوائية فقط لكسر "بصمة" الاسم مع الحفاظ على أرقامك
+            rand_id = "".join(
+                random.choices(string.ascii_lowercase + string.digits, k=4)
+            )
+            # المعرف الجديد يجمع بين الرمز العشوائي وقيمك الأساسية
+            # تنسيق يدمج الأرقام بدون شرطات كثيرة لضمان القبول
+            identifier = f"v{rand_id}x{media_id}x{e_id}x{idx}"  # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
 
             # 3. الرفع للأرشيف (بالاسم النظيف)
             # 3. الرفع للأرشيف
-            print(f"📦 أرشفة النسخة الكاملة: {episode_label}")
-            archive_url = "Failed_Archive_Upload"
+            log.info(f"📦 أرشفة النسخة الكاملة: {episode_label}")
+            #archive_url = "Failed_Archive_Upload"
+            archive_url = "Disabled" # تغيير القيمة الافتراضية
+            final_file_name = f"f_{media_id}_{e_id}_{idx}.mp4"
+            
             try:
-                # --- أضف/عدل هذا الجزء هنا ---
-                if task_id:
-                    supabase.table("download_tasks").update(
-                        {
-                            "status_message": "☁️ جاري الأرشفة (النسخة الخام)...",
-                            "progress_percent": 92,
-                        }
-                    ).eq("id", task_id).execute()
-                # -------------------------
-                # تحديث الحالة للمتصفح: بدء الرفع للأرشيف
-                if e_id:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "☁️ جاري الرفع للأرشيف (نسخة احتياطية)",
-                            "progress_percent": 0,  # تصفير العداد للبدء في حساب الرفع
-                        }
-                    ).eq("id", e_id).execute()
+                pass # إضافة pass لتجاوز هذا الجزء تماماً
+                # # --- أضف/عدل هذا الجزء هنا ---
+                # if task_id:
+                #     supabase.table("download_tasks").update(
+                #         {
+                #             "status_message": "☁️ جاري الأرشفة (النسخة الخام)...",
+                #             "progress_percent": 92,
+                #         }
+                #     ).eq("id", task_id).execute()
+                # # -------------------------
+                # # تحديث الحالة للمتصفح: بدء الرفع للأرشيف
+                # if e_id:
+                #     supabase.table("episodes").update(
+                #         {
+                #             "status_message": "☁️ جاري الرفع للأرشيف (نسخة احتياطية)",
+                #             "progress_percent": 0,  # تصفير العداد للبدء في حساب الرفع
+                #         }
+                #     ).eq("id", e_id).execute()
 
-                pbar_archive = tqdm(
-                    total=os.path.getsize(vid_path),
-                    desc=f"☁️ أرشيف (كامل)",
-                    unit="B",
-                    unit_scale=True,
-                    mininterval=3.0,  # تحديث كل 3 ثوانٍ فقط (مثالي للسرعات البطيئة في كولاب)
-                    maxinterval=10.0,
-                    ascii=" #",  # استخدام رموز بسيطة لا تربك المتصفح
-                )
-                # استبدل سطر إنشاء ProgressStream بـ:
-                stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
-                # التعديل: نضمن أن اسم الملف داخل الأرشيف هو اسم الفيلم وليس الرابط أو اسم عشوائي
-                # بدلاً من استخدام clean_name، سنستخدم نفس هيكلة الـ IDs لاسم الملف
-                final_file_name = f"vid__{media_id}_{e_id}_{idx}.mp4"
+                # pbar_archive = tqdm(
+                #     total=os.path.getsize(vid_path),
+                #     desc=f"☁️ أرشيف (كامل)",
+                #     unit="B",
+                #     unit_scale=True,
+                #     mininterval=3.0,  # تحديث كل 3 ثوانٍ فقط (مثالي للسرعات البطيئة في كولاب)
+                #     maxinterval=10.0,
+                #     ascii=" █",  # استبدال الهاشتاج بمربعات ناعمة
+                #     colour="green",  # اختيار لون الشريط (يعمل في كولاب)
+                # )
 
-                archive_upload(
-                    identifier,
-                    files={final_file_name: stream},  # هنا السر!
-                    metadata={"title": episode_label, "mediatype": "movies"},
-                    access_key=ARCHIVE_ACCESS_KEY,
-                    secret_key=ARCHIVE_SECRET_KEY,
-                    verbose=False,
-                )
-                stream.close()
-                pbar_archive.close()
-                archive_url = f"https://archive.org/download/{identifier}/{final_file_name}"  # Get the archive URL after successful upload
-                direct_download_url = (
-                    f"https://archive.org/download/{identifier}/{final_file_name}"
-                )
-                # حقن الرابط المباشر في قاعدة البيانات يدوياً
-                supabase.table("links").insert(
-                    {
-                        "episode_id": e_id,
-                        "url": direct_download_url,
-                        "server_name": "archive",
-                        "last_check_status": "valid",
-                    }
-                ).execute()
-                print(f"✅ تم ربط الرابط المباشر في سوبابيز: {direct_download_url}")
+                # # اسم ملف مشفر تماماً
+                # # 1. إنشاء الـ stream وربطه بملف الفيديو
+                # stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
+                # # 2. تمرير الـ stream مباشرة لمكتبة الرفع
+                # # الـ stream الآن هو "المخبر" الذي يخبر pbar بكل بايت يخرج
+               
+            #try:
+              
+                #     archive_upload(
+                #         identifier,
+                #         files={
+                #             final_file_name: stream
+                #         },  # 👈 التعديل هنا: استخدم stream وليس f_data
+                #         # إخفاء اسم الفيلم من البيانات الوصفية (Metadata)
+                #         metadata={
+                #             "title": f"M-{media_id}-E{e_id}",
+                #             "mediatype": "movies",
+                #             "description": f"Internal ID: {media_id}_{e_id}_{idx}",
+                #         },
+                #         access_key=ARCHIVE_ACCESS_KEY,
+                #         secret_key=ARCHIVE_SECRET_KEY,
+                #         verbose=False,
+                #     )
+                # finally:
+                #     stream.close()  # التأكد من إغلاق الملف بعد الرفع
+                # stream.close()
+                # pbar_archive.close()
+                # archive_url = f"https://archive.org/download/{identifier}/{final_file_name}"  # Get the archive URL after successful upload
+                # direct_download_url = (
+                #     f"https://archive.org/download/{identifier}/{final_file_name}"
+                # )
+                # # حقن الرابط المباشر في قاعدة البيانات يدوياً
+                # supabase.table("links").insert(
+                #     {
+                #         "episode_id": e_id,
+                #         "url": direct_download_url,
+                #         "server_name": "archive",
+                #         "last_check_status": "valid",
+                #     }
+                # ).execute()
+                # log.info(f"✅ تم ربط الرابط المباشر في سوبابيز: {direct_download_url}")
             except Exception as e:
-                print(f"❌ خطأ أرشيف: {e}")
-                
+                log.error(f"❌ خطأ أرشيف: {e}")
+
             telegram_direct = None  # تعريف أولي لضمان عدم حدوث NameError
             # 4. الرفع لتليجرام (بالاسم النظيف) مع حماية كاملة
             try:
@@ -1238,7 +1519,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).eq("id", e_id).execute()
 
                 if file_size_gb > 1.9:
-                    print(f"✂️ الملف كبير ({file_size_gb:.2f}GB)، جاري التقسيم...")
+                    log.info(f"✂️ الملف كبير ({file_size_gb:.2f}GB)، جاري التقسيم...")
                     duration_cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{vid_path}"'
                     total_seconds = float(
                         subprocess.check_output(duration_cmd, shell=True)
@@ -1266,18 +1547,22 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 else:
                     # رفع الملف ككتلة واحدة إذا كان أصغر من 1.9 جيجا
                     # رفع الملف واستقبال الرابط المباشر في المتغير المطلوب
-                    telegram_direct = await upload_to_telegram_only(vid_path, episode_label, episode_id=e_id)
+                    telegram_direct = await upload_to_telegram_only(
+                        vid_path, episode_label, episode_id=e_id
+                    )
 
             except Exception as e:
-                print(f"❌ فشل رفع تليجرام: {e}")
+                log.warning(
+                    f"⚠️ تنبيه: فشل رفع تليجرام ({e})، لكن الوحش مكمل للسيرفرات التانية..."
+                )
                 if e_id:
                     supabase.table("episodes").update(
                         {
-                            "status_message": "❌ فشل في مرحلة تليجرام",
-                            "download_speed": "Error",
+                            "status_message": "⚠️ تليجرام فشل - جاري الرفع للسيرفرات البديلة",
                         }
-                    ).eq("id", e_id).execute()
-                continue  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
+                    ).eq(
+                        "id", e_id
+                    ).execute()  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
 
             # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
             # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
@@ -1291,7 +1576,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         }
                     ).eq("id", task_id).execute()
                 # ------------------------------------
-                print(
+                log.info(
                     f"🚀 البدء في الرفع المتوازي الخماسي (VK + Voe + Dood + Tape + Lulu)..."
                 )
 
@@ -1303,18 +1588,29 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
                 # --- ⚡ التحول للحل البديل (Telegram Fallback) ⚡ ---
-                # نتحقق: هل الأرشيف نجح؟ (لو archive_url لا يحتوي على رابط صحيح، نستخدم تليجرام)
+                if not (archive_url and "archive.org" in archive_url):
+                    retry_wait = 0
+                    while not telegram_direct and retry_wait < 2:
+                        log.info(f"⏳ انتظار رابط تليجرام.. محاولة {retry_wait+1}")
+                        await asyncio.sleep(5)
+                        retry_wait += 1 
+
                 if archive_url and "archive.org" in archive_url:
                     remote_source = identifier
-                    print(f"✅ المصدر المعتمد للرفع: Archive.org ({identifier})")
+                    log.info(f"✅ المصدر المعتمد للرفع: Archive.org ({identifier})")
                 elif telegram_direct:
                     remote_source = telegram_direct
-                    print(f"⚠️ تحذير: الأرشيف معطل.. تم استخدام رابط Telegram المباشر كمصدر!")
+                    log.warning(
+                        f"⚠️ تحذير: الأرشيف معطل.. تم استخدام رابط Telegram المباشر كمصدر!"
+                    )
                 else:
                     remote_source = None
-                    print("❌ خطأ قاتل: لا يوجد مصدر (أرشيف أو تليجرام) للرفع المتوازي!")
-                    
-                    
+                    log.error(
+                        "❌ خطأ قاتل: لا يوجد مصدر (أرشيف أو تليجرام) للرفع المتوازي!"
+                    )
+
+                log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
+
                 await asyncio.sleep(10)
                 # 1. تحضير مهام الريموت باستخدام المصدر المتاح (أرشيف أو تليجرام)
                 if remote_source:
@@ -1328,17 +1624,21 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         st_login, st_key, remote_source, final_file_name
                     )
                     await asyncio.sleep(30)
-                    task_lulu = upload_to_lulustream(lu_key, remote_source, final_file_name)
+                    task_lulu = upload_to_lulustream(
+                        lu_key, remote_source, final_file_name
+                    )
                 else:
                     # في حالة انعدام المصادر، نضع مهام وهمية تعيد None
-                    task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(0, result=None)
+                    task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(
+                        0, result=None
+                    )
 
                 # 2. تحضير مهمة VK (رفع محلي ثقيل لا يحتاج لرابط ريموت)
                 loop = asyncio.get_event_loop()
                 task_vk = loop.run_in_executor(
                     None, upload_to_vk_local, episode_label, vid_path
                 )
-                
+
                 # 3. إطلاق الصواريخ الخمسة معاً وانتظار الجميع
                 # الترتيب مهم جداً لاستلام النتائج بشكل صحيح
                 vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
@@ -1355,7 +1655,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         {"episode_id": e_id, "server_name": "vk", "url": vk_url},
                         on_conflict="episode_id, server_name",
                     ).execute()
-                    print(f"✅ VK Link Saved to Supabase!")
+                    log.info(f"✅ VK Link Saved to Supabase!")
 
                 # نتائج Voe
                 voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
@@ -1364,7 +1664,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     f"https://voe.sx/{file_id}/download" if file_id else "Failed"
                 )  # أضف هذا السطر
                 if file_id:
-                    print(f"✅ Voe Saved! ID: {file_id}")
+                    log.info(f"✅ Voe Saved! ID: {file_id}")
 
                 # نتائج DoodStream
                 if d_url:
@@ -1372,7 +1672,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         {"episode_id": e_id, "server_name": "doodstream", "url": d_url},
                         on_conflict="episode_id, server_name",
                     ).execute()
-                    print(f"✅ DoodStream Saved!")
+                    log.info(f"✅ DoodStream Saved!")
 
                 # نتائج Streamtape
                 if s_url:
@@ -1380,7 +1680,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         {"episode_id": e_id, "server_name": "streamtape", "url": s_url},
                         on_conflict="episode_id, server_name",
                     ).execute()
-                    print(f"✅ Streamtape Saved!")
+                    log.info(f"✅ Streamtape Saved!")
 
                 # نتائج LuluStream (إضافة الحفظ لسوبابيز)
                 if lu_url:
@@ -1392,7 +1692,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         },
                         on_conflict="episode_id, server_name",
                     ).execute()
-                    print(f"✅ LuluStream Saved!")
+                    log.info(f"✅ LuluStream Saved!")
 
             try:
                 # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
@@ -1414,7 +1714,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     duration_iso=meta_duration,
                 )
             except Exception as e:
-                print(f"⚠️ فشل تحديث ساب باز الأولي: {e}")
+                log.warning(f"⚠️ فشل تحديث ساب باز الأولي: {e}")
 
             # --- 9. الرفع لـ MixDrop (ضع الكود الجديد هنا) ---
             try:
@@ -1432,9 +1732,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
                         on_conflict="episode_id, server_name",
                     ).execute()
-                    print(f"✅ تم حفظ رابط MixDrop")
+                    log.info(f"✅ تم حفظ رابط MixDrop")
             except Exception as e:
-                print(f"⚠️ فشل MixDrop: {e}")
+                log.warning(f"⚠️ فشل MixDrop: {e}")
 
             # --- التحديث النهائي الشامل لجدول الحلقات (خارج الـ try الخاص بـ دود ستريم) ---
             # --- التحديث النهائي الشامل لجدول الحلقات ---
@@ -1461,6 +1761,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 # --- ⚡ بلوك النجاح (يجب أن يكون هنا وليس في الـ except) ⚡ ---
 
                 # 2. تحضير بيانات تليجرام من الذاكرة الحية
+                # 2. تحضير بيانات تليجرام من الذاكرة الحية (زي ما هي)
                 row_data_for_tg = {
                     "title": loop_display_title,
                     "story": meta_story if meta_story else "لا يوجد وصف متاح حالياً.",
@@ -1469,46 +1770,97 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     "year": meta_year,
                 }
 
-                # 3. إرسال تمبلت تليجرام
+                # 3. إرسال تمبلت تليجرام (التعديل هنا)
+                # بنبعت النوع الحقيقي اللي "الوحش" عرفه من TMDB أو من فحص الرابط
                 status = send_to_telegram(
                     row=row_data_for_tg,
-                    content_type="MOVIE" if "فيلم" in display_title else "SERIES",
+                    content_type=category_search,  # <--- استخدم المتغير ده بدل الشرط اليدوي
                     action_text="المشاهدة",
-                    post_url="https://egypyramid.vercel.app/",
-                    lang_val="مترجم / مدبلج",
+                    post_url=final_poster,  # يفضل وضع رابط المقال الفعلي لو متاح
+                    lang_val="لغة أصلية (مترجم)",
                 )
 
                 if status:
-                    print(f"✅ كولاب أرسل تمبلت تليجرام بنجاح")
+                    log.info(f"✅ كولاب أرسل تمبلت تليجرام بنجاح")
 
-                # 4. تفعيل الجاهزية بالـ ID المباشر (القاضية)
+                # 4. فحص الجودة قبل تفعيل الجاهزية (المنطق الجديد)
+                quality_pass = False
                 if media_id:
-                    supabase.table("medias").update({"is_ready": True}).eq(
-                        "id", media_id
-                    ).execute()
-                    print(f"🚀 تم إطلاق إشارة الجاهزية للميديا رقم: {media_id}")
+                    # التحقق من وجود 3 سيرفرات على الأقل
+                    link_check = (
+                        supabase.table("links")
+                        .select("id", count="exact")
+                        .eq("episode_id", e_id)
+                        .execute()
+                    )
+                    links_count = (
+                        link_check.count if link_check.count is not None else 0
+                    )
 
-                # 5. إغلاق المهمة في download_tasks
+                    # التحقق من وجود بوستر ووصف (ليسوا فارغين)
+                    has_metadata = bool(meta_story and meta_story.strip()) and bool(
+                        final_poster and final_poster.strip()
+                    )
+
+                    # المنطق الجديد: النجاح يعتمد على الروابط فقط، والجاهزية تعتمد على الكل
+                    if links_count >= 3:
+                        quality_pass = True  # اعتبر المهمة نجحت طالما فيه لينكات
+
+                        if has_metadata:
+                            # لو فيه لينكات + داتا = أطلق الجاهزية فوراً
+                            supabase.table("medias").update({"is_ready": True}).eq(
+                                "id", media_id
+                            ).execute()
+                            log.info(
+                                f"🚀 تم إطلاق إشارة الجاهزية الكاملة (سيرفرات: {links_count})"
+                            )
+                        else:
+                            # لو فيه لينكات بس مفيش داتا = سيبها False واطبع تحذير
+                            log.warning(
+                                f"🟡 تم الحفظ بنجاح ولكن بدون جاهزية (نقص في الصورة أو الوصف)"
+                            )
+                    else:
+                        quality_pass = False  # هنا فعلاً فشل لأن مفيش لينكات كافية
+
+                # 5. إغلاق المهمة (حذف فقط في حالة انعدام الروابط)
                 if task_id:
-                    supabase.table("download_tasks").update(
-                        {
-                            "status": "completed",
-                            "progress_percent": 100,
-                            "status_message": "✅ اكتملت جميع المراحل بنجاح!",
-                        }
-                    ).eq("id", task_id).execute()
+                    if media_id and not quality_pass:
+                        # الحذف هنا فقط لو السيرفرات أقل من 3
+                        supabase.table("medias").delete().eq("id", media_id).execute()
+                        log.warning(f"🗑️ تم حذف الميديا لعدم وجود روابط كافية.")
+
+                        supabase.table("download_tasks").update(
+                            {
+                                "status": "failed",
+                                "status_message": "❌ فشل: السيرفرات أقل من 3",
+                            }
+                        ).eq("id", task_id).execute()
+                    else:
+                        # هنا هيدخل لو quality_pass بـ True (سواء بـ is_ready أو لأ)
+                        msg = (
+                            "✅ اكتملت بنجاح!"
+                            if has_metadata
+                            else "⚠️ اكتملت بنجاح (يرجى إضافة الصورة والوصف يدوياً)"
+                        )
+                        supabase.table("download_tasks").update(
+                            {
+                                "status": "completed",
+                                "progress_percent": 100,
+                                "status_message": msg,
+                            }
+                        ).eq("id", task_id).execute()
 
             except Exception as e:
                 # الـ except دي وظيفتها تبلغك لو الـ try اللي فوق فشلت
-                print(f"❌ فشل التحديث النهائي أو الإرسال: {e}")
+                log.error(f"❌ فشل التحديث النهائي أو الإرسال: {e}")
 
             # 6. تنظيف الملف المحلي (خارج الـ try/except لضمان التنفيذ)
             if os.path.exists(vid_path):
                 try:
                     os.remove(vid_path)
-                    print(f"🗑️ تم تنظيف الملف المحلي: {os.path.basename(vid_path)}")
+                    log.info(f"🗑️ تم تنظيف الملف المحلي: {os.path.basename(vid_path)}")
                 except Exception as e:
-                    print(f"⚠️ لم يتم مسح الملف المؤقت: {e}")
+                    log.warning(f"⚠️ لم يتم مسح الملف المؤقت: {e}")
 
             # --- هذا هو المكان الصحيح للكود الجديد ---
             # تحديث الحالة النهائية للحلقة (بمحاذاة بلوك الـ try/except بالأعلى)
@@ -1526,12 +1878,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         # --- خارج لووب الحلقات: مسح المجلد بالكامل ---
         if os.path.exists(extract_dir):
             shutil.rmtree(extract_dir)
-        print(f"\n✨ المهمة انتهت بنجاح!")
+        log.info(f"\n✨ المهمة انتهت بنجاح!")
+        time.sleep(30)  # انتظار 20 ثانية قبل الاغلاق
 
 
 async def run_pyramid_tasks(task_list):
     if not task_list:
-        print("⚠️ تنبيه: قائمة المهام فارغة!")
+        log.warning("⚠️ تنبيه: قائمة المهام فارغة!")
         return
 
     for i, task in enumerate(task_list, 1):
@@ -1541,18 +1894,18 @@ async def run_pyramid_tasks(task_list):
         if not url:
             continue
 
-        print(f"\n🎬 معالجة ({i}/{len(task_list)}): {name}")
+        log.info(f"\n🎬 معالجة ({i}/{len(task_list)}): {name}")
         try:
             # التأكد إن الوحش هيستلم الرابط أو المسار صح
             await pyramid_ultimate_beast(url, name)
         except Exception as e:
-            print(f"❌ خطأ في '{name}': {e}")
+            log.error(f"❌ خطأ في '{name}': {e}")
 
 
 # التعديل المطلوب لضمان الاستقلالية التامة
 async def start_download_process(url, name):
     """المدخل الرئيسي - يدعم كاجل، كولاب، والجهاز المحلي"""
-    print(f"\n🚀 انطلاق الوحش لمعالجة: {name}")
+    log.info(f"\n🚀 انطلاق الوحش لمعالجة: {name}")
     try:
         # 1. فحص البيئة وتحديد المسار الآمن للكتابة
         if os.path.exists("/kaggle/working"):
@@ -1564,10 +1917,10 @@ async def start_download_process(url, name):
 
         # 2. تغيير المسار والطباعة للتأكد
         os.chdir(target_path)
-        print(f"📂 بيئة العمل الحالية: {os.getcwd()}")
+        log.info(f"📂 بيئة العمل الحالية: {os.getcwd()}")
 
         # 3. انطلاق المحرك
         await pyramid_ultimate_beast(url, name)
 
     except Exception as e:
-        print(f"❌ خطأ كارثي في معالجة '{name}': {e}")
+        log.error(f"❌ خطأ كارثي في معالجة '{name}': {e}")
