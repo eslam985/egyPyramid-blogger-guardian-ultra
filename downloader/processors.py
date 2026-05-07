@@ -6,7 +6,21 @@ import asyncio
 import httpx
 import urllib.parse
 import requests
-from google import genai
+try:
+    from .logger_setup import get_beast_logger
+except ImportError:
+    import sys
+    import os
+log = get_beast_logger("GuardianUltra")
+try:
+    from google import genai
+except ImportError:
+    import sys
+    # محاولة إجبار بايثون على رؤية المكتبة الجديدة إذا حدث تضارب في الأسماء
+    try:
+        import google.genai as genai
+    except ImportError:
+        log.error("❌ مكتبة google-genai غير مثبتة في النظام!")
 from deep_translator import GoogleTranslator
 from functools import partial
 from .engine import ProgressStream
