@@ -987,8 +987,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         cmd.extend(["--extractor-args", "jwplayer:base-url=https://vidtube.one/"])
     cmd.extend(
         [
-            "--quiet",
-            "--no-warnings",
             "-f",
             # الشرط الجديد: ابحث عن أي جودة يكون البُعد الأصغر فيها (width أو height) لا يتعدى 720 أو 1080
             "(bestvideo[width<=720][height<=1280]/bestvideo[height<=720][width<=1280]+bestaudio/best[width<=720][height<=1280]/best[height<=720][width<=1280]) / "
@@ -1019,9 +1017,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         from tqdm import tqdm as tqdm_std
 
         last_db_update = 0
-        last_log_time = 0
-        last_percent_log = -1
+        last_percent_log = -1  # <--- ضيف السطر ده هنا
 
+        # قراءة المخرجات واستخراج البيانات الكاملة
         # قراءة المخرجات واستخراج البيانات الكاملة
         while True:
             line = await process.stdout.readline()
@@ -1029,75 +1027,52 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 break
             line_str = line.decode().strip()
 
-            # 1. استخراج النسبة والحجم الكلي
+            # 1. استخراج النسبة، الحجم الكلي، السرعة، والوقت المتبقي
+            # النمط ده بيصيد السطر الكامل من yt-dlp
             progress_match = re.search(
-                r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|B)",
+                r"\[download\]\s+(\d+\.\d+)%\s+of\s+([\d\w\.]+)\s+at\s+([\d\w\./s]+)\s+ETA\s+([\d:]+)",
                 line_str,
             )
-            
-            if progress_match:
-                percent = float(progress_match.group(1))
-                percent_int = int(percent)
-                total_str = f"{progress_match.group(2)}{progress_match.group(3)}"
-                
-                # طباعة اللوج فقط كل 10% أو كل 20 ثانية لمنع تكرار السطور
-                now = time.time()
-                if (percent_int % 10 == 0 and percent_int != last_percent_log) or (now - last_log_time > 20):
-                    print(f"📥 {display_title[:20]}: {percent_int}% of {total_str}")
-                    last_percent_log = percent_int
-                    last_log_time = now
 
-            # 1. استخراج النسبة والحجم الكلي لـ tqdm
-            # نمط يدعم: 10.5% of 100.00MiB
-            progress_match = re.search(
-                r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|B)",
-                line_str,
-            )
             if progress_match:
-                percent = float(progress_match.group(1))
-                total_val = float(progress_match.group(2))
-                unit = progress_match.group(3)
-                mult = {"GiB": 1024**3, "MiB": 1024**2, "KiB": 1024, "B": 1}.get(
-                    unit, 1024**2
+                percent = progress_match.group(1)
+                total = progress_match.group(2)
+                speed = progress_match.group(3)
+                eta = progress_match.group(4)
+                percent_int = int(float(percent))
+
+                # --- السحر هنا: التحديث في سطر واحد فقط في الـ Logs ---
+                # نستخدم \r للرجوع لأول السطر و \033[K لمسح الكلام القديم
+                sys.stdout.write(
+                    f"\r📥 {display_title[:15]}.. | {percent}% of {total} | ⚡ {speed} | ⏳ ETA: {eta} \033[K"
                 )
+                sys.stdout.flush()
 
-                if pbar_dl.total == 0 or pbar_dl.total != total_val * mult:
-                    pbar_dl.total = total_val * mult
-                pbar_dl.n = (percent / 100) * pbar_dl.total
-                # حذفنا الـ refresh عشان tqdm تلتزم بالـ mininterval اللي حددناه فوق
+                # 2. تحديث قاعدة البيانات كل 5 ثواني (عشان منضغطش على Supabase)
+                now = time.time()
+                if task_id and (now - last_db_update > 10 or int(float(percent)) != last_percent_log):
+                    try:
+                        percent_int = int(float(percent))
+                        supabase.table("download_tasks").update(
+                            {
+                                "progress_percent": percent_int,
+                                "status_message": f"📥 جاري التحميل: {percent_int}% (ETA: {eta})",
+                                "download_speed": speed,
+                                "status": "processing",
+                            }
+                        ).eq("id", task_id).execute()
+                        last_db_update = now
+                        last_percent_log = percent_int  # <--- ضيف السطر ده هنا ضروري!
+                    except:
+                        pass
+            # 3. طباعة الأخطاء الحقيقية فقط في سطر جديد
+            elif any(x in line_str.upper() for x in ["ERROR", "WARNING", "FAILED"]):
+                print(
+                    f"\n⚠️ ALERT_LOG: {line_str}"
+                )  # استخدم \n عشان ميمسحش شريط التحميل
 
-            # 2. تحديث قاعدة البيانات بالسرعة والوقت المتبقي كل 3 ثواني
-            if task_id and (time.time() - last_db_update > 3):
-                speed_match = re.search(r"at\s+([\d\.]+(?:k|M|G)?B/s)", line_str)
-                eta_match = re.search(r"ETA\s+([\d:]+)", line_str)
-
-                percent_now = int(percent) if "percent" in locals() else 0
-                speed_now = speed_match.group(1) if speed_match else "Downloading..."
-                status_txt = f"📥 جاري التحميل: {percent_now}%"
-                if eta_match:
-                    status_txt += f" (متبقي {eta_match.group(1)})"
-
-                try:
-                    supabase.table("download_tasks").update(
-                        {
-                            "progress_percent": percent_now,
-                            "status_message": status_txt,
-                            "download_speed": speed_now,
-                            "status": "processing",
-                        }
-                    ).eq("id", task_id).execute()
-                    last_db_update = time.time()
-                except:
-                    pass
-
-            # 3. فلترة الطباعة: أخطاء فقط
-            if any(x in line_str.upper() for x in ["ERROR", "WARNING", "FAILED"]):
-                log.warning(f"⚠️ ALERT_LOG: {line_str}")
-
-        # الانتظار الحقيقي والمطلق لانتهاء العملية
-        # الانتظار الحقيقي والمطلق لانتهاء العملية
-        await process.wait()
-        pbar_dl.close()
+        # سطر جديد بعد انتهاء اللوب عشان اللوجات اللي بعدها متجيش جنب الشريط
+        print("")
 
         # سطر أمان إضافي: اطبع مخرجات الخطأ لو العملية فشلت
         if process.returncode != 0:
