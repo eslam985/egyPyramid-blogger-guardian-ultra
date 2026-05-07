@@ -1,3 +1,8 @@
+# --- تثبيت الأساسيات أولاً لضمان التوافق ---
+httpx
+websockets
+supabase
+
 # --- المكتبات الأساسية والذكاء الاصطناعي ---
 google-genai
 groq
@@ -19,13 +24,11 @@ nest-asyncio
 ffmpeg-python
 
 # --- قاعدة البيانات والويب ---
-supabase==1.2.0
 fastapi
 uvicorn
 python-multipart
 python-dotenv
 requests
-httpx
 beautifulsoup4
 PyJWT
 
