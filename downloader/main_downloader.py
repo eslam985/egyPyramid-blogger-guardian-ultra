@@ -613,6 +613,14 @@ async def get_mixdrop_direct_link(embed_url):
 
         try:
             await page.goto(target_url, wait_until="domcontentloaded")
+
+            # --- 🔍 فحص هل الملف محذوف فعلياً من المصدر ---
+            page_content = await page.content()
+            if "can't find the file you are looking for" in page_content:
+                log.error("🚫 الرابط ميت: MixDrop بيقول We can't find the file")
+                await browser.close()
+                return "404_DELETED"
+
             btn_selector = "a.download-btn"
 
             # رفعنا المدى لـ 10 لضمان وجود محاولات كافية بعد الـ Reload
@@ -784,10 +792,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # التأكد من بقاء معلومات الموسم والحلقة في العنوان المعروض
     if "الموسم" in original_task_name and "الموسم" not in display_title:
-        season_match = re.search(r'(الموسم\s*\d+)', original_task_name)
+        season_match = re.search(r"(الموسم\s*\d+)", original_task_name)
         if season_match:
             display_title = display_title + " " + season_match.group(1)
-            
+
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
         # استخراج "الحلقة X" وإضافتها
         ep_match = re.search(r"(الحلقة\s*\d+|ح\s*\d+)", original_task_name)
@@ -922,10 +930,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         else:
             log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
 
-    # 2. معالجة روابط MixDrop (باستخدام elif لزيادة الكفاءة)
+    # 2. معالجة روابط MixDrop
     elif "mixdrop" in url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
         direct_link = await get_mixdrop_direct_link(url)
+
+        if direct_link == "404_DELETED":
+            # رمي خطأ صريح لتشغيل نظام تنظيف الميديا (الذي أعددناه سابقاً)
+            raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
+
         if direct_link:
             log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
             url = direct_link
@@ -1015,10 +1028,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             unit_scale=True,
             unit_divisor=1024,
             bar_format="{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-            ascii=True, # إجبار استخدام نصوص ASCII فقط
-            force_ascii=True,
+            ascii=True,  # ✅ نكتفي بهذا
             dynamic_ncols=False,
-            mininterval=5.0 # تحديث اللوجات كل 5 ثواني لتقليل الزحمة
+            mininterval=5.0,
         )
 
         last_db_update = 0
@@ -1438,12 +1450,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             # 3. الرفع للأرشيف (بالاسم النظيف)
             # 3. الرفع للأرشيف
             log.info(f"📦 أرشفة النسخة الكاملة: {episode_label}")
-            #archive_url = "Failed_Archive_Upload"
-            archive_url = "Disabled" # تغيير القيمة الافتراضية
+            # archive_url = "Failed_Archive_Upload"
+            archive_url = "Disabled"  # تغيير القيمة الافتراضية
             final_file_name = f"f_{media_id}_{e_id}_{idx}.mp4"
-            
+
             try:
-                pass # إضافة pass لتجاوز هذا الجزء تماماً
+                pass  # إضافة pass لتجاوز هذا الجزء تماماً
                 # # --- أضف/عدل هذا الجزء هنا ---
                 # if task_id:
                 #     supabase.table("download_tasks").update(
@@ -1478,42 +1490,42 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 # stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
                 # # 2. تمرير الـ stream مباشرة لمكتبة الرفع
                 # # الـ stream الآن هو "المخبر" الذي يخبر pbar بكل بايت يخرج
-               
-            #try:
-              
-                #     archive_upload(
-                #         identifier,
-                #         files={
-                #             final_file_name: stream
-                #         },  # 👈 التعديل هنا: استخدم stream وليس f_data
-                #         # إخفاء اسم الفيلم من البيانات الوصفية (Metadata)
-                #         metadata={
-                #             "title": f"M-{media_id}-E{e_id}",
-                #             "mediatype": "movies",
-                #             "description": f"Internal ID: {media_id}_{e_id}_{idx}",
-                #         },
-                #         access_key=ARCHIVE_ACCESS_KEY,
-                #         secret_key=ARCHIVE_SECRET_KEY,
-                #         verbose=False,
-                #     )
-                # finally:
-                #     stream.close()  # التأكد من إغلاق الملف بعد الرفع
-                # stream.close()
-                # pbar_archive.close()
-                # archive_url = f"https://archive.org/download/{identifier}/{final_file_name}"  # Get the archive URL after successful upload
-                # direct_download_url = (
-                #     f"https://archive.org/download/{identifier}/{final_file_name}"
-                # )
-                # # حقن الرابط المباشر في قاعدة البيانات يدوياً
-                # supabase.table("links").insert(
-                #     {
-                #         "episode_id": e_id,
-                #         "url": direct_download_url,
-                #         "server_name": "archive",
-                #         "last_check_status": "valid",
-                #     }
-                # ).execute()
-                # log.info(f"✅ تم ربط الرابط المباشر في سوبابيز: {direct_download_url}")
+
+            # try:
+
+            #     archive_upload(
+            #         identifier,
+            #         files={
+            #             final_file_name: stream
+            #         },  # 👈 التعديل هنا: استخدم stream وليس f_data
+            #         # إخفاء اسم الفيلم من البيانات الوصفية (Metadata)
+            #         metadata={
+            #             "title": f"M-{media_id}-E{e_id}",
+            #             "mediatype": "movies",
+            #             "description": f"Internal ID: {media_id}_{e_id}_{idx}",
+            #         },
+            #         access_key=ARCHIVE_ACCESS_KEY,
+            #         secret_key=ARCHIVE_SECRET_KEY,
+            #         verbose=False,
+            #     )
+            # finally:
+            #     stream.close()  # التأكد من إغلاق الملف بعد الرفع
+            # stream.close()
+            # pbar_archive.close()
+            # archive_url = f"https://archive.org/download/{identifier}/{final_file_name}"  # Get the archive URL after successful upload
+            # direct_download_url = (
+            #     f"https://archive.org/download/{identifier}/{final_file_name}"
+            # )
+            # # حقن الرابط المباشر في قاعدة البيانات يدوياً
+            # supabase.table("links").insert(
+            #     {
+            #         "episode_id": e_id,
+            #         "url": direct_download_url,
+            #         "server_name": "archive",
+            #         "last_check_status": "valid",
+            #     }
+            # ).execute()
+            # log.info(f"✅ تم ربط الرابط المباشر في سوبابيز: {direct_download_url}")
             except Exception as e:
                 log.error(f"❌ خطأ أرشيف: {e}")
 
@@ -1603,7 +1615,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     while not telegram_direct and retry_wait < 2:
                         log.info(f"⏳ انتظار رابط تليجرام.. محاولة {retry_wait+1}")
                         await asyncio.sleep(5)
-                        retry_wait += 1 
+                        retry_wait += 1
 
                 if archive_url and "archive.org" in archive_url:
                     remote_source = identifier
@@ -1889,7 +1901,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         if os.path.exists(extract_dir):
             shutil.rmtree(extract_dir)
         log.info(f"\n✨ المهمة انتهت بنجاح!")
-        await asyncio.sleep(5) # انتظار قصير جداً للسماح للوجات بالخروج
+        await asyncio.sleep(5)  # انتظار قصير جداً للسماح للوجات بالخروج
 
 
 async def run_pyramid_tasks(task_list):

@@ -90,7 +90,6 @@ def ultimate_beast_worker():
                 # --- نهاية التعديل المحصن ---
 
                 # 3. تشغيل الوحش (pyramid_ultimate_beast)
-                # 3. تشغيل الوحش (pyramid_ultimate_beast)
                 # التعديل: التأكد من انتظار العملية بالكامل (Await)
                 log.info(f"⏳ جاري تشغيل المحرك لـ {file_name}...")
                 try:
@@ -99,6 +98,19 @@ def ultimate_beast_worker():
                     )
                 except Exception as run_err:
                     log.error(f"❌ خطأ أثناء تشغيل المحرك: {run_err}")
+                    # --- 🧹 تنظيف الأشباح فور الفشل ---
+                    try:
+                        # بنمسح الميديا اللي اتكريت وليها نفس العنوان وحالتها لسه pending
+                        SupabaseService.client.table("medias").delete().eq("status", "pending").ilike("title", f"%{file_name}%").execute()
+                        log.info(f"🧹 تم تنظيف سجل الميديا الفارغ لـ: {file_name}")
+
+                        # تحديث المهمة للفشل عشان متفضلش عالقة
+                        SupabaseService.client.table("download_tasks").update({
+                            "status": "failed",
+                            "status_message": f"❌ فشل: {str(run_err)[:50]}",
+                        }).eq("id", job_id).execute()
+                    except Exception as clean_err:
+                        log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
 
                 # --- [هام جداً]: لا تضع أي أكواد تحديث "Success" هنا إلا لو كنت متأكد إن الدالة رجعت بنجاح ---
 

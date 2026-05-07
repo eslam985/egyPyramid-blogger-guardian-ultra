@@ -42,9 +42,8 @@ except ImportError:
 tqdm_custom = partial(
     tqdm_base, 
     dynamic_ncols=False, 
-    mininterval=10.0, # تقليل اللوجات جداً
-    ascii=True,       # نصوص فقط
-    force_ascii=True
+    mininterval=10.0, 
+    ascii=True  # ✅ هذا يكفي لجعل اللوجات نصوص بسيطة
 )
 
 # 3. توحيد الاسم عالمياً لخدمة أي مكتبات خارجية ولإصلاح أخطاء Ruff

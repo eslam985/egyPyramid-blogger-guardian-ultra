@@ -1,12 +1,14 @@
 # استخدم نسخة بايثون الكاملة لضمان استقرار المكتبات
 FROM python:3.11-slim
 
-# 1. تثبيت أدوات النظام والخطوط (بديل apt-get في كولاب)
+# 1. تثبيت أدوات النظام والخطوط وفك الضغط
 RUN apt-get update && apt-get install -y \
     fonts-liberation \
     ffmpeg \
     curl \
     gnupg \
+    p7zip-full \
+    unzip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
