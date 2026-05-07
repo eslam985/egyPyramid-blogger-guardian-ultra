@@ -38,9 +38,14 @@ try:
 except ImportError:
     import tqdm as tqdm_base
 
-# 2. التعريف (خارج بلوك الـ try/except) لضمان توفره في كل الحالات
+# 2. التعريف المعدل لبيئة السيرفرات (Hugging Face)
 tqdm_custom = partial(
-    tqdm_base, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
+    tqdm_base, 
+    dynamic_ncols=False, 
+    mininterval=5.0, # زيادة المدة لتقليل زحمة اللوجات
+    ascii=True,      # إجبار نمط النصوص العادي
+    disable=False, 
+    force_ascii=True
 )
 
 # 3. توحيد الاسم عالمياً لخدمة أي مكتبات خارجية ولإصلاح أخطاء Ruff
