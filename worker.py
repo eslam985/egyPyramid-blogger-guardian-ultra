@@ -132,8 +132,10 @@ def ultimate_beast_worker():
                 log.info(f"✅ المهمة {job_id} انتهت بالكامل.")
 
             else:
-                # نستخدم print هنا حصراً لمنع ظهور الفواصل المنقطة في حالة السكون
-                print(".", end="", flush=True)
+                # استبدال النقطة بلوج رسمي عشان يظهر في Hugging Face فوراً
+                log.info(
+                    "😴 الوحش يبحث في الداتابيز.. لا توجد مهام حالياً (status: idle)"
+                )
                 time.sleep(15)
 
         except Exception as e:
