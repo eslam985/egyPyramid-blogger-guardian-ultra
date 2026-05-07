@@ -998,6 +998,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "1950M",
             "--post-overwrites",
             "--no-check-certificate",  # زيادة أمان للروابط المحمية
+            "--newline",
             f"{url}",
             "-o",
             download_path_template,
@@ -1027,18 +1028,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 break
             line_str = line.decode().strip()
 
-            # 1. استخراج النسبة، الحجم الكلي، السرعة، والوقت المتبقي
-            # النمط ده بيصيد السطر الكامل من yt-dlp
-            progress_match = re.search(
-                r"\[download\]\s+(\d+\.\d+)%\s+of\s+([\d\w\.]+)\s+at\s+([\d\w\./s]+)\s+ETA\s+([\d:]+)",
-                line_str,
-            )
+            # Regex شامل يصيد النسبة، الحجم، السرعة، والوقت المتبقي بدقة
+            progress_match = re.search(r"\[download\]\s+(\d+\.\d+)%\s+of\s+([\d\w\.]+)(?:\s+at\s+([\d\w\./s]+))?(?:\s+ETA\s+([\d:]+))?", line_str)
 
             if progress_match:
                 percent = progress_match.group(1)
                 total = progress_match.group(2)
-                speed = progress_match.group(3)
-                eta = progress_match.group(4)
+                speed = progress_match.group(3) or "---"
+                eta = progress_match.group(4) or "--:--"
                 percent_int = int(float(percent))
 
                 # --- التعديل لضمان الظهور في لوجات Hugging Face ---
