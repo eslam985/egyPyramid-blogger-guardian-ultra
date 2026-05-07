@@ -1001,7 +1001,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             f"{url}",
             "-o",
             download_path_template,
-            "--newline",
         ]
     )
 
@@ -1017,26 +1016,34 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         # استخدام tqdm العادية المتوافقة مع السيرفرات وكولاب معاً
         from tqdm import tqdm as tqdm_std
 
-        pbar_dl = tqdm_std(
-            total=0,
-            desc=f"📥 {display_title[:20]}",
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            bar_format="{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-            ascii=True,  # ✅ نكتفي بهذا
-            dynamic_ncols=False,
-           mininterval=15.0, # هيطبع سطر في اللوج كل 15 ثانية بس
-        )
-
         last_db_update = 0
+        last_log_time = 0
+        last_percent_log = -1
 
-        # قراءة المخرجات واستخراج البيانات الكاملة (المرونة القصوى)
+        # قراءة المخرجات واستخراج البيانات الكاملة
         while True:
             line = await process.stdout.readline()
             if not line:
                 break
             line_str = line.decode().strip()
+
+            # 1. استخراج النسبة والحجم الكلي
+            progress_match = re.search(
+                r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|B)",
+                line_str,
+            )
+            
+            if progress_match:
+                percent = float(progress_match.group(1))
+                percent_int = int(percent)
+                total_str = f"{progress_match.group(2)}{progress_match.group(3)}"
+                
+                # طباعة اللوج فقط كل 10% أو كل 20 ثانية لمنع تكرار السطور
+                now = time.time()
+                if (percent_int % 10 == 0 and percent_int != last_percent_log) or (now - last_log_time > 20):
+                    print(f"📥 {display_title[:20]}: {percent_int}% of {total_str}")
+                    last_percent_log = percent_int
+                    last_log_time = now
 
             # 1. استخراج النسبة والحجم الكلي لـ tqdm
             # نمط يدعم: 10.5% of 100.00MiB

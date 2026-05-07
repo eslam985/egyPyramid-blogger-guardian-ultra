@@ -113,10 +113,11 @@ async def ensure_dependencies():
             shell=True,
         )
 
-    # إضافة فحص unrar و ffprobe مع دعم مستودعات non-free
+    # إضافة فحص unrar و ffprobe مع دعم البدائل
     if not shutil.which("unrar") or not shutil.which("ffprobe"):
         print("📥 جاري تجهيز المستودعات وتثبيت unrar/ffmpeg...")
-        cmd = "apt-get update && apt-get install -y software-properties-common && apt-get install -y unrar-free ffmpeg || apt-get install -y unrar ffmpeg"
+        # محاولة تثبيت unrar-free كبديل لو unrar مش متاح في الـ main repos
+        cmd = "apt-get update && apt-get install -y unrar-free ffmpeg || apt-get install -y unrar ffmpeg"
         subprocess.run(cmd, shell=True)
 
     print("✅ جميع الأدوات جاهزة للعمل.")
@@ -134,42 +135,21 @@ class ProgressStream:
         if chunk:
             self.pbar.update(len(chunk))
             now = time.time()
-            total = self.pbar.total if self.pbar.total else 1
-            percent = int((self.pbar.n / total) * 100)
-
-            # تحديث فقط كل 5% "و" بشرط مرور 5 ثوانٍ
-            if self.episode_id and (now - self.last_update_time > 5) and (percent % 5 == 0):
-                try:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": f"📥 جاري السحب للأرشيف... {percent}%",
+            if self.episode_id and (now - self.last_update_time > 5):
+                total = self.pbar.total if self.pbar.total else 1
+                percent = int((self.pbar.n / total) * 100)
+                if percent % 5 == 0:  # تحديث فقط كل 5% لتجنب الزحمة
+                    try:
+                        supabase.table("episodes").update({
+                            "status_message": f"☁️ جاري السحب للأرشيف... {percent}%",
                             "progress_percent": percent,
-                            "download_speed": "Downloading...",
-                        }
-                    ).eq("id", self.episode_id).execute()
-                    self.last_update_time = now
-                except:
-                    pass
+                            "download_speed": "Uploading..."
+                        }).eq("id", self.episode_id).execute()
+                        self.last_update_time = now
+                    except:
+                        pass
         return chunk
 
-                # استخدام ThreadPoolExecutor أو أي وسيلة غير بلوكية سيكون أفضل
-                # لكن حالياً، على الأقل زدنا الوقت ليقل الضغط
-                try:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "☁️ جاري الرفع للأرشيف...",
-                            "progress_percent": percent,
-                            "download_speed": "Uploading...",
-                        }
-                    ).eq("id", self.episode_id).execute()
-                    self.last_update_time = time.time()
-                except:
-                    pass
-        return chunk
-
-    # ... باقي الدوال (tell, seek, etc.) تبقى كما هي ...
-
-    # هما السطران اللذان كانا ينقصان الكود:
     def tell(self):
         return self.fd.tell()
 
@@ -177,7 +157,6 @@ class ProgressStream:
         return self.fd.seek(offset, whence)
 
     def __len__(self):
-
         return os.path.getsize(self.fd.name)
 
     def close(self):
@@ -285,8 +264,7 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
             print(f"⚠️ تليجرام وقع بس الوحش مبيقفش.. مكملين للسيرفرات الخمسة: {e}")
             return "failed_but_continue"
         finally:
-            if tracker.pbar:
-                tracker.pbar.close()
+            tracker.close()
 
 
 # 1. الدالة الجديدة المضافة (البحث في توب سينما كخطة بديلة)
