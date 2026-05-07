@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     p7zip-full \
     unzip \
+    ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
