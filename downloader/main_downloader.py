@@ -1026,7 +1026,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             bar_format="{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
             ascii=True,  # ✅ نكتفي بهذا
             dynamic_ncols=False,
-            mininterval=5.0,
+           mininterval=15.0, # هيطبع سطر في اللوج كل 15 ثانية بس
         )
 
         last_db_update = 0
@@ -1055,7 +1055,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 if pbar_dl.total == 0 or pbar_dl.total != total_val * mult:
                     pbar_dl.total = total_val * mult
                 pbar_dl.n = (percent / 100) * pbar_dl.total
-                pbar_dl.refresh()
+                # حذفنا الـ refresh عشان tqdm تلتزم بالـ mininterval اللي حددناه فوق
 
             # 2. تحديث قاعدة البيانات بالسرعة والوقت المتبقي كل 3 ثواني
             if task_id and (time.time() - last_db_update > 3):

@@ -72,50 +72,37 @@ class PyrogramProgress:
         self.last_percent = -1  # لإضافة طبقة حماية ثانية
 
     def update(self, current, total):
-        # 1. إنشاء الشريط الأخضر (مرة واحدة فقط)
-        if not self.pbar:
-            from tqdm.auto import tqdm
-
-            self.pbar = tqdm(
-                total=total,
-                desc=f"📤 {self.dest_info} {self.name}",
-                unit="B",
-                unit_scale=True,
-                ascii=" █",
-                colour="green",
-            )
-
-        # 2. تحديث الشريط في كولاب (محلياً - لا يسبب Flood)
-        self.pbar.update(current - self.pbar.n)
-
-        # 3. ⚡️ فلتر منع الـ Flood ⚡️
-        now = time.time()
+        # 1. حساب النسبة المئوية
         percent = int((current / total) * 100)
+        now = time.time()
 
-        # لا ترسل تحديثاً إلا لو مر 3 ثواني "أو" لو النسبة المئوية اتغيرت (حماية مضاعفة)
-        if (now - self.last_update_time < 3.0) and (percent == self.last_percent):
-            return
+        # 2. ⚡️ فلتر اللوجات (Print Throttling) ⚡️
+        # الطباعة في الشاشة فقط كل 5% لمنع الزحمة
+        if percent % 5 == 0 and percent != self.last_percent:
+            print(f"📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]")
+            self.last_percent = percent
 
-        # تحديث قاعدة البيانات فقط لو فيه تغيير حقيقي في النسبة
-        if self.episode_id and percent != self.last_percent:
-            try:
-                supabase.table("episodes").update(
-                    {
-                        "status_message": f"📤 رفع تليجرام {self.dest_info} - {percent}%",
-                        "progress_percent": percent,
-                        "download_speed": "Uploading...",
-                    }
-                ).eq("id", self.episode_id).execute()
+        # 3. تحديث قاعدة البيانات (كل 3 ثوانٍ فقط)
+        if self.episode_id:
+            if (now - self.last_update_time >= 3.0) and (percent != self.last_percent):
+                try:
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": f"📤 رفع تليجرام {self.dest_info} - {percent}%",
+                            "progress_percent": percent,
+                            "download_speed": "Uploading...",
+                        }
+                    ).eq("id", self.episode_id).execute()
 
-                self.last_update_time = now
-                self.last_percent = percent
-            except:
-                pass
+                    self.last_update_time = now
+                    self.last_percent = percent
+                except:
+                    pass
 
     # الدالة اللي كانت ناقصة ومسببة المشكلة:
     def close(self):
-        if self.pbar:
-            self.pbar.close()
+        # تم الاستغناء عن tqdm لتنظيف اللوجات
+        pass
 
 
 async def ensure_dependencies():
