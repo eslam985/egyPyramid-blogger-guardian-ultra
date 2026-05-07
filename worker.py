@@ -20,6 +20,11 @@ log.info(f"🚀 تم تشغيل الووركر بنجاح من المسار: {PR
 # 5. دالة التشغيل المحسنة مع تأكيد الجاهزية (Worker Mode)
 def ultimate_beast_worker():
     log.info("⚙️ بدء تشغيل محرك الووركر...")
+
+    # 1. إنشاء وتثبيت Event Loop خاص بهذا الـ Thread فوراً
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     try:
         from services.supabase_db import SupabaseService
         from downloader.main_downloader import pyramid_ultimate_beast
@@ -84,7 +89,9 @@ def ultimate_beast_worker():
                 # التعديل: التأكد من انتظار العملية بالكامل (Await)
                 log.info(f"⏳ جاري تشغيل المحرك لـ {file_name}...")
                 try:
-                    asyncio.run(pyramid_ultimate_beast(url, file_name, task_id=job_id))
+                    loop.run_until_complete(
+                        pyramid_ultimate_beast(url, file_name, task_id=job_id)
+                    )
                 except Exception as run_err:
                     log.error(f"❌ خطأ أثناء تشغيل المحرك: {run_err}")
 
