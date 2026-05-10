@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <main class="w-full max-w-7xl mx-auto p-4 md:p-8">
+    <main class="w-full max-w-[1300px] mx-auto p-2 md:py-8 md:px-0">
       <!-- مكون مراقبة التحميل (إذا كان موجوداً) -->
       <DownloadMonitor />
 
