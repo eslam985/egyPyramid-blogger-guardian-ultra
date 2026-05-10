@@ -41,8 +41,9 @@ CLOUDINARY_CONFIG = {
     "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME"),
     "upload_preset": os.getenv("CLOUDINARY_UPLOAD_PRESET"),
 }
-    
-    # كمل باقي كود الدالة بتاعك هنا...
+
+
+# كمل باقي كود الدالة بتاعك هنا...
 def save_to_supabase(
     current_voe,
     current_down,
@@ -73,7 +74,12 @@ def save_to_supabase(
             c_title, c_cat, extracted_season_no, actual_ep_no = media_data
         else:
             log.warning(f"⚠️ فشل تحليل {display_title}، سيتم استخدام بيانات افتراضية.")
-            c_title, c_cat, extracted_season_no, actual_ep_no = display_title, "movie", None, None
+            c_title, c_cat, extracted_season_no, actual_ep_no = (
+                display_title,
+                "movie",
+                None,
+                None,
+            )
 
         # توليد slug تلقائي للميديا
         # إذا كان الاسم إنجليزي، نستخدم الحروف الإنجليزية، وإذا كان عربي نستخدم العربي
@@ -384,5 +390,11 @@ def save_to_supabase(
                         )
         return e_id, m_id, meta_story, final_poster
     except Exception as e:
-        log.error(f"❌ خطأ أثناء الحفظ في ساب باز: {e}")
-        return None, None, meta_story, final_poster
+        # طباعة الخطأ كامل بالسطر والسبب عشان نعرف المشكلة فين بالظبط
+        import traceback
+
+        log.error("🚨 Supabase Crash Traceback:")
+        log.error(traceback.format_exc())
+        log.error(f"❌ خطأ تفصيلي أثناء الحفظ: {str(e)}")
+        # نرجع None صريحة عشان سطر الـ 'if save_res' في الكور يحس إن فيه مشكلة ويوقف
+        return None
