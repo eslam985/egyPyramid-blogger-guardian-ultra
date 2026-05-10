@@ -52,7 +52,18 @@ st_login = os.getenv("STREAMTAPE_LOGIN")
 st_key = os.getenv("STREAMTAPE_KEY")
 mix_user = os.getenv("MIXDROP_EMAIL")
 mix_key = os.getenv("MIXDROP_API_KEY")
-
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+OMDB_API_KEY = os.getenv("OMDB_API_KEY")
+VOE_API_KEY = os.getenv("VOE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+VK_ACCESS_TOKEN = os.getenv("VK_ACCESS_TOKEN")
+VK_GROUP_ID = os.getenv("VK_GROUP_ID")
+VK_ALBUM_ID = os.getenv("VK_ALBUM_ID", "2")  # "2" كقيمة افتراضية إذا لم يوجد سكرت
+# بناء القاموس من متغيرات البيئة
+CLOUDINARY_CONFIG = {
+    "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "upload_preset": os.getenv("CLOUDINARY_UPLOAD_PRESET"),
+}
 # 4. الدوال الوسيطة
 async def run_pyramid_tasks(task_list):
     """دالة وسيطة لاستدعاء المايسترو لتجنب الـ Circular Import"""
@@ -1277,4 +1288,3 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         if os.path.exists(extract_dir):
             shutil.rmtree(extract_dir)
         log.info(f"\n✨ المهمة انتهت بنجاح!")
-        await asyncio.sleep(5)  # انتظار قصير جداً للسماح للوجات بالخروج

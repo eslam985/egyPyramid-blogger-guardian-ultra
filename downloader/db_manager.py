@@ -21,8 +21,26 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- دالتك اللي أنت نقلتها بتبدأ من هنا ---
-
-
+ARCHIVE_ACCESS_KEY = os.getenv("ARCHIVE_ACCESS_KEY")
+ARCHIVE_SECRET_KEY = os.getenv("ARCHIVE_SECRET_KEY")
+lu_key = os.getenv("LULUSTREAM_API_KEY")
+dood_api_key = os.getenv("DOOD_API_KEY")
+st_login = os.getenv("STREAMTAPE_LOGIN")
+st_key = os.getenv("STREAMTAPE_KEY")
+mix_user = os.getenv("MIXDROP_EMAIL")
+mix_key = os.getenv("MIXDROP_API_KEY")
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+OMDB_API_KEY = os.getenv("OMDB_API_KEY")
+VOE_API_KEY = os.getenv("VOE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+VK_ACCESS_TOKEN = os.getenv("VK_ACCESS_TOKEN")
+VK_GROUP_ID = os.getenv("VK_GROUP_ID")
+VK_ALBUM_ID = os.getenv("VK_ALBUM_ID", "2")  # "2" كقيمة افتراضية إذا لم يوجد سكرت
+# بناء القاموس من متغيرات البيئة
+CLOUDINARY_CONFIG = {
+    "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "upload_preset": os.getenv("CLOUDINARY_UPLOAD_PRESET"),
+}
     
     # كمل باقي كود الدالة بتاعك هنا...
 def save_to_supabase(
