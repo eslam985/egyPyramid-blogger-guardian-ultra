@@ -189,6 +189,7 @@ class ProgressStream:
 # --- الدالة الجديدة التي ستحل محل upload_file_to_all ---
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
+
     log.info(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
 
     # 1. جلب القيم من بيئة النظام (التي قمت بحقنها في الخلية السابقة)
@@ -283,11 +284,16 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                                 return direct_link  # هذا السطر هو الذي سينقذ السيرفرات الخمسة
 
         except Exception as e:
-            # بنطبع التحذير وبنرجع None عشان السكريبت يروح للـ Parallel Upload فوراً
-            print(f"⚠️ تليجرام وقع بس الوحش مبيقفش.. مكملين للسيرفرات الخمسة: {e}")
+            # 1. حولنا الخطأ لنص صريح str(e) عشان نمنع كراش الـ print/log
+            error_msg = str(e) if e else "Unknown RPC Error"
+
+            # 2. استعمل log.warning عشان دي أضمن وأحسن من print في السيرفرات
+            log.warning(
+                f"⚠️ تليجرام وقع بس الوحش مبيقفش.. مكملين للسيرفرات الخمسة: {error_msg}"
+            )
+
+            # 3. نرجع القيمة اللي إنت مثبتها عشان السكربت يكمل
             return "failed_but_continue"
-        finally:
-            tracker.close()
 
 
 # 1. الدالة الجديدة المضافة (البحث في توب سينما كخطة بديلة)
