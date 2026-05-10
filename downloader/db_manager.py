@@ -49,10 +49,13 @@ def save_to_supabase(
     except ImportError:
         from processors import get_clean_media_data, normalize_title
 
-        # نستخدم الاسم النظيف لاستخراج العنوان والنوع ورقم الموسم والحلقة
-        c_title, c_cat, extracted_season_no, actual_ep_no = get_clean_media_data(
-            display_title
-        )
+        # نستخدم الاسم النظيف مع تأمين الـ Unpacking
+        media_data = get_clean_media_data(display_title)
+        if media_data:
+            c_title, c_cat, extracted_season_no, actual_ep_no = media_data
+        else:
+            log.warning(f"⚠️ فشل تحليل {display_title}، سيتم استخدام بيانات افتراضية.")
+            c_title, c_cat, extracted_season_no, actual_ep_no = display_title, "movie", None, None
 
         # توليد slug تلقائي للميديا
         # إذا كان الاسم إنجليزي، نستخدم الحروف الإنجليزية، وإذا كان عربي نستخدم العربي

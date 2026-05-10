@@ -28,9 +28,13 @@ def ultimate_beast_worker():
 
     try:
         from services.supabase_db import SupabaseService
-        from downloader.main_downloader import pyramid_ultimate_beast
+        # بننادي على الوحش من ملف الكور مباشرة لأنه هو اللي فيه الدالة الحقيقية دلوقتى
+        try:
+            from downloader.core_engine import pyramid_ultimate_beast
+        except ImportError:
+            from downloader.main_downloader import pyramid_ultimate_beast
 
-        log.info("✅ تم تحميل المكتبات بنجاح داخل الـ Thread")
+        log.info("✅ تم تحميل المكتبات بنجاح من محرك الكور")
     except Exception as e:
         log.error(f"❌ فشل تحميل المكتبات: {e}")
         return

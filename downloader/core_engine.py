@@ -146,21 +146,20 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         + " ..."
     )
 
-    # 2. تعديل استدعاء get_movie_data ليدعم السنة (إذا كانت الدالة تدعم ذلك)
-    # ملاحظة: سنمرر السنة للدالة لضمان دقة البحث
-    (
-        tmdb_id_fetched,
-        display_title_tmdb,
-        meta_story,
-        final_poster,
-        meta_labels,
-        meta_duration,
-        meta_rating,
-        meta_runtime,
-        meta_year,
-    ) = get_movie_data(
+    # 2. استدعاء بيانات TMDB مع تأمين الـ Unpacking لمنع خطأ الـ NoneType
+    movie_result = get_movie_data(
         search_query_clean if search_query_clean else name, year=extracted_year
     )
+
+    if movie_result:
+        (
+            tmdb_id_fetched, display_title_tmdb, meta_story, final_poster,
+            meta_labels, meta_duration, meta_rating, meta_runtime, meta_year
+        ) = movie_result
+    else:
+        log.warning(f"⚠️ لم يتم العثور على بيانات لـ {search_query_clean}، سيتم استخدام البيانات الافتراضية.")
+        tmdb_id_fetched, display_title_tmdb, meta_story, final_poster = None, original_task_name, "", ""
+        meta_labels, meta_duration, meta_rating, meta_runtime, meta_year = [], "", "0", 0, extracted_year or "2026"
 
     # دمج الاسم المجلوب مع تفاصيل الحلقة من التاسك الأصلي
     display_title = display_title_tmdb if display_title_tmdb else original_task_name
