@@ -144,12 +144,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         )
 
     log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
-    # احتفظ بالاسم الأصلي الذي كتبته في التاسك كخطة احتياطية
+    # احتفظ بالاسم الأصلي وتعيين قيمة أولية لـ display_title فوراً لمنع الأخطاء
     original_task_name = str(name).strip()
+    display_title = original_task_name
 
-    # استخراج الاسم النظيف للبحث في TMDB (بدلاً من البحث بالاسم الكامل مع رقم الحلقة)
-    # التعديل: إذا كان المدخل رابطاً، نمرره كما هو لـ get_movie_data ليتعامل معه
-    # 1. استخراج السنة من الاسم الأصلي (Task Name) لاستخدامها في البحث الدقيق
+    # استخراج الاسم النظيف للبحث في TMDB
     year_match = re.search(r"\b((?:19|20)\d{2})\b", original_task_name)
     extracted_year = year_match.group(1) if year_match else None
 
@@ -208,9 +207,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             0,
             extracted_year or "2026",
         )
-    log.info(f"DEBUG: Final media data - Title: {display_title}, Year: {meta_year}")
     # دمج الاسم المجلوب مع تفاصيل الحلقة من التاسك الأصلي
     display_title = display_title_tmdb if display_title_tmdb else original_task_name
+    log.info(f"DEBUG: Final media data - Title: {display_title}, Year: {meta_year}")
 
     # التأكد من بقاء معلومات الموسم والحلقة في العنوان المعروض
     if "الموسم" in original_task_name and "الموسم" not in display_title:
