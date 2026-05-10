@@ -155,13 +155,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         search_query_clean if search_query_clean else name, year=extracted_year
     )
 
-    if movie_result:
+    # تأمين الاستخراج لمنع الانهيار حتى لو رجعت بيانات ناقصة أو غلط
+    if isinstance(movie_result, (list, tuple)) and len(movie_result) >= 9:
         (
             tmdb_id_fetched, display_title_tmdb, meta_story, final_poster,
             meta_labels, meta_duration, meta_rating, meta_runtime, meta_year
-        ) = movie_result
+        ) = movie_result[:9] # بناخد أول 9 بس للأمان
     else:
-        log.warning(f"⚠️ لم يتم العثور على بيانات لـ {search_query_clean}، سيتم استخدام البيانات الافتراضية.")
+        log.warning(f"⚠️ بيانات TMDB ناقصة أو غير صالحة لـ {search_query_clean}، سيتم استخدام الافتراضي.")
         tmdb_id_fetched, display_title_tmdb, meta_story, final_poster = None, original_task_name, "", ""
         meta_labels, meta_duration, meta_rating, meta_runtime, meta_year = [], "", "0", 0, extracted_year or "2026"
 
