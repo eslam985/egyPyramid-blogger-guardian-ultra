@@ -1,3 +1,4 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader/main_downloader.py
 import os
 import asyncio
 import nest_asyncio
@@ -27,10 +28,6 @@ try:
     from .core_engine import pyramid_ultimate_beast
 except ImportError:
     from core_engine import pyramid_ultimate_beast
-
-# --- الدوال الأساسية (المايسترو) ---
-
-
 async def run_pyramid_tasks(task_list):
     if not task_list:
         log.warning("⚠️ تنبيه: قائمة المهام فارغة!")
@@ -49,7 +46,6 @@ async def run_pyramid_tasks(task_list):
             await pyramid_ultimate_beast(url, name)
         except Exception as e:
             log.error(f"❌ خطأ في '{name}': {e}")
-
 
 # التعديل المطلوب لضمان الاستقلالية التامة
 async def start_download_process(url, name):
