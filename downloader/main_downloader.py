@@ -939,7 +939,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     elif "mixdrop" in url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
         direct_link = await get_mixdrop_direct_link(url)
-
         if direct_link == "404_DELETED":
             # رمي خطأ صريح لتشغيل نظام تنظيف الميديا (الذي أعددناه سابقاً)
             raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
@@ -1286,12 +1285,23 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}"
                 )
 
-                # تأكد أن LOGO_FILE معرف في بداية السكريبت
-                # أولاً: نحصل على مدة الفيديو بالثواني (لإظهار النص في نصف الوقت بالضبط)
-
                 def get_duration(file):
-                    cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{file}"'
-                    return float(subprocess.check_output(cmd, shell=True))
+                    cmd = [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "default=noprint_wrappers=1:nokey=1",
+                        file,
+                    ]
+                    result = subprocess.run(
+                        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                    )
+                    return (
+                        float(result.stdout.strip()) if result.stdout.strip() else 0.0
+                    )
 
                 # تجهيز النص العربي
                 raw_text = "To see more, please search on Google for EGY PYRAMID"
@@ -1301,9 +1311,17 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 duration = get_duration(vid_path)
                 mid_time = duration / 2
 
-                # ثانياً: أمر FFmpeg المطور
+                    # تجهيز النص العربي
+                raw_text = "To see more, please search on Google for EGY PYRAMID"
+                reshaped_text = arabic_reshaper.reshape(raw_text)
+                bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
+
+                duration = get_duration(vid_path)
+                mid_time = duration / 2
+
+                # ثانياً: أمر FFmpeg المطور مع إضافة -loglevel error لكتم اللوجات
                 ffmpeg_cmd = (
-                    f'ffmpeg -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
+                    f'ffmpeg -loglevel error -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
                     f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.05:contrast=1.03[v_final]; '
                     # اللوجو النصي (أول 10 ثواني)
                     f"[v_final]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
