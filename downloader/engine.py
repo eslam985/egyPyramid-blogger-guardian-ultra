@@ -1,4 +1,10 @@
 import os
+import logging
+
+# كتم ضجيج مكتبة httpx لمنع زحمة اللوجات (PATCH requests)
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 import re
 import shutil
 import subprocess
@@ -77,9 +83,16 @@ class PyrogramProgress:
         now = time.time()
 
         # 2. ⚡️ فلتر اللوجات (Print Throttling) ⚡️
-        # الطباعة في الشاشة فقط كل 5% لمنع الزحمة
-        if percent % 5 == 0 and percent != self.last_percent:
-            print(f"📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]")
+        # الطباعة في الشاشة بوضوح أكبر
+        if (percent % 5 == 0 or percent == 100) and percent != self.last_percent:
+            # مسح السطر القديم وطباعة الجديد لضمان بقاء شريط التقدم في الأسفل
+            print(
+                f"\r📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]",
+                end="",
+                flush=True,
+            )
+            if percent == 100:
+                print()  # سطر جديد عند الانتهاء
             self.last_percent = percent
 
         # 3. تحديث قاعدة البيانات (كل 3 ثوانٍ فقط)
@@ -140,11 +153,13 @@ class ProgressStream:
                 percent = int((self.pbar.n / total) * 100)
                 if percent % 5 == 0:  # تحديث فقط كل 5% لتجنب الزحمة
                     try:
-                        supabase.table("episodes").update({
-                            "status_message": f"☁️ جاري السحب للأرشيف... {percent}%",
-                            "progress_percent": percent,
-                            "download_speed": "Uploading..."
-                        }).eq("id", self.episode_id).execute()
+                        supabase.table("episodes").update(
+                            {
+                                "status_message": f"☁️ جاري السحب للأرشيف... {percent}%",
+                                "progress_percent": percent,
+                                "download_speed": "Uploading...",
+                            }
+                        ).eq("id", self.episode_id).execute()
                         self.last_update_time = now
                     except:
                         pass
