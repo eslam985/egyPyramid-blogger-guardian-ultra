@@ -125,7 +125,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     log.info(f"🛠️ مسار العمل الحالي للوحش: {os.getcwd()}")
     # باقي الكود كما هو...
 
-    await ensure_dependencies()
+    # تأمين الاستدعاء ومنع أي محاولة لاستقبال قيم
+    try:
+        await ensure_dependencies()
+    except Exception as deps_err:
+        log.warning(f"⚠️ فشل فحص الأدوات (تجاوز): {deps_err}")
     timestamp = int(time.time())
 
     # --- 1. تنظيف الاسم وجلب البيانات الذكية ---
@@ -164,11 +168,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         + (f"({extracted_year})" if extracted_year else "")
         + " ..."
     )
+    log.info(f"DEBUG: calling get_clean_media_data with {original_task_name}")
 
     # 2. استدعاء بيانات TMDB مع تأمين الـ Unpacking لمنع خطأ الـ NoneType
     movie_result = get_movie_data(
         search_query_clean if search_query_clean else name, year=extracted_year
     )
+    log.info(f"DEBUG: get_movie_data returned: {movie_result}")
 
     # تأمين الاستخراج لمنع الانهيار حتى لو رجعت بيانات ناقصة أو غلط
     if isinstance(movie_result, (list, tuple)) and len(movie_result) >= 9:
@@ -202,7 +208,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             0,
             extracted_year or "2026",
         )
-
+    log.info(f"DEBUG: Final media data - Title: {display_title}, Year: {meta_year}")
     # دمج الاسم المجلوب مع تفاصيل الحلقة من التاسك الأصلي
     display_title = display_title_tmdb if display_title_tmdb else original_task_name
 
@@ -282,7 +288,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # استدعاء الحفظ الأولي للحصول على e_id
     # التعديل: استلام 4 قيم بدلاً من 3
-    e_id, media_id, meta_story, final_poster = save_to_supabase(
+    # استدعاء الحفظ الأولي
+    save_res = save_to_supabase(
         None,
         None,
         "Pending",
@@ -299,6 +306,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         runtime=meta_runtime,
         duration_iso=meta_duration,
     )
+
+    # التأمين النهائي
+    if save_res and len(save_res) == 4:
+        e_id, media_id, meta_story, final_poster = save_res
+    else:
+        # لو فشل الحفظ، نوقف المهمة بشياكة بدل ما السكربت ينهار
+        log.error("❌ فشل الحفظ الأولي في قاعدة البيانات (save_to_supabase رجعت None)")
+        return
 
     if not e_id:
         log.warning("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")

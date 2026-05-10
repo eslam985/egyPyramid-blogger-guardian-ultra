@@ -4,7 +4,12 @@ import logging
 # كتم ضجيج مكتبة httpx لمنع زحمة اللوجات (PATCH requests)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
+# 1. استيراد اللوجر
+try:
+    from .logger_setup import get_beast_logger
+except ImportError:
+    from logger_setup import get_beast_logger
+log = get_beast_logger("GuardianUltra")
 import re
 import shutil
 import subprocess
@@ -86,13 +91,13 @@ class PyrogramProgress:
         # الطباعة في الشاشة بوضوح أكبر
         if (percent % 5 == 0 or percent == 100) and percent != self.last_percent:
             # مسح السطر القديم وطباعة الجديد لضمان بقاء شريط التقدم في الأسفل
-            print(
-                f"\r📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]",
+            log.info(
+                f"📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]",
                 end="",
                 flush=True,
             )
             if percent == 100:
-                print()  # سطر جديد عند الانتهاء
+                log.info("")  # سطر جديد عند الانتهاء
             self.last_percent = percent
 
         # 3. تحديث قاعدة البيانات (كل 3 ثوانٍ فقط)
@@ -119,21 +124,24 @@ class PyrogramProgress:
 
 
 async def ensure_dependencies():
-    print("🔍 جاري فحص الأدوات الأساسية...")
-    if not shutil.which("yt-dlp"):
-        subprocess.run(
-            "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp",
-            shell=True,
-        )
+    try:
+        log.info("🔍 جاري فحص الأدوات الأساسية...")
+        if not shutil.which("yt-dlp"):
+            subprocess.run(
+                "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp",
+                shell=True,
+            )
 
-    # إضافة فحص unrar و ffprobe مع دعم البدائل
-    if not shutil.which("unrar") or not shutil.which("ffprobe"):
-        print("📥 جاري تجهيز المستودعات وتثبيت unrar/ffmpeg...")
-        # محاولة تثبيت unrar-free كبديل لو unrar مش متاح في الـ main repos
-        cmd = "apt-get update && apt-get install -y unrar-free ffmpeg || apt-get install -y unrar ffmpeg"
-        subprocess.run(cmd, shell=True)
+        # إضافة فحص unrar و ffprobe مع دعم البدائل
+        if not shutil.which("unrar") or not shutil.which("ffprobe"):
+            log.info("📥 جاري تجهيز المستودعات وتثبيت unrar/ffmpeg...")
+            # محاولة تثبيت unrar-free كبديل لو unrar مش متاح في الـ main repos
+            cmd = "apt-get update && apt-get install -y unrar-free ffmpeg || apt-get install -y unrar ffmpeg"
+            subprocess.run(cmd, shell=True)
 
-    print("✅ جميع الأدوات جاهزة للعمل.")
+        log.info("✅ جميع الأدوات جاهزة للعمل.")
+    except Exception as e:
+        log.error(f"❌ خطأ أثناء تثبيت الأدوات: {e}")
 
 
 class ProgressStream:
@@ -181,7 +189,7 @@ class ProgressStream:
 # --- الدالة الجديدة التي ستحل محل upload_file_to_all ---
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
-    print(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
+    log.info(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
 
     # 1. جلب القيم من بيئة النظام (التي قمت بحقنها في الخلية السابقة)
     t_id = os.environ.get("TELEGRAM_API_ID") or os.environ.get("API_ID")
@@ -204,15 +212,15 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
         f_api_id = int(t_id) if t_id else None
         f_api_hash = t_hash
     except Exception as e:
-        print(f"❌ خطأ في معالجة أرقام الـ ID: {e}")
+        log.error(f"❌ خطأ في معالجة أرقام الـ ID: {e}")
         return None
 
     if not f_api_id or not f_api_hash:
-        print("❌ خطأ: مفاتيح Telegram مفقودة في النظام وفي الـ Secrets.")
+        log.error("❌ خطأ: مفاتيح Telegram مفقودة في النظام وفي الـ Secrets.")
         return None
 
     if not tele_string:
-        print("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود!")
+        log.error("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود!")
         return None
 
     # استكمال بقية الكود (الوحش يدخل الآن)...
@@ -240,7 +248,7 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
             )
             tracker.close()  # 👈 ضرورية جداً هنا
             if sent_video:
-                print(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
+                log.info(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
                 # 2. عمل Forward لبوت الاستخراج
                 await sent_video.forward("@EgyPyramid_stream_bot")
 
