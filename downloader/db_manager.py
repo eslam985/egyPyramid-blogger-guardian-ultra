@@ -41,9 +41,8 @@ CLOUDINARY_CONFIG = {
     "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME"),
     "upload_preset": os.getenv("CLOUDINARY_UPLOAD_PRESET"),
 }
-
-
-# كمل باقي كود الدالة بتاعك هنا...
+    
+    # كمل باقي كود الدالة بتاعك هنا...
 def save_to_supabase(
     current_voe,
     current_down,
@@ -63,14 +62,19 @@ def save_to_supabase(
     duration_iso=None,
 ):
     # استيراد الدوال دي "جوه" الدالة عشان نهرب من مشكلة الـ Circular Import
-    try:
-        from .processors import get_clean_media_data, normalize_title
-    except ImportError:
-        from processors import get_clean_media_data, normalize_title
+    # 1. الاستيراد المؤمن
+    # استيراد الدوال دي "جوه" الدالة عشان نهرب من مشكلة الـ Circular Import
+    try: # <--- دي "المظلة" الكبيرة اللي هتحمي الدالة كلها
+        # 1. الاستيراد المؤمن
+        try:
+            from .processors import get_clean_media_data, normalize_title
+        except ImportError:
+            from processors import get_clean_media_data, normalize_title
 
-        # نستخدم الاسم النظيف مع تأمين الـ Unpacking
+        # 2. تنفيذ المنطق (لاحظ المسافة: السطر ده بره الـ except تماماً)
         media_data = get_clean_media_data(display_title)
-        if media_data:
+        
+        if isinstance(media_data, (list, tuple)) and len(media_data) == 4:
             c_title, c_cat, extracted_season_no, actual_ep_no = media_data
         else:
             log.warning(f"⚠️ فشل تحليل {display_title}، سيتم استخدام بيانات افتراضية.")
@@ -81,9 +85,9 @@ def save_to_supabase(
                 None,
             )
 
-        # توليد slug تلقائي للميديا
-        # إذا كان الاسم إنجليزي، نستخدم الحروف الإنجليزية، وإذا كان عربي نستخدم العربي
+        # توليد slug تلقائي للميديا (بره برضه وعلى نفس المحاذاة)
         generated_slug = c_title.lower().strip().replace(" ", "-")
+        # ... كمل باقي الكود بتاعك كلو على نفس مستوى المحاذاة دي ...
         # تنظيف الـ slug من الرموز الغريبة مع الحفاظ على الحروف العربية والإنجليزية والأرقام والشرطة
         generated_slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug)
         # إزالة الشرطات المتكررة
@@ -392,7 +396,6 @@ def save_to_supabase(
     except Exception as e:
         # طباعة الخطأ كامل بالسطر والسبب عشان نعرف المشكلة فين بالظبط
         import traceback
-
         log.error("🚨 Supabase Crash Traceback:")
         log.error(traceback.format_exc())
         log.error(f"❌ خطأ تفصيلي أثناء الحفظ: {str(e)}")
