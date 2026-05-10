@@ -83,21 +83,19 @@ class PyrogramProgress:
         self.last_percent = -1  # لإضافة طبقة حماية ثانية
 
     def update(self, current, total):
-        # 1. حساب النسبة المئوية
         percent = int((current / total) * 100)
         now = time.time()
 
-        # 2. ⚡️ فلتر اللوجات (Print Throttling) ⚡️
-        # الطباعة في الشاشة بوضوح أكبر
         if (percent % 5 == 0 or percent == 100) and percent != self.last_percent:
-            # مسح السطر القديم وطباعة الجديد لضمان بقاء شريط التقدم في الأسفل
-            log.info(
-                f"📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]",
+            # استخدام print العادية عشان هي اللي بتفهم end و flush
+            # الـ r\ دي مهمة جداً عشان يرجع لأول السطر ويمسح القديم
+            print(
+                f"\r📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]",
                 end="",
                 flush=True,
             )
             if percent == 100:
-                log.info("")  # سطر جديد عند الانتهاء
+                print("") # سطر جديد عشان اللي بعده ميبدأش من نصه
             self.last_percent = percent
 
         # 3. تحديث قاعدة البيانات (كل 3 ثوانٍ فقط)
@@ -172,7 +170,6 @@ class ProgressStream:
                     except:
                         pass
         return chunk
-
     def tell(self):
         return self.fd.tell()
 
@@ -189,9 +186,7 @@ class ProgressStream:
 # --- الدالة الجديدة التي ستحل محل upload_file_to_all ---
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
-
     log.info(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
-
     # 1. جلب القيم من بيئة النظام (التي قمت بحقنها في الخلية السابقة)
     t_id = os.environ.get("TELEGRAM_API_ID") or os.environ.get("API_ID")
     t_hash = os.environ.get("TELEGRAM_API_HASH") or os.environ.get("API_HASH")
@@ -284,15 +279,18 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                                 return direct_link  # هذا السطر هو الذي سينقذ السيرفرات الخمسة
 
         except Exception as e:
-            # 1. حولنا الخطأ لنص صريح str(e) عشان نمنع كراش الـ print/log
             error_msg = str(e) if e else "Unknown RPC Error"
+            log.warning(f"⚠️ تنبيه تليجرام: {error_msg}")
 
-            # 2. استعمل log.warning عشان دي أضمن وأحسن من print في السيرفرات
-            log.warning(
-                f"⚠️ تليجرام وقع بس الوحش مبيقفش.. مكملين للسيرفرات الخمسة: {error_msg}"
-            )
+            # محاولة أخيرة قبل الاستسلام: هل الرابط موجود في الداتابيز؟
+            if episode_id:
+                try:
+                    res = supabase.table("links").select("url").eq("episode_id", episode_id).eq("server_name", "telegram_direct").execute()
+                    if res.data:
+                        return res.data[0]['url']
+                except:
+                    pass
 
-            # 3. نرجع القيمة اللي إنت مثبتها عشان السكربت يكمل
             return "failed_but_continue"
 
 

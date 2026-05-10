@@ -1048,26 +1048,36 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
                 # --- ⚡ التحول للحل البديل (Telegram Fallback) ⚡ ---
+                # --- ⚡ التحول للحل البديل (The Ultimate Fallback) ⚡ ---
                 if not (archive_url and "archive.org" in archive_url):
+                    log.info("⏳ جاري انتظار رابط تليجرام المباشر (صبر الوحش)...")
                     retry_wait = 0
-                    while not telegram_direct and retry_wait < 2:
-                        log.info(f"⏳ انتظار رابط تليجرام.. محاولة {retry_wait+1}")
+                    while (not telegram_direct or telegram_direct == "failed_but_continue") and retry_wait < 15:
                         await asyncio.sleep(5)
+                        # محاولة جلب الرابط من الداتابيز
+                        if e_id:
+                            try:
+                                res = supabase.table("links").select("url").eq("episode_id", e_id).eq("server_name", "telegram_direct").execute()
+                                if res.data:
+                                    telegram_direct = res.data[0]['url']
+                                    break
+                            except: pass
                         retry_wait += 1
 
-                if archive_url and "archive.org" in archive_url:
-                    remote_source = identifier
-                    log.info(f"✅ المصدر المعتمد للرفع: Archive.org ({identifier})")
-                elif telegram_direct:
+                # --- 🎯 المنطق الجديد: اختيار المصدر النهائي 🎯 ---
+                if telegram_direct and telegram_direct != "failed_but_continue":
                     remote_source = telegram_direct
-                    log.warning(
-                        f"⚠️ تحذير: الأرشيف معطل.. تم استخدام رابط Telegram المباشر كمصدر!"
-                    )
+                    log.info(f"✅ المصدر المعتمد: Telegram Direct Link")
+                elif archive_url and "archive.org" in archive_url:
+                    remote_source = identifier
+                    log.info(f"✅ المصدر المعتمد: Archive.org")
+                elif url and ("http" in url) and ("mixdrop" not in url.lower()):
+                    # 🔥 هنا السحر: لو تليجرام فشل، استخدم رابط الصيد المباشر (اللي الوحش جابه في البداية)
+                    remote_source = url
+                    log.warning(f"⚠️ تليجرام فشل، تم استخدام الرابط المباشر الأصلي كمصدر ريموت: {url}")
                 else:
                     remote_source = None
-                    log.error(
-                        "❌ خطأ قاتل: لا يوجد مصدر (أرشيف أو تليجرام) للرفع المتوازي!"
-                    )
+                    log.error("❌ لا يوجد مصدر ريموت نهائياً.. الرفع سيعمل محلياً (بطيء).")
 
                 log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
 
