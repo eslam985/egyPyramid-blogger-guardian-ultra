@@ -137,8 +137,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     if "http" in original_task_name or original_task_name.startswith(("tt", "tmdb")):
         search_query_clean = original_task_name
     else:
-        # هنا get_clean_media_data ترجع الاسم بدون سنة
-        search_query_clean, _, _, _ = get_clean_media_data(original_task_name)
+        # تأمين Unpacking لمنع خطأ NoneType
+        clean_res = get_clean_media_data(original_task_name)
+        if clean_res and len(clean_res) == 4:
+            search_query_clean, _, _, _ = clean_res
+        else:
+            search_query_clean = original_task_name
 
     log.info(
         f"🔎 البحث عن: {search_query_clean} "
@@ -178,9 +182,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
     # --- 2. نظام منع التكرار الاحترافي (Supabase) ---
     # 1. استخراج البيانات النظيفة فوراً قبل أي فحص
-    clean_title_search, category_search, current_season_no, current_ep_no = (
-        get_clean_media_data(display_title)
-    )
+    clean_res_db = get_clean_media_data(display_title)
+    if clean_res_db and len(clean_res_db) == 4:
+        clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
+    else:
+        clean_title_search, category_search, current_season_no, current_ep_no = display_title, "movie", None, None
     # البحث الذكي عن الميديا (بالاسم المطابق أو المنظف)
     try:
         media_id = None
