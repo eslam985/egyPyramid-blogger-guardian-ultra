@@ -401,3 +401,4 @@ def save_to_supabase(
         log.error(f"❌ خطأ تفصيلي أثناء الحفظ: {str(e)}")
         # نرجع None صريحة عشان سطر الـ 'if save_res' في الكور يحس إن فيه مشكلة ويوقف
         return None
+    
