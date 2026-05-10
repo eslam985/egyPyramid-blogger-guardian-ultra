@@ -1005,17 +1005,24 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     )
 
             except Exception as e:
+                # تحويل الخطأ لنص صريح لمنع كراش اللوجر (NoneType Error)
+                error_msg = str(e) if e else "Unknown Telegram Error"
                 log.warning(
-                    f"⚠️ تنبيه: فشل رفع تليجرام ({e})، لكن الوحش مكمل للسيرفرات التانية..."
+                    f"⚠️ تنبيه: فشل رفع تليجرام ({error_msg})، لكن الوحش مكمل للسيرفرات التانية..."
                 )
+
+                # تأمين المتغير عشان السكربت ميقفش لما يدور عليه تحت
+                telegram_direct = None
+
                 if e_id:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "⚠️ تليجرام فشل - جاري الرفع للسيرفرات البديلة",
-                        }
-                    ).eq(
-                        "id", e_id
-                    ).execute()  # تخطي باقي المراحل لهذا الملف والانتقال للملف التالي
+                    try:
+                        supabase.table("episodes").update(
+                            {
+                                "status_message": "⚠️ تليجرام فشل - جاري الرفع للسيرفرات البديلة",
+                            }
+                        ).eq("id", e_id).execute()
+                    except:
+                        pass  # لو حتى سوبابيز هنج ميتعطلش التحميل
 
             # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
             # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
