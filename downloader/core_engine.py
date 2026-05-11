@@ -475,10 +475,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 speed = progress_match.group(3) or "---"
                 eta = progress_match.group(4) or "--:--"
                 percent_int = int(float(percent))
-
-                # --- التعديل لضمان الظهور في لوجات Hugging Face ---
-                # بدلاً من sys.stdout، سنستخدم print عادية لكن بشرط النسبة
-                # سنطبع فقط عند كل 5% أو كل 10 ثواني عشان اللوج ميتمليش
                 now = time.time()
                 if percent_int % 5 == 0 and percent_int != last_percent_log:
                     # هذه ستظهر كسطر جديد ومنظم كل 5%
@@ -505,17 +501,17 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 print(
                     f"\n⚠️ ALERT_LOG: {line_str}"
                 )  # استخدم \n عشان ميمسحش شريط التحميل
-
         # سطر جديد بعد انتهاء اللوب عشان اللوجات اللي بعدها متجيش جنب الشريط
         print("")
-
         # سطر أمان إضافي: اطبع مخرجات الخطأ لو العملية فشلت
         if process.returncode != 0:
-            log.error(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
+            import os
+            if extract_dir and os.path.exists(extract_dir) and any(os.path.isfile(os.path.join(extract_dir, f)) for f in os.listdir(extract_dir)):
+                log.info(f"✅ تم تجاوز خطأ المحرك (Code: {process.returncode}) - الملفات موجودة.")
+            else:
+                log.error(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
         # --- ⚡ التعديل المنقذ للوحش ⚡ ---
-
         await asyncio.sleep(5)
-
         actual_downloaded_path = None
 
         # محاولة البحث في المجلد المخصص أولاً، ثم المجلد الحالي كخطة بديلة
@@ -546,14 +542,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             log.error(
                 f"❌ فشل التحميل: المجلد فارغ! المحتوى الموجود: {os.listdir(extract_dir)}"
             )
-
             # --- 🧹 تنظيف الأشباح فور الفشل ---
             if media_id:
                 try:
                     # حذف الميديا لأن التحميل فشل
                     supabase.table("medias").delete().eq("id", media_id).execute()
                     log.info(f"🧹 تم حذف سجل الميديا الفارغ (ID: {media_id})")
-
                     if task_id:
                         supabase.table("download_tasks").update(
                             {
@@ -563,20 +557,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         ).eq("id", task_id).execute()
                 except Exception as clean_err:
                     log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
-
-            # بدلاً من continue اللي سببت المشكلة، هنستخدم return
-            # عشان نخرج من "الدالة الحالية" وننهي معالجة الفيلم ده بسلام
             return
-
     else:
         # حالة الملف المحلي
         log.info(f"⚡ تخطي التحميل: الملف موجود محلياً في {url}")
         actual_downloaded_path = url
-
         # تعريف متغير وهمي للعملية لتجنب خطأ الـ NameError لاحقاً
         class MockProcess:
             returncode = 0
-
         process = MockProcess()
 
     # تحديث سوبابيز قبل بدء المعالجة
