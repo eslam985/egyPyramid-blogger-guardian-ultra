@@ -505,9 +505,17 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         print("")
         # سطر أمان إضافي: اطبع مخرجات الخطأ لو العملية فشلت
         if process.returncode != 0:
-            import os
-            if extract_dir and os.path.exists(extract_dir) and any(os.path.isfile(os.path.join(extract_dir, f)) for f in os.listdir(extract_dir)):
-                log.info(f"✅ تم تجاوز خطأ المحرك (Code: {process.returncode}) - الملفات موجودة.")
+            if (
+                extract_dir
+                and os.path.exists(extract_dir)
+                and any(
+                    os.path.isfile(os.path.join(extract_dir, f))
+                    for f in os.listdir(extract_dir)
+                )
+            ):
+                log.info(
+                    f"✅ تم تجاوز خطأ المحرك (Code: {process.returncode}) - الملفات موجودة."
+                )
             else:
                 log.error(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
         # --- ⚡ التعديل المنقذ للوحش ⚡ ---
@@ -562,9 +570,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         # حالة الملف المحلي
         log.info(f"⚡ تخطي التحميل: الملف موجود محلياً في {url}")
         actual_downloaded_path = url
+
         # تعريف متغير وهمي للعملية لتجنب خطأ الـ NameError لاحقاً
         class MockProcess:
             returncode = 0
+
         process = MockProcess()
 
     # تحديث سوبابيز قبل بدء المعالجة
@@ -1040,16 +1050,25 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 if not (archive_url and "archive.org" in archive_url):
                     log.info("⏳ جاري انتظار رابط تليجرام المباشر (صبر الوحش)...")
                     retry_wait = 0
-                    while (not telegram_direct or telegram_direct == "failed_but_continue") and retry_wait < 15:
+                    while (
+                        not telegram_direct or telegram_direct == "failed_but_continue"
+                    ) and retry_wait < 15:
                         await asyncio.sleep(5)
                         # محاولة جلب الرابط من الداتابيز
                         if e_id:
                             try:
-                                res = supabase.table("links").select("url").eq("episode_id", e_id).eq("server_name", "telegram_direct").execute()
+                                res = (
+                                    supabase.table("links")
+                                    .select("url")
+                                    .eq("episode_id", e_id)
+                                    .eq("server_name", "telegram_direct")
+                                    .execute()
+                                )
                                 if res.data:
-                                    telegram_direct = res.data[0]['url']
+                                    telegram_direct = res.data[0]["url"]
                                     break
-                            except: pass
+                            except:
+                                pass
                         retry_wait += 1
 
                 # --- 🎯 المنطق الجديد: اختيار المصدر النهائي 🎯 ---
@@ -1062,10 +1081,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 elif url and ("http" in url) and ("mixdrop" not in url.lower()):
                     # 🔥 هنا السحر: لو تليجرام فشل، استخدم رابط الصيد المباشر (اللي الوحش جابه في البداية)
                     remote_source = url
-                    log.warning(f"⚠️ تليجرام فشل، تم استخدام الرابط المباشر الأصلي كمصدر ريموت: {url}")
+                    log.warning(
+                        f"⚠️ تليجرام فشل، تم استخدام الرابط المباشر الأصلي كمصدر ريموت: {url}"
+                    )
                 else:
                     remote_source = None
-                    log.error("❌ لا يوجد مصدر ريموت نهائياً.. الرفع سيعمل محلياً (بطيء).")
+                    log.error(
+                        "❌ لا يوجد مصدر ريموت نهائياً.. الرفع سيعمل محلياً (بطيء)."
+                    )
                 log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
                 await asyncio.sleep(10)
                 # 1. تحضير مهام الريموت باستخدام المصدر المتاح (أرشيف أو تليجرام)
