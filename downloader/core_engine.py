@@ -1078,9 +1078,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 else:
                     remote_source = None
                     log.error("❌ لا يوجد مصدر ريموت نهائياً.. الرفع سيعمل محلياً (بطيء).")
-
                 log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
-
                 await asyncio.sleep(10)
                 # 1. تحضير مهام الريموت باستخدام المصدر المتاح (أرشيف أو تليجرام)
                 if remote_source:
@@ -1102,22 +1100,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(
                         0, result=None
                     )
-
                 # 2. تحضير مهمة VK (رفع محلي ثقيل لا يحتاج لرابط ريموت)
                 loop = asyncio.get_event_loop()
                 task_vk = loop.run_in_executor(
                     None, upload_to_vk_local, episode_label, vid_path
                 )
-
                 # 3. إطلاق الصواريخ الخمسة معاً وانتظار الجميع
                 # الترتيب مهم جداً لاستلام النتائج بشكل صحيح
                 vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
                     task_vk, task_voe, task_dood, task_tape, task_lulu
                 )
-
                 # تعيين رابط VK المستخرج
                 vk_url = vk_result if vk_result else "Failed"
-
                 # --- 6. معالجة النتائج وحفظها ---
                 # نتائج VK (إضافة الحفظ لسوبابيز)
                 if vk_url != "Failed":
