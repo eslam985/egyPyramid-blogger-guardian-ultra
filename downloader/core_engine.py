@@ -1131,7 +1131,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         on_conflict="episode_id, server_name",
                     ).execute()
                     log.info(f"✅ VK Link Saved to Supabase!")
-
+                else:
+                    log.warning(f"⚠️ VK upload failed or returned empty URL.")
                 # نتائج Voe
                 voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
 
@@ -1140,7 +1141,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 )  # أضف هذا السطر
                 if file_id:
                     log.info(f"✅ Voe Saved! ID: {file_id}")
-
+                else:
+                    log.warning(f"⚠️ Voe upload failed or returned empty ID.")
                 # نتائج DoodStream
                 if d_url:
                     supabase.table("links").upsert(
@@ -1148,7 +1150,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         on_conflict="episode_id, server_name",
                     ).execute()
                     log.info(f"✅ DoodStream Saved!")
-
+                else:
+                    log.warning(f"⚠️ DoodStream upload failed or returned empty URL.")
                 # نتائج Streamtape
                 if s_url:
                     supabase.table("links").upsert(
@@ -1156,7 +1159,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         on_conflict="episode_id, server_name",
                     ).execute()
                     log.info(f"✅ Streamtape Saved!")
-
+                
+                else:
+                    log.warning(f"⚠️ Streamtape upload failed or returned empty URL.")
                 # نتائج LuluStream (إضافة الحفظ لسوبابيز)
                 if lu_url:
                     supabase.table("links").upsert(
@@ -1168,7 +1173,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         on_conflict="episode_id, server_name",
                     ).execute()
                     log.info(f"✅ LuluStream Saved!")
+                else:
+                    log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
 
+
+            # --- 7. معالجة النتائج وحفظها ---
+            # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة 
             try:
                 # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
                 e_id, media_id, meta_story, final_poster = save_to_supabase(

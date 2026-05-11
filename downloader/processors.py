@@ -6,6 +6,7 @@ import asyncio
 import httpx
 import urllib.parse
 import requests
+
 try:
     from .logger_setup import get_beast_logger
 except ImportError:
@@ -16,6 +17,7 @@ try:
     from google import genai
 except ImportError:
     import sys
+
     # محاولة إجبار بايثون على رؤية المكتبة الجديدة إذا حدث تضارب في الأسماء
     try:
         import google.genai as genai
@@ -40,10 +42,10 @@ except ImportError:
 
 # 2. التعريف المعدل لبيئة السيرفرات (Hugging Face)
 tqdm_custom = partial(
-    tqdm_base, 
-    dynamic_ncols=False, 
-    mininterval=10.0, 
-    ascii=True  # ✅ هذا يكفي لجعل اللوجات نصوص بسيطة
+    tqdm_base,
+    dynamic_ncols=False,
+    mininterval=10.0,
+    ascii=True,  # ✅ هذا يكفي لجعل اللوجات نصوص بسيطة
 )
 
 # 3. توحيد الاسم عالمياً لخدمة أي مكتبات خارجية ولإصلاح أخطاء Ruff
@@ -660,7 +662,7 @@ async def upload_to_voe_api(file_path, identifier):
                         break
                 except Exception as e:
                     log.warning(f"⚠️ Voe: فشل اتصال في المحاولة {attempt+1}: {e}")
-                
+
                 await asyncio.sleep(5)
 
             if res.get("status") != 200:
@@ -766,7 +768,7 @@ async def upload_to_doodstream(api_key, identifier, file_name):
                     print(f"✅ DoodStream: تم قبول الأمر عبر {domain}")
                     break
             except Exception:
-                await asyncio.sleep(2) # انتظار بسيط قبل تجربة نطاق آخر
+                await asyncio.sleep(2)  # انتظار بسيط قبل تجربة نطاق آخر
                 continue
 
         if not data or (data.get("msg") != "OK" and not data.get("success")):
@@ -874,31 +876,43 @@ async def upload_to_streamtape(login, key, identifier, file_name):
             # التأكد من قبول السيرفر للأمر
             if data.get("status") == 200:
                 result_data = data.get("result", {})
-                remote_id = str(result_data.get("id")) # تحويل لنص لضمان المطابقة في القاموس لاحقاً
-                
+                remote_id = str(
+                    result_data.get("id")
+                )  # تحويل لنص لضمان المطابقة في القاموس لاحقاً
+
                 # محاولة قنص فورية (في حال كان الملف مرفوعاً مسبقاً)
                 if result_data.get("url") and "/v/" in result_data.get("url"):
                     file_code = result_data.get("url").split("/v/")[1].split("/")[0]
                     log.info(f"✅ Streamtape Direct Match: {file_code}")
                     return f"https://streamtape.com/e/{file_code}"
 
-                for i in range(1, 26): # زيادة المحاولات لـ 25 (صبر الوحش)
-                    await asyncio.sleep(15) # مسافة أمان 15 ثانية
-                    print(f"🔄 Streamtape Polling Attempt {i}/25 for ID: {remote_id}...")
+                for i in range(1, 51):  # زيادة المحاولات لـ 50 (صبر الوحش)
+                    await asyncio.sleep(15)  # مسافة أمان 15 ثانية
+                    print(
+                        f"🔄 Streamtape Polling Attempt {i}/50 for ID: {remote_id}..."
+                    )
 
                     try:
                         status_url = f"https://api.streamtape.com/remotedl/status?login={login}&key={key}&id={remote_id}"
                         s_res = await client.get(status_url)
                         s_data = s_res.json()
-                        
+
                         # استخراج معلومات المهمة بذكاء (دعم الرقم والنص كمفتاح)
                         tasks = s_data.get("result", {})
-                        task_info = tasks.get(remote_id) or tasks.get(int(remote_id)) or {}
+                        task_info = (
+                            tasks.get(remote_id) or tasks.get(int(remote_id)) or {}
+                        )
 
                         # منطق القنص الشامل للمعرف
                         file_code = task_info.get("extid") or task_info.get("fileid")
-                        if not file_code and task_info.get("url") and "/v/" in task_info.get("url"):
-                            file_code = task_info.get("url").split("/v/")[1].split("/")[0]
+                        if (
+                            not file_code
+                            and task_info.get("url")
+                            and "/v/" in task_info.get("url")
+                        ):
+                            file_code = (
+                                task_info.get("url").split("/v/")[1].split("/")[0]
+                            )
 
                         if file_code:
                             log.info(f"✅ Streamtape Captured ID: {file_code}")
@@ -906,17 +920,20 @@ async def upload_to_streamtape(login, key, identifier, file_name):
                             try:
                                 rename_url = f"https://api.streamtape.com/file/rename?login={login}&key={key}&file={file_code}&name={urllib.parse.quote(file_name)}"
                                 await client.get(rename_url)
-                            except: pass
+                            except:
+                                pass
                             return f"https://streamtape.com/e/{file_code}"
-                        
+
                         # إذا انتهى الرفع ولم يظهر الكود، نقوم بفحص المجلد كخيار أخير في كل دورة
-                        if i % 5 == 0: # فحص المجلد كل 5 محاولات لتوفير الـ API Calls
+                        if i % 5 == 0:  # فحص المجلد كل 5 محاولات لتوفير الـ API Calls
                             list_url = f"https://api.streamtape.com/file/listfolder?login={login}&key={key}"
                             l_res = await client.get(list_url)
                             files = l_res.json().get("result", {}).get("files", [])
                             for f in files:
                                 if file_name.split(".")[0] in f.get("name", ""):
-                                    log.info(f"✅ Streamtape Emergency Match: {f.get('linkid')}")
+                                    log.info(
+                                        f"✅ Streamtape Emergency Match: {f.get('linkid')}"
+                                    )
                                     return f"https://streamtape.com/e/{f.get('linkid')}"
 
                     except Exception as poll_err:
