@@ -745,28 +745,37 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 reshaped_text = arabic_reshaper.reshape(raw_text)
                 bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
 
+                # 1. حساب المدة والتحكم الديناميكي في الجودة والمساحة
                 duration = get_duration(vid_path)
                 mid_time = duration / 2
+                duration_mins = duration / 60
 
-                # ثانياً: أمر FFmpeg المطور مع إضافة -loglevel error لكتم اللوجات
+                if duration_mins > 150:
+                    # إعدادات للأفلام الطويلة جداً (أمان ضد التقسيم)
+                    t_maxrate, t_bufsize, t_crf = "1.5M", "1.5M", 28
+                    log.info(f"🎬 فيلم طويل ({duration_mins:.1f}m) -> ضبط: 1.5M/CRF28")
+                else:
+                    # إعدادات للأفلام العادية (أعلى جودة ممكنة)
+                    t_maxrate, t_bufsize, t_crf = "1.8M", "3M", 26
+                    log.info(f"🎬 فيلم عادي ({duration_mins:.1f}m) -> ضبط: 1.8M/CRF26")
+
+                # 2. بناء أمر FFmpeg بالقيم الجديدة
                 ffmpeg_cmd = (
                     f'ffmpeg -loglevel error -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
                     f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.05:contrast=1.03[v_final]; '
-                    # اللوجو النصي (أول 10 ثواني)
                     f"[v_final]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
-                    # النص العربي (منتصف الفيلم)
                     f"[txt1]drawtext=text='{bidi_text}':fontfile=/content/arial.ttf:fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
                     f"enable='between(t,{mid_time},{mid_time+10})'[txt2]; "
-                    # سطر التحكم في شفافية اللوجو الصوري
                     f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
                     f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
-                    f'" '  # قفلنا الفلتر كومبلكس هنا
-                    f'-map "[outv]" -map 0:a '  # سحبنا الصوت الأصلي (0:a) كما هو لضمان التزامن 100%
-                    f"-c:v libx264 -preset superfast -crf 28 -maxrate 1.8M -bufsize 3M -threads 0 -pix_fmt yuv420p "
+                    f'" '
+                    f'-map "[outv]" -map 0:a '
+                    f"-c:v libx264 -preset superfast -crf {t_crf} "
+                    f"-maxrate {t_maxrate} -bufsize {t_bufsize} -threads 0 -pix_fmt yuv420p "
                     f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
                 )
 
-                # تنفيذ الأمر (استخدام subprocess.run يضمن الانتظار حتى انتهاء التمويه)
+                # تنفيذ العملية
                 subprocess.run(ffmpeg_cmd, shell=True, check=True)
 
                 # الاستبدال المادي: حذف الأصلي وتسمية المموه باسم الأصلي
