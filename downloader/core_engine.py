@@ -762,7 +762,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
                     f'" '  # قفلنا الفلتر كومبلكس هنا
                     f'-map "[outv]" -map 0:a '  # سحبنا الصوت الأصلي (0:a) كما هو لضمان التزامن 100%
-                    f"-c:v libx264 -preset ultrafast -crf 26 -maxrate 1.8M -bufsize 3.6M -threads 0 -pix_fmt yuv420p "
+                    f"-c:v libx264 -preset superfast -crf 28 -maxrate 1.8M -bufsize 3M -threads 0 -pix_fmt yuv420p "
                     f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
                 )
 
@@ -1159,7 +1159,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         on_conflict="episode_id, server_name",
                     ).execute()
                     log.info(f"✅ Streamtape Saved!")
-                
+
                 else:
                     log.warning(f"⚠️ Streamtape upload failed or returned empty URL.")
                 # نتائج LuluStream (إضافة الحفظ لسوبابيز)
@@ -1176,9 +1176,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 else:
                     log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
 
-
             # --- 7. معالجة النتائج وحفظها ---
-            # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة 
+            # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
             try:
                 # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
                 e_id, media_id, meta_story, final_poster = save_to_supabase(
