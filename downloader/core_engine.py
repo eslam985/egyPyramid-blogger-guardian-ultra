@@ -12,6 +12,10 @@ from urllib.parse import unquote, urlparse
 from tqdm import tqdm as tqdm_std
 from bidi.algorithm import get_display
 
+# 1. إعدادات النظام وتليجرام (يجب أن تظل في المدخل الرئيسي)
+os.environ["PYROGRAM_MAX_CONCURRENT_TRANSMISSIONS"] = "1"
+os.environ["PYROGRAM_SLEEP_THRESHOLD"] = "60"
+os.environ["TQDM_MININTERVAL"] = "2.0"
 # 1. استيراد اللوجر
 try:
     from .logger_setup import get_beast_logger
