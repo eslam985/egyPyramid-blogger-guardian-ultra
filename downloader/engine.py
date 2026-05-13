@@ -184,11 +184,14 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     # 3. الوحش يدخل الآن "In-Memory"
     # 3. الوحش يدخل الآن "In-Memory" وبدون اسم ثابت لمنع التداخل
     async with Client(
-        name=":memory:",  # 👈 التعديل الجوهري هنا: استخدام الذاكرة كاسم للجلسة
+        name=f"bot_{int(time.time())}",  # استخدام اسم فريد مؤقت بدلاً من :memory: لمنع تعارض الجلسات
         session_string=tele_string,
         api_id=f_api_id,
         api_hash=f_api_hash,
+        workers=4,  # تقليل عدد العمال لضمان الاستقرار في بيئات الـ Cloud
+        sleep_threshold=60, # رفع حد الانتظار عند حصول Flood
     ) as app:
+        await asyncio.sleep(2) # انتظار بسيط لضمان استقرار الـ NetworkTask قبل البدء
 
         # 1. الرفع للمخزن (أول وجهة في القائمة)
         dest = DESTINATIONS[0].strip()
