@@ -36,14 +36,15 @@ async def run_pyramid_tasks(task_list):
     for i, task in enumerate(task_list, 1):
         url = task.get("url")
         name = task.get("name")
+        episode_id = task.get("episode_id") # 👈 جلب الـ ID من المهمة
 
         if not url:
             continue
 
         log.info(f"\n🎬 معالجة ({i}/{len(task_list)}): {name}")
         try:
-            # التأكد إن الوحش هيستلم الرابط أو المسار صح
-            await pyramid_ultimate_beast(url, name)
+            # تمرير الـ episode_id للوحش عشان يوصل لـ Supabase
+            await pyramid_ultimate_beast(url, name, task_id=episode_id)
         except Exception as e:
             log.error(f"❌ خطأ في '{name}': {e}")
 

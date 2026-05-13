@@ -118,11 +118,12 @@ class PyrogramProgress:
                     ).eq("id", self.episode_id).execute()
                     self.last_db_update = now
                 except:
-                    pass # 👈 الهدوء أفضل هنا عشان اللوجات متتجننش لو النت قطع لحظة
+                    pass  # 👈 الهدوء أفضل هنا عشان اللوجات متتجننش لو النت قطع لحظة
 
     def close(self):
 
         pass
+
 
 class ProgressStream:
     def __init__(self, filename, pbar, episode_id=None):
@@ -174,6 +175,7 @@ class ProgressStream:
 
         self.fd.close()
 
+
 async def ensure_dependencies():
     try:
         log.info("🔍 جاري فحص الأدوات الأساسية...")
@@ -193,7 +195,8 @@ async def ensure_dependencies():
         log.info("✅ جميع الأدوات جاهزة للعمل.")
     except Exception as e:
         log.error(f"❌ خطأ أثناء تثبيت الأدوات: {e}")
-        
+
+
 # --- الدالة الجديدة التي ستحل محل upload_file_to_all ---
 # تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
