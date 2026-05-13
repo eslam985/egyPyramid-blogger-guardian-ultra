@@ -71,105 +71,54 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 class PyrogramProgress:
     def __init__(self, name, dest_count, current_dest, episode_id=None):
-        self.pbar = None
         self.name = name
         self.episode_id = episode_id
         self.dest_info = f"({current_dest}/{dest_count})"
-        self.last_update_time = 0
-        self.last_db_update = 0  # مؤقت منفصل تماماً للداتابيز
-        self.last_percent = -1
+        self.started = False 
 
     def update(self, current, total):
-        if total <= 0:
-            return
-        percent = int((current / total) * 100)
-        now = time.time()
-
-        # 🛡️ [Throttling] تحديث اللوجات على الشاشة كل 2 ثانية فقط
-        if now - self.last_update_time < 2.0 and percent < 100:
-            return
-
-        if (percent % 5 == 0 or percent == 100) and percent != self.last_percent:
-            self.last_update_time = now
-            print(
-                f"\r📤 {self.dest_info} {self.name}: {percent}% [{current / (1024*1024):.1f}MB / {total / (1024*1024):.1f}MB]",
-                end="",
-                flush=True,
-            )
-            if percent == 100:
-                print("")
-            self.last_percent = percent
-        # 🚀 [Important] تحديث سوبابيز كل 10 ثوانٍ فقط لمنع الـ Disconnect
-        if self.episode_id and (
-            now - self.last_db_update >= 60.0 or percent >= 100 or percent % 25 == 0
-        ):
-            if percent != self.last_percent or percent == 100:
+        # تحديث واحد فقط عند بداية الرفع
+        if not self.started:
+            print(f"🚀 بدأ الرفع: {self.name} {self.dest_info}...")
+            if self.episode_id:
                 try:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": f"📤 رفع تليجرام {self.dest_info} - {percent}%",
-                            "progress_percent": percent,
-                            "download_speed": "Uploading...",
-                        }
-                    ).eq("id", self.episode_id).execute()
-                    self.last_db_update = now
-                except:
-                    pass  # 👈 الهدوء أفضل هنا عشان اللوجات متتجننش لو النت قطع لحظة
+                    supabase.table("episodes").update({
+                        "status_message": f"📤 جاري الرفع الآن: {self.name}",
+                        "progress_percent": 1
+                    }).eq("id", self.episode_id).execute()
+                except: pass
+            self.started = True
+
+        # تحديث واحد فقط عند اكتمال الرفع
+        if current == total:
+            print(f"✅ اكتمل الرفع بنجاح: {self.name}")
+            if self.episode_id:
+                try:
+                    supabase.table("episodes").update({
+                        "status_message": f"✅ اكتمل الرفع: {self.name}",
+                        "progress_percent": 100
+                    }).eq("id", self.episode_id).execute()
+                except: pass
 
     def close(self):
-
         pass
 
 
 class ProgressStream:
     def __init__(self, filename, pbar, episode_id=None):
         self.fd = open(filename, "rb")
-        self.pbar = pbar
         self.episode_id = episode_id
-        self.last_update_time = 0
-        self.last_percent_db = -1  # 👈 لازم تضيف السطر ده هنا
+        self.filename = os.path.basename(filename)
+        print(f"☁️ جاري سحب {self.filename} للأرشيف (بدون شريط تقدم لضمان الاستقرار)...")
 
     def read(self, size=-1):
-        chunk = self.fd.read(size)
-        if chunk:
-            self.pbar.update(len(chunk))
-            now = time.time()
-            # 🛡️ تحديث كل دقيقة كاملة أو كل 25% فقط لمنع تهنيج السكريبت
-            # 🛡️ التحديث يحصل لو مر دقيقة كاملة "أو" وصلنا لنسبة من مضاعفات الـ 25
-            total = self.pbar.total if self.pbar.total else 1
-            percent = int((self.pbar.n / total) * 100)
+        # قراءة خام مباشرة - أسرع وأخف حاجة ممكنة
+        return self.fd.read(size)
 
-            time_trigger = now - self.last_update_time >= 60.0
-            percent_trigger = (
-                percent % 25 == 0 and percent != self.last_percent_db
-            )  # محتاج تضيف last_percent_db في الـ __init__
-
-            if self.episode_id and (time_trigger or percent == 100 or percent_trigger):
-                try:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": f"☁️ جاري السحب للأرشيف... {percent}%",
-                            "progress_percent": percent,
-                        }
-                    ).eq("id", self.episode_id).execute()
-                    self.last_update_time = now
-                    self.last_percent_db = percent
-                except Exception as e:
-                    log.error(f"❌ خطأ أثناء تحديث قاعدة البيانات: {e}")
-        return chunk
-
-    def tell(self):
-        return self.fd.tell()
-
-    def seek(self, offset, whence=0):
-        return self.fd.seek(offset, whence)
-
-    def __len__(self):
-        return os.path.getsize(self.fd.name)
-
-    def close(self):
-
-        self.fd.close()
+    def tell(self): return self.fd.tell()
+    def seek(self, offset, whence=0): return self.fd.seek(offset, whence)
+    def __len__(self): return os.path.getsize(self.fd.name)
+    def close(self): self.fd.close()
 
 
 async def ensure_dependencies():
