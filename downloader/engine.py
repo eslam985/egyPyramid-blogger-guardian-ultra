@@ -157,27 +157,24 @@ async def ensure_dependencies():
     except Exception as e:
         log.error(f"❌ خطأ أثناء تثبيت الأدوات: {e}")
 
-
-# --- الدالة الجديدة التي ستحل محل upload_file_to_all ---
-# تعديل رأس الدالة لإضافة episode_id
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     log.info(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
-    # 1. جلب القيم من بيئة النظام (التي قمت بحقنها في الخلية السابقة)
+    # 1. جلب القيم من بيئة النظام
     t_id = os.environ.get("TELEGRAM_API_ID") or os.environ.get("API_ID")
     t_hash = os.environ.get("TELEGRAM_API_HASH") or os.environ.get("API_HASH")
     tele_string = os.environ.get("TELEGRAM_STRING_SESSION")
 
-    # 2. محاولة جلبها من userdata فقط إذا كانت مفقودة (كخيار احتياطي)
+    # 2. خيار احتياطي من Colab userdata
     if not t_id or not t_hash or not tele_string:
         try:
             from google.colab import userdata
-
             t_id = t_id or userdata.get("TELEGRAM_API_ID")
             t_hash = t_hash or userdata.get("TELEGRAM_API_HASH")
             tele_string = tele_string or userdata.get("TELEGRAM_STRING_SESSION")
         except Exception as e:
-            log.error(f"❌ خطاء في جلب مفاتيح Telegram: {e}")
+            log.error(f"❌ خطأ في جلب مفاتيح Telegram: {e}")
             pass
+
     # 3. التحقق النهائي وتحويل النوع
     try:
         f_api_id = int(t_id) if t_id else None
@@ -186,99 +183,88 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
         log.error(f"❌ خطأ في معالجة أرقام الـ ID: {e}")
         return None
 
-    if not f_api_id or not f_api_hash:
-        log.error("❌ خطأ: مفاتيح Telegram مفقودة في النظام وفي الـ Secrets.")
+    if not f_api_id or not f_api_hash or not tele_string:
+        log.error("❌ خطأ: بيانات Telegram غير مكتملة.")
         return None
 
-    if not tele_string:
-        log.error("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود!")
-        return None
+    dest = DESTINATIONS[0].strip()
+    tracker = PyrogramProgress(display_name, 1, 1, episode_id)
+    sent_video = None
+
+    # حلقة الرفع
+    while True:
+        try:
+            async with Client(
+                name=f"bot_{int(time.time())}",
+                session_string=tele_string,
+                api_id=f_api_id,
+                api_hash=f_api_hash,
+                workers=4,
+                sleep_threshold=120,
+            ) as app:
+                await asyncio.sleep(2)
+                sent_video = await app.send_video(
+                    chat_id=int(dest),
+                    video=file_path,
+                    supports_streaming=True,
+                    caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
+                    progress=lambda c, t: tracker.update(c, t),
+                )
+                if sent_video:
+                    break
+        except FloodWait as e:
+            log.warning(f"⚠️ Telegram FloodWait: انتظار {e.value + 5} ثانية...")
+            await asyncio.sleep(e.value + 5)
+            continue
+        except Exception as e:
+            log.error(f"❌ خطأ أثناء الرفع: {e}")
+            await asyncio.sleep(10)
+            continue
+    
+    tracker.close()
+
+    # استخراج الرابط
     async with Client(
-        name=f"bot_{int(time.time())}",  # استخدام اسم فريد مؤقت بدلاً من :memory: لمنع تعارض الجلسات
+        name=f"bot_fetch_{int(time.time())}",
         session_string=tele_string,
         api_id=f_api_id,
         api_hash=f_api_hash,
-        workers=4,  # تقليل عدد العمال لضمان الاستقرار في بيئات الـ Cloud
-        sleep_threshold=60,  # رفع حد الانتظار عند حصول Flood
+        sleep_threshold=60,
     ) as app:
-        await asyncio.sleep(2)  # انتظار بسيط لضمان استقرار الـ NetworkTask قبل البدء
+        if sent_video:
+            log.info(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
+            await sent_video.forward("@EgyPyramid_stream_bot")
+            await asyncio.sleep(5)
 
-        # 1. الرفع للمخزن (أول وجهة في القائمة)
-        dest = DESTINATIONS[0].strip()
-        tracker = PyrogramProgress(display_name, 1, 1, episode_id)
+            async for message in app.get_chat_history("@EgyPyramid_stream_bot", limit=1):
+                if message.text and "http" in message.text:
+                    links = re.findall(r"(https?://[^\s]+)", message.text)
+                    if links:
+                        direct_link = links[0]
+                        print(f"✅ تم صيد الرابط المباشر: {direct_link}")
+
+                        if episode_id:
+                            supabase.table("links").upsert(
+                                {
+                                    "episode_id": episode_id,
+                                    "server_name": "telegram_direct",
+                                    "url": direct_link,
+                                },
+                                on_conflict="episode_id, server_name",
+                            ).execute()
+                            print(f"🔗 تم ربط الرابط بالحلقة {episode_id}")
+                            return direct_link
+
+    # محاولة أخيرة لو فشل الاستخراج
+    if episode_id:
         try:
-            while True:
-                try:
-                    sent_video = await app.send_video(
-                        chat_id=int(dest),
-                        video=file_path,
-                        supports_streaming=True,
-                        caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
-                        progress=lambda c, t: tracker.update(c, t),
-                    )
-                    break
-                except FloodWait as e:
-                    log.warning(
-                        f"⚠️ Telegram FloodWait: الانتظار لمدة {e.value} ثانية قبل إعادة المحاولة..."
-                    )
-                    await asyncio.sleep(e.value + 2)
-                    continue
-            tracker.close()  # 👈 ضرورية جداً هنا
-            if sent_video:
-                log.info(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
-                # 2. عمل Forward لبوت الاستخراج
-                await sent_video.forward("@EgyPyramid_stream_bot")
-
-                # 3. انتظار الرد (تكتيك الصياد)
-                await asyncio.sleep(5)  # وقت كافٍ للبوت ليرد
-
-                async for message in app.get_chat_history(
-                    "@EgyPyramid_stream_bot", limit=1
-                ):
-                    if message.text and "http" in message.text:
-                        # استخراج الرابط باستخدام regex بسيط
-
-                        links = re.findall(r"(https?://[^\s]+)", message.text)
-                        # --- التعديل ليتوافق مع جدول links ---
-                        if links:
-                            direct_link = links[0]
-                            print(f"✅ تم صيد الرابط المباشر: {direct_link}")
-
-                            if episode_id:
-                                # استخدام كائن supabase المعرف في أعلى الملف مباشرة
-                                supabase.table("links").upsert(
-                                    {
-                                        "episode_id": episode_id,
-                                        "server_name": "telegram_direct",
-                                        "url": direct_link,
-                                    },
-                                    on_conflict="episode_id, server_name",
-                                ).execute()
-                                print(
-                                    f"🔗 تم ربط رابط التليجرام بالحلقة {episode_id} في جدول links"
-                                )
-                                return direct_link  # هذا السطر هو الذي سينقذ السيرفرات الخمسة
-
+            res = supabase.table("links").select("url").eq("episode_id", episode_id).eq("server_name", "telegram_direct").execute()
+            if res.data:
+                return res.data[0]["url"]
         except Exception as e:
-            error_msg = str(e) if e else "Unknown RPC Error"
-            log.warning(f"⚠️ تنبيه تليجرام: {error_msg}")
-
-            # محاولة أخيرة قبل الاستسلام: هل الرابط موجود في الداتابيز؟
-            if episode_id:
-                try:
-                    res = (
-                        supabase.table("links")
-                        .select("url")
-                        .eq("episode_id", episode_id)
-                        .eq("server_name", "telegram_direct")
-                        .execute()
-                    )
-                    if res.data:
-                        return res.data[0]["url"]
-                except Exception as e:
-                    log.error(f"❌ خطأ أثناء التحقق من قاعدة البيانات: {e}")
-                    pass
-            return "failed_but_continue"
+            log.error(f"❌ خطأ أثناء التحقق من قاعدة البيانات: {e}")
+    
+    return "failed_but_continue"
 
 
 # 1. الدالة الجديدة المضافة (البحث في توب سينما كخطة بديلة)
