@@ -1,15 +1,5 @@
 import os
 import logging
-
-# كتم ضجيج مكتبة httpx لمنع زحمة اللوجات (PATCH requests)
-
-logging.getLogger("httpx").setLevel(logging.WARNING)
-# 1. استيراد اللوجر
-try:
-    from .logger_setup import get_beast_logger
-except ImportError:
-    from logger_setup import get_beast_logger
-log = get_beast_logger("GuardianUltra")
 import re
 import shutil
 import subprocess
@@ -17,9 +7,7 @@ import requests
 import time
 import asyncio
 import json
-
 from pyrogram import Client
-from internetarchive import upload as archive_upload
 from supabase import create_client, Client as SupabaseClient
 from functools import partial  # استيراد واحد يكفي
 from datetime import datetime
@@ -34,7 +22,15 @@ except ImportError:
 tqdm_custom = partial(
     tqdm_base, dynamic_ncols=False, mininterval=2.0, ascii=" #", ncols=80
 )
+# كتم ضجيج مكتبة httpx لمنع زحمة اللوجات (PATCH requests)
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+# 1. استيراد اللوجر
+try:
+    from .logger_setup import get_beast_logger
+except ImportError:
+    from logger_setup import get_beast_logger
+log = get_beast_logger("GuardianUltra")
 # توحيد الاسم لمنع انهيار المكتبات الخارجية مثل VK
 tqdm = tqdm_custom
 

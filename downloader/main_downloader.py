@@ -1,16 +1,16 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader/main_downloader.py
 import os
+# إعدادات النظام - توضع هنا لضمان تطبيقها على كل الاستيرادات التالية
+os.environ["PYROGRAM_MAX_CONCURRENT_TRANSMISSIONS"] = "1"
+os.environ["PYROGRAM_SLEEP_THRESHOLD"] = "60"
+os.environ["TQDM_MININTERVAL"] = "2.0"
+
 import asyncio
 import nest_asyncio
 from dotenv import load_dotenv
 
 # تحميل متغيرات البيئة لو شغال لوكل
 load_dotenv()
-
-# 1. إعدادات النظام وتليجرام (يجب أن تظل في المدخل الرئيسي)
-os.environ["PYROGRAM_MAX_CONCURRENT_TRANSMISSIONS"] = "1"
-os.environ["PYROGRAM_SLEEP_THRESHOLD"] = "60"
-os.environ["TQDM_MININTERVAL"] = "2.0"
 
 # تفعيل nest_asyncio لدعم asyncio في بيئات مثل Jupyter أو HuggingFace
 nest_asyncio.apply()
