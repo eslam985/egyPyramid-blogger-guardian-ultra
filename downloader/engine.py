@@ -8,6 +8,7 @@ import time
 import asyncio
 import json
 from pyrogram import Client
+from pyrogram.errors import FloodWait
 from supabase import create_client, Client as SupabaseClient
 from functools import partial  # استيراد واحد يكفي
 from datetime import datetime
@@ -74,7 +75,7 @@ class PyrogramProgress:
         self.name = name
         self.episode_id = episode_id
         self.dest_info = f"({current_dest}/{dest_count})"
-        self.started = False 
+        self.started = False
 
     def update(self, current, total):
         # تحديث واحد فقط عند بداية الرفع
@@ -82,11 +83,14 @@ class PyrogramProgress:
             print(f"🚀 بدأ الرفع: {self.name} {self.dest_info}...")
             if self.episode_id:
                 try:
-                    supabase.table("episodes").update({
-                        "status_message": f"📤 جاري الرفع الآن: {self.name}",
-                        "progress_percent": 1
-                    }).eq("id", self.episode_id).execute()
-                except: pass
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": f"📤 جاري الرفع الآن: {self.name}",
+                            "progress_percent": 1,
+                        }
+                    ).eq("id", self.episode_id).execute()
+                except:
+                    pass
             self.started = True
 
         # تحديث واحد فقط عند اكتمال الرفع
@@ -94,11 +98,14 @@ class PyrogramProgress:
             print(f"✅ اكتمل الرفع بنجاح: {self.name}")
             if self.episode_id:
                 try:
-                    supabase.table("episodes").update({
-                        "status_message": f"✅ اكتمل الرفع: {self.name}",
-                        "progress_percent": 100
-                    }).eq("id", self.episode_id).execute()
-                except: pass
+                    supabase.table("episodes").update(
+                        {
+                            "status_message": f"✅ اكتمل الرفع: {self.name}",
+                            "progress_percent": 100,
+                        }
+                    ).eq("id", self.episode_id).execute()
+                except:
+                    pass
 
     def close(self):
         pass
@@ -109,16 +116,25 @@ class ProgressStream:
         self.fd = open(filename, "rb")
         self.episode_id = episode_id
         self.filename = os.path.basename(filename)
-        print(f"☁️ جاري سحب {self.filename} للأرشيف (بدون شريط تقدم لضمان الاستقرار)...")
+        print(
+            f"☁️ جاري سحب {self.filename} للأرشيف (بدون شريط تقدم لضمان الاستقرار)..."
+        )
 
     def read(self, size=-1):
         # قراءة خام مباشرة - أسرع وأخف حاجة ممكنة
         return self.fd.read(size)
 
-    def tell(self): return self.fd.tell()
-    def seek(self, offset, whence=0): return self.fd.seek(offset, whence)
-    def __len__(self): return os.path.getsize(self.fd.name)
-    def close(self): self.fd.close()
+    def tell(self):
+        return self.fd.tell()
+
+    def seek(self, offset, whence=0):
+        return self.fd.seek(offset, whence)
+
+    def __len__(self):
+        return os.path.getsize(self.fd.name)
+
+    def close(self):
+        self.fd.close()
 
 
 async def ensure_dependencies():
@@ -162,7 +178,6 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
         except Exception as e:
             log.error(f"❌ خطاء في جلب مفاتيح Telegram: {e}")
             pass
-
     # 3. التحقق النهائي وتحويل النوع
     try:
         f_api_id = int(t_id) if t_id else None
@@ -178,33 +193,36 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     if not tele_string:
         log.error("❌ خطأ قاتل: TELEGRAM_STRING_SESSION غير موجود!")
         return None
-
-    # استكمال بقية الكود (الوحش يدخل الآن)...
-
-    # 3. الوحش يدخل الآن "In-Memory"
-    # 3. الوحش يدخل الآن "In-Memory" وبدون اسم ثابت لمنع التداخل
     async with Client(
         name=f"bot_{int(time.time())}",  # استخدام اسم فريد مؤقت بدلاً من :memory: لمنع تعارض الجلسات
         session_string=tele_string,
         api_id=f_api_id,
         api_hash=f_api_hash,
         workers=4,  # تقليل عدد العمال لضمان الاستقرار في بيئات الـ Cloud
-        sleep_threshold=60, # رفع حد الانتظار عند حصول Flood
+        sleep_threshold=60,  # رفع حد الانتظار عند حصول Flood
     ) as app:
-        await asyncio.sleep(2) # انتظار بسيط لضمان استقرار الـ NetworkTask قبل البدء
+        await asyncio.sleep(2)  # انتظار بسيط لضمان استقرار الـ NetworkTask قبل البدء
 
         # 1. الرفع للمخزن (أول وجهة في القائمة)
         dest = DESTINATIONS[0].strip()
         tracker = PyrogramProgress(display_name, 1, 1, episode_id)
-
         try:
-            sent_video = await app.send_video(
-                chat_id=int(dest),
-                video=file_path,
-                supports_streaming=True,
-                caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
-                progress=lambda c, t: tracker.update(c, t),
-            )
+            while True:
+                try:
+                    sent_video = await app.send_video(
+                        chat_id=int(dest),
+                        video=file_path,
+                        supports_streaming=True,
+                        caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
+                        progress=lambda c, t: tracker.update(c, t),
+                    )
+                    break
+                except FloodWait as e:
+                    log.warning(
+                        f"⚠️ Telegram FloodWait: الانتظار لمدة {e.value} ثانية قبل إعادة المحاولة..."
+                    )
+                    await asyncio.sleep(e.value + 2)
+                    continue
             tracker.close()  # 👈 ضرورية جداً هنا
             if sent_video:
                 log.info(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
