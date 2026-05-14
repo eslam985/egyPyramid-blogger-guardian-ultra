@@ -146,12 +146,14 @@ def ultimate_beast_worker():
 
                     if check_task.data and len(check_task.data) > 0:
                         task_data = check_task.data[0]
-                        # باقي شروط الـ if كما هي...
-                        # 2. التحقق من الشروط المطلوبة
-                        if (
-                            task_data.get("status") == "completed"
-                            and task_data.get("progress_percent") == 100
-                        ):
+                        current_status = task_data.get("status")
+                        
+                        # لو الحالة completed (تمت بنجاح) أو failed (فشلت تماماً)
+                        # في الحالتين لازم نحذفها عشان ما تتكررش
+                        if current_status in ["completed", "failed"]:
+                            log.info(f"🧹 تنظيف: المهمة {job_id} انتهت بحالة ({current_status})، جاري حذفها...")
+                            SupabaseService.client.table("download_tasks").delete().eq("id", job_id).execute()
+                            log.info(f"🗑️ تم حذف المهمة {job_id} من قائمة الانتظار.")
 
                             log.info(
                                 f"🧹 تنظيف: المهمة {job_id} اكتملت بنجاح، جاري حذفها من الجدول..."

@@ -1281,18 +1281,26 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         quality_pass = False  # هنا فعلاً فشل لأن مفيش لينكات كافية
 
                 # 5. إغلاق المهمة (حذف فقط في حالة انعدام الروابط)
+                # 5. إغلاق المهمة - تأمين الإغلاق النهائي مهما حدث
                 if task_id:
-                    if media_id and not quality_pass:
-                        # الحذف هنا فقط لو السيرفرات أقل من 3
-                        supabase.table("medias").delete().eq("id", media_id).execute()
-                        log.warning(f"🗑️ تم حذف الميديا لعدم وجود روابط كافية.")
+                    try:
+                        if media_id and not quality_pass:
+                            supabase.table("medias").delete().eq("id", media_id).execute()
+                            log.warning(f"🗑️ تم حذف الميديا لعدم وجود روابط كافية.")
+                            final_status, final_msg = "failed", "❌ فشل: السيرفرات أقل من 3"
+                        else:
+                            final_status = "completed"
+                            final_msg = "✅ اكتملت بنجاح!" if has_metadata else "⚠️ اكتملت (بدون بيانات وصفية)"
 
-                        supabase.table("download_tasks").update(
-                            {
-                                "status": "failed",
-                                "status_message": "❌ فشل: السيرفرات أقل من 3",
-                            }
-                        ).eq("id", task_id).execute()
+                        # التحديث الفعلي الذي يمنع سحب التاسك مرة أخرى
+                        supabase.table("download_tasks").update({
+                            "status": final_status,
+                            "progress_percent": 100,
+                            "status_message": final_msg,
+                        }).eq("id", task_id).execute()
+                        log.info(f"✅ تم إغلاق التاسك {task_id} بحالة: {final_status}")
+                    except Exception as task_err:
+                        log.error(f"❌ فشل تحديث حالة التاسك في سوبابيز: {task_err}")
                     else:
                         # هنا هيدخل لو quality_pass بـ True (سواء بـ is_ready أو لأ)
                         msg = (
