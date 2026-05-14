@@ -753,10 +753,9 @@ def rename_and_move_to_stream(file_path: str, media_id: int, episode_id: int, id
     except Exception as move_err:
         log.error(f"❌ خطأ في نقل الملف: {move_err}")
 
-    raw_space_id = os.environ.get("SPACE_ID", "eslam315/egypyramid-guardian-ultra")
-    space_domain = raw_space_id.replace("/", "-").lower().strip()
+    raw_space_id = os.environ.get("SPACE_ID", "Eslam315/egyPyramid-guardian-ultra")
+    space_domain = raw_space_id.replace("/", "-").strip()
     direct_remote_url = f"https://{space_domain}.hf.space/stream/{new_file_name}"
-
     log.info(f"🔗 [Direct Link] الرابط جاهز للاختبار: {direct_remote_url}")
 
     return final_public_path, direct_remote_url
