@@ -1176,8 +1176,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 else:
                     log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
 
-            # --- 🟢 [تم حذف القسم رقم 7 بالكامل لمنع تضارب المسارات] ---
-
             # --- 9. الرفع لـ MixDrop ---
             try:
                 if e_id:
@@ -1195,40 +1193,28 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
                         on_conflict="episode_id, server_name",
                     ).execute()
-                    log.info(f"✅ تم حفظ رابط MixDrop")
+                    log.info(f"✅ تم رفع وحفظ رابط MixDrop: {mix_url}")
             except Exception as e:
                 log.warning(f"⚠️ فشل MixDrop: {e}")
 
-            # --- 10. التحديث النهائي الشامل (هذا هو الأهم) ---
+            # --- 10. التحديث النهائي الشامل ---
             try:
-                # تنظيف الملف من الـ stream بعد التأكد من انتهاء الرفع لجميع السيرفرات
-                if os.path.exists(vid_path):
-                    os.remove(vid_path)
-                    log.info(f"🧹 تم تنظيف مسار الستريم العام: {vid_path}")
-
                 # نرسل كل شيء في استدعاء واحد نهائي يغلق المهمة بـ Success
                 save_res = save_to_supabase(
-                    voe_watch,
-                    voe_down,
-                    vk_url,  # تأكد أن رابط VK تم توليده أو تمريره هنا
-                    loop_display_title,
-                    original_task_name,
-                    meta_story,
-                    final_poster,
-                    meta_year,
-                    meta_rating,
-                    vid_path,  # المسار الجديد للملف في مجلد stream
-                    archive_url,
-                    tmdb_id=tmdb_id_fetched,
-                    labels=meta_labels,
-                    runtime=meta_runtime,
-                    duration_iso=meta_duration,
+                    voe_watch, voe_down, vk_url, 
+                    loop_display_title, original_task_name,
+                    meta_story, final_poster, meta_year, meta_rating,
+                    vid_path, archive_url, tmdb_id=tmdb_id_fetched,
+                    labels=meta_labels, runtime=meta_runtime, duration_iso=meta_duration
                 )
-                if save_res:
-                    e_id, media_id, meta_story, final_poster = save_res
-                    log.info(f"🏁 تم إغلاق المهمة بنجاح وحفظ كافة البيانات.")
             except Exception as e:
                 log.error(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
+                save_res = None
+
+            # --- ⚡ بلوك النجاح (خارج الـ except ليعمل عند النجاح فقط) ⚡ ---
+            if save_res:
+                e_id, media_id, meta_story, final_poster = save_res
+                log.info(f"🏁 تم إغلاق المهمة بنجاح وحفظ كافة البيانات.")
 
                 # --- ⚡ بلوك النجاح (يجب أن يكون هنا وليس في الـ except) ⚡ ---
 
@@ -1321,11 +1307,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                                 "status_message": msg,
                             }
                         ).eq("id", task_id).execute()
-
-            except Exception as e:
-                # الـ except دي وظيفتها تبلغك لو الـ try اللي فوق فشلت
-                log.error(f"❌ فشل التحديث النهائي أو الإرسال: {e}")
-
             # 6. تنظيف الملف المحلي (خارج الـ try/except لضمان التنفيذ)
             if os.path.exists(vid_path):
                 try:

@@ -1040,7 +1040,7 @@ async def upload_to_mixdrop(file_path, email, key):
                     # تأكد أن الرابط يبدأ بـ https
                     if not embed_url.startswith("https:"):
                         embed_url = "https:" + embed_url
-                    print(f"✅ تم الرفع لـ MixDrop: {embed_url}")
+                    log.info(f"✅ تم الرفع لـ MixDrop: {embed_url}")
                     return embed_url
                 else:
                     print(f"❌ فشل MixDrop: {res_json}")
