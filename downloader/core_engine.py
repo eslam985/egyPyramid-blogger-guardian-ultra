@@ -1007,7 +1007,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             # archive_url = Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
             # عمل كومنت لسطر "Disabled" أو حذفه تماماً بعد ما تجرب دالة الأرشفة
             archive_url = "Disabled"
-
+            # --- 0. صمامات الأمان (تعريف افتراضي لمنع NameError) ---
+            vk_url = "Pending"
+            voe_watch = "Pending"
+            voe_down = "Pending"
+            mix_url = None
+            # -------------------------------------------------------
             # --- 4. تجهيز المصدر المباشر (Direct Space Stream) ---
             # تخطي تليجرام تماماً لتجنب الـ FloodWait وتعطيل السكربت
             file_name = os.path.basename(vid_path)
@@ -1147,31 +1152,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     log.info(f"✅ LuluStream Saved!")
                 else:
                     log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
-            # --- 7. معالجة النتائج وحفظها ---
-            # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
-            try:
-                # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
-                e_id, media_id, meta_story, final_poster = save_to_supabase(
-                    voe_watch,
-                    voe_down,
-                    "Pending",
-                    loop_display_title,
-                    original_task_name,
-                    meta_story,
-                    final_poster,
-                    meta_year,
-                    meta_rating,
-                    identifier,
-                    archive_url,
-                    tmdb_id=tmdb_id_fetched,
-                    labels=meta_labels,
-                    runtime=meta_runtime,
-                    duration_iso=meta_duration,
-                )
-            except Exception as e:
-                log.warning(f"⚠️ فشل تحديث ساب باز الأولي: {e}")
 
-            # --- 9. الرفع لـ MixDrop (ضع الكود الجديد هنا) ---
+            # --- 🟢 [تم حذف القسم رقم 7 بالكامل لمنع تضارب المسارات] ---
+
+            # --- 9. الرفع لـ MixDrop ---
             try:
                 if e_id:
                     supabase.table("episodes").update(
@@ -1181,6 +1165,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                         }
                     ).eq("id", e_id).execute()
 
+                # تأكد أن vid_path هنا هي المسار الجديد بعد النقل (final_public_path)
                 mix_url = await upload_to_mixdrop(vid_path, mix_user, mix_key)
                 if mix_url:
                     supabase.table("links").upsert(
@@ -1191,27 +1176,31 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             except Exception as e:
                 log.warning(f"⚠️ فشل MixDrop: {e}")
 
-            # --- التحديث النهائي الشامل لجدول الحلقات (خارج الـ try الخاص بـ دود ستريم) ---
-            # --- التحديث النهائي الشامل لجدول الحلقات ---
+            # --- 10. التحديث النهائي الشامل (هذا هو الأهم) ---
             try:
-                # 1. حفظ البيانات واستلام الـ ID (المفتاح القاطع)
-                e_id, media_id, meta_story, final_poster = save_to_supabase(
+                # نرسل كل شيء في استدعاء واحد نهائي يغلق المهمة بـ Success
+                save_res = save_to_supabase(
                     voe_watch,
                     voe_down,
-                    vk_url,
+                    vk_url,  # تأكد أن رابط VK تم توليده أو تمريره هنا
                     loop_display_title,
                     original_task_name,
                     meta_story,
                     final_poster,
                     meta_year,
                     meta_rating,
-                    identifier,
+                    vid_path,  # المسار الجديد للملف في مجلد stream
                     archive_url,
                     tmdb_id=tmdb_id_fetched,
                     labels=meta_labels,
                     runtime=meta_runtime,
                     duration_iso=meta_duration,
                 )
+                if save_res:
+                    e_id, media_id, meta_story, final_poster = save_res
+                    log.info(f"🏁 تم إغلاق المهمة بنجاح وحفظ كافة البيانات.")
+            except Exception as e:
+                log.error(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
 
                 # --- ⚡ بلوك النجاح (يجب أن يكون هنا وليس في الـ except) ⚡ ---
 
