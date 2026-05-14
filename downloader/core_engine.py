@@ -722,19 +722,26 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         if actual_downloaded_path:
             log.info(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
 
-            # --- ⚡ توليد رابط الـ Direct Remote ⚡ ---
-            # استخراج اسم الملف (مثلاً down_123.mp4)
             file_name = os.path.basename(actual_downloaded_path)
-            # دومين السبيس بتاعك
-            space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"
-            # الرابط السحري اللي هنبعته للسيرفرات (Voe, Dood, etc.)
+
+            # تحديد مجلد الستريم في الجذر (المجلد الذي فتحه FastAPI)
+            # بما أننا داخل /app/project حالياً، فـ ".." تعود بنا لـ /app/
+            base_root = os.path.dirname(os.getcwd())
+            stream_dir = os.path.join(base_root, "stream")
+            os.makedirs(stream_dir, exist_ok=True)
+
+            # نقل الملف
+            final_public_path = os.path.join(stream_dir, file_name)
+            shutil.move(actual_downloaded_path, final_public_path)
+
+            # بناء الرابط
+            space_domain = "eslam315-egypyramid-guardian-ultra.hf.space"
             direct_remote_url = f"https://{space_domain}/stream/{file_name}"
 
-            log.info(f"🔗 [Direct Link] جاهز للرفع الخماسي: {direct_remote_url}")
-
-            # تخزين الرابط في الـ meta_data أو متغير لاستخدامه في الدوال القادمة
-            if meta_data is not None:
-                meta_data["direct_link"] = direct_remote_url
+            log.info(f"🔗 [Direct Link] الرابط جاهز للاختبار: {direct_remote_url}")
+            vid_path = (
+                final_public_path  # تحديث المسار عشان الرفع المحلي لـ VK و MixDrop
+            )
             # ------------------------------------------
         else:
             log.error(
