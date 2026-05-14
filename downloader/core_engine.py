@@ -808,7 +808,7 @@ async def upload_to_all_servers(
         ).eq("id", e_id).execute()
 
     log.info(f"🚀 البدء في الرفع المتوازي الخماسي (VK + Voe + Dood + Tape + Lulu)...")
-
+    log.info(f"remote_source for parallel uploads: {remote_source} | video_path: {video_path}")
     if remote_source:
         task_voe = upload_to_voe_api(video_path, remote_source)
         await asyncio.sleep(15)
@@ -924,6 +924,7 @@ async def finalize_episode(
             ).eq("id", e_id).execute()
 
         mix_url = await upload_to_mixdrop(video_path, mix_user, mix_key)
+        log.info(f"mix_url: {mix_url}")
         if mix_url:
             supabase.table("links").upsert(
                 {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
@@ -1180,13 +1181,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     meta_runtime = tmdb_data["runtime"]
     meta_year = tmdb_data["year"]
 
-    # --- 9. تحديد نوع المصدر (محلي أم رابط) ---
-    clean_name = (
-        "".join([c for c in display_title if c.isalnum() or c in (" ", ".", "_")])
-        .strip()
-        .replace(" ", "_")
-    )
-
     is_local_file = os.path.exists(url)
     actual_downloaded_path = None
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
@@ -1202,6 +1196,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         actual_downloaded_path = final_public_path
         vid_path = final_public_path
         final_direct_url = direct_remote_url   # حفظ الرابط الديناميكي
+        log.info(f"final_direct_url for local file: {final_direct_url}")
         class MockProcess:
             returncode = 0
         process = MockProcess()
@@ -1275,13 +1270,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         else:
             log.info(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
             # الملف موجود بالفعل في المسار الصحيح (vid_path)
-            log.info(f"videos={vid_path} | is_rar={is_rar} | is_local_file={is_local_file}")
             videos = [vid_path]
+            log.info(f"videos={vid_path} | is_rar={is_rar} | is_local_file={is_local_file}")
         # لا تقم بإعادة تعريف videos مرة أخرى باستخدام list_videos(extract_dir) هنا!
         # انتقل مباشرة إلى فحص عدد الفيديوهات
         if not videos:
             if "vid_path" in locals() and os.path.exists(vid_path):
                 videos = [vid_path]
+                log.info(f"videos={vid_path} | is_rar={is_rar} | is_local_file={is_local_file}")
             else:
                 log.error("❌ لم يتم العثور على فيديوهات!")
                 return
@@ -1319,7 +1315,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         # --- 17. لووب الحلقات ---
         for idx, vid_path in enumerate(videos, 1):
-            # apply_media_disguise(vid_path, idx, display_title, LOGO_FILE)
+            apply_media_disguise(vid_path, idx, display_title, LOGO_FILE)
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
             current_file_name = os.path.basename(vid_path)
             if len(videos) > 1:
