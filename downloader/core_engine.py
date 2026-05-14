@@ -1041,9 +1041,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).eq("id", e_id).execute()
                 except:
                     pass
-            # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
             # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
-            if identifier:
+            # نستخدم vid_path عشان نضمن الدخول للرفع طالما التحميل نجح
+            if vid_path and os.path.exists(vid_path):
                 # --- التعديل هنا (إظهار السيرفرات) ---
                 if task_id:
                     supabase.table("download_tasks").update(
@@ -1064,10 +1064,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                             "progress_percent": 90,
                         }
                     ).eq("id", e_id).execute()
-                # --- 🎯 المنطق الجديد والمبسط: المصدر هو السبيس فوراً 🎯 ---
-                if "direct_remote_url" in locals() and direct_remote_url:
+                # --- 🎯 المصدر المعتمد هو رابط السبيس المباشر 🎯 ---
+                if direct_remote_url:
                     remote_source = direct_remote_url
-                    log.info(f"✅ المصدر المعتمد: [Hugging Face Direct Stream]")
+                    log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream]")
                 elif archive_url and "archive.org" in archive_url:
                     remote_source = identifier
                     log.info(f"✅ المصدر المعتمد: Archive.org")
