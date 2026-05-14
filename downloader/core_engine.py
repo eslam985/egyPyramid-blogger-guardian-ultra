@@ -740,8 +740,7 @@ def rename_and_move_to_stream(file_path: str, media_id: int, episode_id: int, id
         log.error(f"⚠️ فشل إعادة التسمية، سيتم استخدام الاسم الأصلي: {rename_err}")
         new_file_name = os.path.basename(file_path)
 
-    base_root = os.path.dirname(os.getcwd())
-    stream_dir = os.path.join(base_root, "stream")
+    stream_dir = os.path.join(os.getcwd(), "stream")
     os.makedirs(stream_dir, exist_ok=True)
 
     final_public_path = os.path.join(stream_dir, new_file_name)
@@ -1380,14 +1379,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             # --- 21. الرفع المتوازي الخماسي ---
             if vid_path and os.path.exists(vid_path):
-                # بناء الرابط بنفس طريقة النسخة الأصلية التي كانت تعمل
-                file_name = os.path.basename(vid_path)        # اسم الملف الفعلي بعد النقل والتسمية
-                space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"   # ثابت كما كان في الأصل
+                file_name = os.path.basename(vid_path)   # المفتاح: استخدم اسم الملف الفعلي
+                space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"   # أو احسبها من SPACE_ID بدون lower()
                 direct_remote_url = f"https://{space_domain}/stream/{file_name}"
                 remote_source = direct_remote_url
-                log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream] - {direct_remote_url}")
-
-                log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
+                log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Direct Stream] - {remote_source}")
                 await asyncio.sleep(10)
 
                 upload_results = await upload_to_all_servers(
