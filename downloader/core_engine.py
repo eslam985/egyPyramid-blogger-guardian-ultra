@@ -723,7 +723,7 @@ async def download_video(cmd: list, task_id, display_title: str, extract_dir: st
     return actual_downloaded_path
 
 
-def rename_and_move_to_stream(file_path: str, media_id: int, episode_id: int, idx: int) -> tuple:
+def rename_and_move_to_stream(file_path, media_id, episode_id, idx):
     """
     إعادة تسمية الملف بالمعرفات الرقمية ونقله لمجلد stream.
     تعيد (final_public_path, direct_remote_url).
@@ -740,8 +740,9 @@ def rename_and_move_to_stream(file_path: str, media_id: int, episode_id: int, id
         log.error(f"⚠️ فشل إعادة التسمية، سيتم استخدام الاسم الأصلي: {rename_err}")
         new_file_name = os.path.basename(file_path)
 
-    stream_dir = os.path.join(os.getcwd(), "stream")
-    os.makedirs(stream_dir, exist_ok=True)
+
+    base_root = os.path.dirname(os.getcwd())          # /app
+    stream_dir = os.path.join(base_root, "stream")    # /app/stream
 
     final_public_path = os.path.join(stream_dir, new_file_name)
     try:
@@ -1269,24 +1270,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         if is_rar:
             log.info(f"🔓 تم اكتشاف ملف مضغوط حقيقي، جاري فك الضغط...")
             extract_archive(actual_downloaded_path, extract_dir)
+            # بعد فك الضغط، جرد الفيديوهات من المجلد المستخرج
+            videos = list_videos(extract_dir)
         else:
             log.info(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
-            if not os.path.exists(actual_downloaded_path):
-                final_video_path = vid_path
-            else:
-                _, file_extension = os.path.splitext(actual_downloaded_path)
-                final_video_path = os.path.join(
-                    extract_dir, f"{clean_name}{file_extension}"
-                )
-                if actual_downloaded_path != final_video_path:
-                    shutil.move(actual_downloaded_path, final_video_path)
-
-            videos = [final_video_path]
-
-        # --- 15. جرد الفيديوهات ---
-        log.debug(f"DEBUG: الملفات الموجودة في المجلد حالياً: {os.listdir(extract_dir)}")
-        videos = list_videos(extract_dir)
-
+            # الملف موجود بالفعل في المسار الصحيح (vid_path)
+            log.info(f"videos={vid_path} | is_rar={is_rar} | is_local_file={is_local_file}")
+            videos = [vid_path]
+        # لا تقم بإعادة تعريف videos مرة أخرى باستخدام list_videos(extract_dir) هنا!
+        # انتقل مباشرة إلى فحص عدد الفيديوهات
         if not videos:
             if "vid_path" in locals() and os.path.exists(vid_path):
                 videos = [vid_path]
