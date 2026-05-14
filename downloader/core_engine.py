@@ -676,9 +676,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 print(
                     f"\n⚠️ ALERT_LOG: {line_str}"
                 )  # استخدم \n عشان ميمسحش شريط التحميل
-        # سطر جديد بعد انتهاء اللوب عشان اللوجات اللي بعدها متجيش جنب الشريط
+        # سطر جديد
         print("")
-        # سطر أمان إضافي: اطبع مخرجات الخطأ لو العملية فشلت
+        
+        # ⚡ الإجراء التصحيحي: انتظر العملية لتحديث الـ returncode ⚡
+        await process.wait() 
+
+        # الآن returncode لن يكون None أبداً
         if process.returncode != 0:
             if (
                 extract_dir
