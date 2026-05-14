@@ -176,8 +176,8 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                 session_string=tele_string,
                 api_id=f_api_id,
                 api_hash=f_api_hash,
-                workers=4,
-                sleep_threshold=120,
+                workers=1,  # تقييد عدد العمال لمنع الـ Flood
+                sleep_threshold=300,
             ) as app:
                 await asyncio.sleep(2)
                 log.info(f"🚀 [Telegram] بدأ الرفع الصامت للملف...")

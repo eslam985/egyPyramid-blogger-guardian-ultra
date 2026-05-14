@@ -2,7 +2,7 @@
 import os
 # إعدادات النظام - توضع هنا لضمان تطبيقها على كل الاستيرادات التالية
 os.environ["PYROGRAM_MAX_CONCURRENT_TRANSMISSIONS"] = "1"
-os.environ["PYROGRAM_SLEEP_THRESHOLD"] = "60"
+os.environ["PYROGRAM_SLEEP_THRESHOLD"] = "300"
 os.environ["TQDM_MININTERVAL"] = "2.0"
 
 import asyncio
