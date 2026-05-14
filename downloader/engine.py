@@ -74,41 +74,16 @@ class PyrogramProgress:
     def __init__(self, name, dest_count, current_dest, episode_id=None):
         self.name = name
         self.episode_id = episode_id
-        self.dest_info = f"({current_dest}/{dest_count})"
         self.started = False
 
     def update(self, current, total):
-        # تحديث واحد فقط عند بداية الرفع
+        # سنكتفي بطباعة رسالة البدء فقط في الـ Console لمرة واحدة
         if not self.started:
-            print(f"🚀 بدأ الرفع: {self.name} {self.dest_info}...")
-            if self.episode_id:
-                try:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": f"📤 جاري الرفع الآن: {self.name}",
-                            "progress_percent": 1,
-                        }
-                    ).eq("id", self.episode_id).execute()
-                except:
-                    pass
+            print(f"🚀 [Telegram] بدأت عملية الرفع للملف: {self.name}...")
             self.started = True
 
-        # تحديث واحد فقط عند اكتمال الرفع
-        if current == total:
-            print(f"✅ اكتمل الرفع بنجاح: {self.name}")
-            if self.episode_id:
-                try:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": f"✅ اكتمل الرفع: {self.name}",
-                            "progress_percent": 100,
-                        }
-                    ).eq("id", self.episode_id).execute()
-                except:
-                    pass
-
     def close(self):
-        pass
+        print(f"✅ [Telegram] انتهت محاولة الرفع.")
 
 
 class ProgressStream:
@@ -157,6 +132,7 @@ async def ensure_dependencies():
     except Exception as e:
         log.error(f"❌ خطأ أثناء تثبيت الأدوات: {e}")
 
+
 async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     log.info(f"📤 رفع واستخراج رابط تليجرام المباشر: {display_name}")
     # 1. جلب القيم من بيئة النظام
@@ -168,6 +144,7 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     if not t_id or not t_hash or not tele_string:
         try:
             from google.colab import userdata
+
             t_id = t_id or userdata.get("TELEGRAM_API_ID")
             t_hash = t_hash or userdata.get("TELEGRAM_API_HASH")
             tele_string = tele_string or userdata.get("TELEGRAM_STRING_SESSION")
@@ -203,12 +180,14 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                 sleep_threshold=120,
             ) as app:
                 await asyncio.sleep(2)
+                log.info(f"🚀 [Telegram] بدأ الرفع الصامت للملف...")
+                # البحث عن سطر الرفع القديم واستبداله بهذا لتعطيل الـ Callback تماماً
                 sent_video = await app.send_video(
                     chat_id=int(dest),
                     video=file_path,
                     supports_streaming=True,
                     caption=f"🎬 **{display_name}**\n✅ بواسطة **Egy Pyramid**",
-                    progress=lambda c, t: tracker.update(c, t),
+                    progress=None,  # تعطيل التحديثات لمنع الـ Flood
                 )
                 if sent_video:
                     break
@@ -220,7 +199,7 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
             log.error(f"❌ خطأ أثناء الرفع: {e}")
             await asyncio.sleep(10)
             continue
-    
+
     tracker.close()
 
     # استخراج الرابط
@@ -234,9 +213,11 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
         if sent_video:
             log.info(f"🔄 جاري عمل Forward للبوت لاستخراج الرابط...")
             await sent_video.forward("@EgyPyramid_stream_bot")
-            await asyncio.sleep(5)
+            await asyncio.sleep(8)
 
-            async for message in app.get_chat_history("@EgyPyramid_stream_bot", limit=1):
+            async for message in app.get_chat_history(
+                "@EgyPyramid_stream_bot", limit=1
+            ):
                 if message.text and "http" in message.text:
                     links = re.findall(r"(https?://[^\s]+)", message.text)
                     if links:
@@ -258,12 +239,18 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
     # محاولة أخيرة لو فشل الاستخراج
     if episode_id:
         try:
-            res = supabase.table("links").select("url").eq("episode_id", episode_id).eq("server_name", "telegram_direct").execute()
+            res = (
+                supabase.table("links")
+                .select("url")
+                .eq("episode_id", episode_id)
+                .eq("server_name", "telegram_direct")
+                .execute()
+            )
             if res.data:
                 return res.data[0]["url"]
         except Exception as e:
             log.error(f"❌ خطأ أثناء التحقق من قاعدة البيانات: {e}")
-    
+
     return "failed_but_continue"
 
 

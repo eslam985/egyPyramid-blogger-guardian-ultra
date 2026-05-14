@@ -11,6 +11,7 @@ import arabic_reshaper
 from urllib.parse import unquote, urlparse
 from tqdm import tqdm as tqdm_std
 from bidi.algorithm import get_display
+
 # 1. استيراد اللوجر
 try:
     from .logger_setup import get_beast_logger
@@ -76,7 +77,172 @@ async def run_pyramid_tasks(task_list):
     return await original_run(task_list)
 
 
-# --- دالة pyramid_ultimate_beast بتبدأ هنا ---
+def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
+    """
+    تقوم هذه الدالة بتطبيق فلتر FFmpeg لكسر بصمة الفيديو وإضافة الشعارات.
+    """
+    try:
+        # إنشاء مسار للملف المموه في نفس مجلد الفيديو الحالي
+        extract_dir_current = os.path.dirname(vid_path)
+        disguised_file = os.path.join(extract_dir_current, f"disguised_{idx}.mp4")
+
+        log.info(f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}")
+        def get_duration(file):
+            cmd = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                file,
+            ]
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            return float(result.stdout.strip()) if result.stdout.strip() else 0.0
+
+        # تجهيز النص العربي
+        raw_text = "To see more, please search on Google for EGY PYRAMID"
+        reshaped_text = arabic_reshaper.reshape(raw_text)
+        bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
+
+        duration = get_duration(vid_path)
+        mid_time = duration / 2
+
+        # تجهيز النص العربي
+        raw_text = "To see more, please search on Google for EGY PYRAMID"
+        reshaped_text = arabic_reshaper.reshape(raw_text)
+        bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
+
+        # 1. حساب المدة والتحكم الديناميكي في الجودة والمساحة
+        duration = get_duration(vid_path)
+        mid_time = duration / 2
+        duration_mins = duration / 60
+
+        if duration_mins > 150:
+            # إعدادات للأفلام الطويلة جداً (أمان ضد التقسيم)
+            t_maxrate, t_bufsize, t_crf = "1.5M", "1.5M", 28
+            log.info(f"🎬 فيلم طويل ({duration_mins:.1f}m) -> ضبط: 1.5M/CRF28")
+        else:
+            # إعدادات للأفلام العادية (أعلى جودة ممكنة)
+            t_maxrate, t_bufsize, t_crf = "1.8M", "3M", 26
+            log.info(f"🎬 فيلم عادي ({duration_mins:.1f}m) -> ضبط: 1.8M/CRF26")
+
+        # 2. بناء أمر FFmpeg بالقيم الجديدة
+        ffmpeg_cmd = (
+            f'ffmpeg -loglevel error -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
+            f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.05:contrast=1.03[v_final]; '
+            f"[v_final]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
+            f"[txt1]drawtext=text='{bidi_text}':fontfile=/content/arial.ttf:fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
+            f"enable='between(t,{mid_time},{mid_time+10})'[txt2]; "
+            f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
+            f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
+            f'" '
+            f'-map "[outv]" -map 0:a '
+            f"-c:v libx264 -preset superfast -crf {t_crf} "
+            f"-maxrate {t_maxrate} -bufsize {t_bufsize} -threads 0 -pix_fmt yuv420p "
+            f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
+        )
+
+        # تنفيذ العملية
+        subprocess.run(ffmpeg_cmd, shell=True, check=True)
+
+        # الاستبدال المادي: حذف الأصلي وتسمية المموه باسم الأصلي
+        if os.path.exists(disguised_file):
+            os.remove(vid_path)
+            os.rename(disguised_file, vid_path)
+            log.info(f"✅ تم تحصين الحلقة {idx} بنجاح!")
+
+    except Exception as e:
+        log.warning(f"⚠️ خطأ في التمويه، سيتم الرفع الأصلي: {e}")
+
+def Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id=None):
+    """
+    تقوم هذه الدالة برفع نسخة احتياطية من الملف الخام إلى Archive.org وتحديث روابط سوبابيز.
+    """
+    try:
+
+        # --- أضف/عدل هذا الجزء هنا ---
+        if task_id:
+            supabase.table("download_tasks").update(
+                {
+                    "status_message": "☁️ جاري الأرشفة (النسخة الخام)...",
+                    "progress_percent": 92,
+                }
+            ).eq("id", task_id).execute()
+        # -------------------------
+        # تحديث الحالة للمتصفح: بدء الرفع للأرشيف
+        if e_id:
+            supabase.table("episodes").update(
+                {
+                    "status_message": "☁️ جاري الرفع للأرشيف (نسخة احتياطية)",
+                    "progress_percent": 0,  # تصفير العداد للبدء في حساب الرفع
+                }
+            ).eq("id", e_id).execute()
+
+        pbar_archive = tqdm(
+            total=os.path.getsize(vid_path),
+            desc=f"☁️ أرشيف (كامل)",
+            unit="B",
+            unit_scale=True,
+            mininterval=3.0,  # تحديث كل 3 ثوانٍ فقط (مثالي للسرعات البطيئة في كولاب)
+            maxinterval=10.0,
+            ascii=" █",  # استبدال الهاشتاج بمربعات ناعمة
+            colour="green",  # اختيار لون الشريط (يعمل في كولاب)
+        )
+
+        # اسم ملف مشفر تماماً
+        # 1. إنشاء الـ stream وربطه بملف الفيديو
+        stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
+        # 2. تمرير الـ stream مباشرة لمكتبة الرفع
+        # الـ stream الآن هو "المخبر" الذي يخبر pbar بكل بايت يخرج
+
+        try:
+            # التصحيح هنا: استدعاء upload من المكتبة وليس اسم دالتك الحالية
+            from internetarchive import upload 
+            
+            upload(
+                identifier,
+                files={
+                    final_file_name: stream
+                },  # 👈 التعديل هنا: استخدم stream وليس f_data
+                # إخفاء اسم الفيلم من البيانات الوصفية (Metadata)
+                metadata={
+                    "title": f"M-{media_id}-E{e_id}",
+                    "mediatype": "movies",
+                    "description": f"Internal ID: {media_id}_{e_id}_{idx}",
+                },
+                access_key=ARCHIVE_ACCESS_KEY,
+                secret_key=ARCHIVE_SECRET_KEY,
+                verbose=False,
+            )
+        finally:
+            stream.close()
+            pbar_archive.close()
+        direct_download_url = f"https://archive.org/download/{identifier}/{final_file_name}"
+        
+        # حقن الرابط في سوبابيز
+        supabase.table("links").insert({
+            "episode_id": e_id,
+            "url": direct_download_url,
+            "server_name": "archive",
+            "last_check_status": "valid",
+        }).execute()
+        
+        log.info(f"✅ تم الأرشفة بنجاح: {direct_download_url}")
+        return direct_download_url # مهم جداً للـ Loop
+
+    except Exception as e:
+        log.error(f"❌ خطأ أرشيف: {e}")
+        return "Failed_Archive_Upload"
+
+
+
+
+
+
 
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
@@ -702,90 +868,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         # 3. تحديد الحجم الكلي لكل حلقة
         for idx, vid_path in enumerate(videos, 1):
             # --- [ بداية منطقة التحصين والتمويه - EGY PYRAMID ] ---
-            try:
-                # إنشاء مسار للملف المموه في نفس مجلد الفيديو الحالي
-                extract_dir_current = os.path.dirname(vid_path)
-                disguised_file = os.path.join(
-                    extract_dir_current, f"disguised_{idx}.mp4"
-                )
-
-                log.info(
-                    f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}"
-                )
-
-                def get_duration(file):
-                    cmd = [
-                        "ffprobe",
-                        "-v",
-                        "error",
-                        "-show_entries",
-                        "format=duration",
-                        "-of",
-                        "default=noprint_wrappers=1:nokey=1",
-                        file,
-                    ]
-                    result = subprocess.run(
-                        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                    )
-                    return (
-                        float(result.stdout.strip()) if result.stdout.strip() else 0.0
-                    )
-
-                # تجهيز النص العربي
-                raw_text = "To see more, please search on Google for EGY PYRAMID"
-                reshaped_text = arabic_reshaper.reshape(raw_text)
-                bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
-
-                duration = get_duration(vid_path)
-                mid_time = duration / 2
-
-                # تجهيز النص العربي
-                raw_text = "To see more, please search on Google for EGY PYRAMID"
-                reshaped_text = arabic_reshaper.reshape(raw_text)
-                bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
-
-                # 1. حساب المدة والتحكم الديناميكي في الجودة والمساحة
-                duration = get_duration(vid_path)
-                mid_time = duration / 2
-                duration_mins = duration / 60
-
-                if duration_mins > 150:
-                    # إعدادات للأفلام الطويلة جداً (أمان ضد التقسيم)
-                    t_maxrate, t_bufsize, t_crf = "1.5M", "1.5M", 28
-                    log.info(f"🎬 فيلم طويل ({duration_mins:.1f}m) -> ضبط: 1.5M/CRF28")
-                else:
-                    # إعدادات للأفلام العادية (أعلى جودة ممكنة)
-                    t_maxrate, t_bufsize, t_crf = "1.8M", "3M", 26
-                    log.info(f"🎬 فيلم عادي ({duration_mins:.1f}m) -> ضبط: 1.8M/CRF26")
-
-                # 2. بناء أمر FFmpeg بالقيم الجديدة
-                ffmpeg_cmd = (
-                    f'ffmpeg -loglevel error -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
-                    f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.05:contrast=1.03[v_final]; '
-                    f"[v_final]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
-                    f"[txt1]drawtext=text='{bidi_text}':fontfile=/content/arial.ttf:fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
-                    f"enable='between(t,{mid_time},{mid_time+10})'[txt2]; "
-                    f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
-                    f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
-                    f'" '
-                    f'-map "[outv]" -map 0:a '
-                    f"-c:v libx264 -preset superfast -crf {t_crf} "
-                    f"-maxrate {t_maxrate} -bufsize {t_bufsize} -threads 0 -pix_fmt yuv420p "
-                    f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
-                )
-
-                # تنفيذ العملية
-                subprocess.run(ffmpeg_cmd, shell=True, check=True)
-
-                # الاستبدال المادي: حذف الأصلي وتسمية المموه باسم الأصلي
-                if os.path.exists(disguised_file):
-                    os.remove(vid_path)
-                    os.rename(disguised_file, vid_path)
-                    log.info(f"✅ تم تحصين الحلقة {idx} بنجاح!")
-
-            except Exception as e:
-                log.warning(f"⚠️ خطأ في التمويه، سيتم الرفع الأصلي: {e}")
-            # --- [ نهاية منطقة التحصين - السكربت سيكمل الرفع الآن بالملف الجديد ] ---
+            # استدعاء دالة التحصين (تقدر تعمل كومنت للسطر ده بس وقت التجارب)
+            # apply_media_disguise(vid_path, idx, display_title, LOGO_FILE)
 
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
             # ... باقي الكود (جلب البيانات، الأرشفة، تليجرام) سيكمل عمله بـ vid_path الجديد
@@ -873,9 +957,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     )
 
             # لاحظ أن السطور التالية خارج الـ if ومرتبة معها في نفس المستوى
-            file_name = f"{clean_name}.mp4"
+            # ... (كود توليد الـ identifier والـ final_file_name)
             episode_label = f"{loop_display_title}"
-
             # توليد 4 رموز عشوائية فقط لكسر "بصمة" الاسم مع الحفاظ على أرقامك
             rand_id = "".join(
                 random.choices(string.ascii_lowercase + string.digits, k=4)
@@ -883,89 +966,17 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             # المعرف الجديد يجمع بين الرمز العشوائي وقيمك الأساسية
             # تنسيق يدمج الأرقام بدون شرطات كثيرة لضمان القبول
             identifier = f"v{rand_id}x{media_id}x{e_id}x{idx}"  # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
-
-            # 3. الرفع للأرشيف (بالاسم النظيف)
+            # archive_url = "Failed_Archive_Upload"
+            final_file_name = f"f_{media_id}_{e_id}_{idx}.mp4"
             # 3. الرفع للأرشيف
             log.info(f"📦 أرشفة النسخة الكاملة: {episode_label}")
-            # archive_url = "Failed_Archive_Upload"
-            archive_url = "Disabled"  # تغيير القيمة الافتراضية
-            final_file_name = f"f_{media_id}_{e_id}_{idx}.mp4"
-
-            try:
-                pass  # إضافة pass لتجاوز هذا الجزء تماماً
-                # # --- أضف/عدل هذا الجزء هنا ---
-                # if task_id:
-                #     supabase.table("download_tasks").update(
-                #         {
-                #             "status_message": "☁️ جاري الأرشفة (النسخة الخام)...",
-                #             "progress_percent": 92,
-                #         }
-                #     ).eq("id", task_id).execute()
-                # # -------------------------
-                # # تحديث الحالة للمتصفح: بدء الرفع للأرشيف
-                # if e_id:
-                #     supabase.table("episodes").update(
-                #         {
-                #             "status_message": "☁️ جاري الرفع للأرشيف (نسخة احتياطية)",
-                #             "progress_percent": 0,  # تصفير العداد للبدء في حساب الرفع
-                #         }
-                #     ).eq("id", e_id).execute()
-
-                # pbar_archive = tqdm(
-                #     total=os.path.getsize(vid_path),
-                #     desc=f"☁️ أرشيف (كامل)",
-                #     unit="B",
-                #     unit_scale=True,
-                #     mininterval=3.0,  # تحديث كل 3 ثوانٍ فقط (مثالي للسرعات البطيئة في كولاب)
-                #     maxinterval=10.0,
-                #     ascii=" █",  # استبدال الهاشتاج بمربعات ناعمة
-                #     colour="green",  # اختيار لون الشريط (يعمل في كولاب)
-                # )
-
-                # # اسم ملف مشفر تماماً
-                # # 1. إنشاء الـ stream وربطه بملف الفيديو
-                # stream = ProgressStream(vid_path, pbar_archive, episode_id=e_id)
-                # # 2. تمرير الـ stream مباشرة لمكتبة الرفع
-                # # الـ stream الآن هو "المخبر" الذي يخبر pbar بكل بايت يخرج
-
-            # try:
-
-            #     archive_upload(
-            #         identifier,
-            #         files={
-            #             final_file_name: stream
-            #         },  # 👈 التعديل هنا: استخدم stream وليس f_data
-            #         # إخفاء اسم الفيلم من البيانات الوصفية (Metadata)
-            #         metadata={
-            #             "title": f"M-{media_id}-E{e_id}",
-            #             "mediatype": "movies",
-            #             "description": f"Internal ID: {media_id}_{e_id}_{idx}",
-            #         },
-            #         access_key=ARCHIVE_ACCESS_KEY,
-            #         secret_key=ARCHIVE_SECRET_KEY,
-            #         verbose=False,
-            #     )
-            # finally:
-            #     stream.close()  # التأكد من إغلاق الملف بعد الرفع
-            # stream.close()
-            # pbar_archive.close()
-            # archive_url = f"https://archive.org/download/{identifier}/{final_file_name}"  # Get the archive URL after successful upload
-            # direct_download_url = (
-            #     f"https://archive.org/download/{identifier}/{final_file_name}"
-            # )
-            # # حقن الرابط المباشر في قاعدة البيانات يدوياً
-            # supabase.table("links").insert(
-            #     {
-            #         "episode_id": e_id,
-            #         "url": direct_download_url,
-            #         "server_name": "archive",
-            #         "last_check_status": "valid",
-            #     }
-            # ).execute()
-            # log.info(f"✅ تم ربط الرابط المباشر في سوبابيز: {direct_download_url}")
-            except Exception as e:
-                log.error(f"❌ خطأ أرشيف: {e}")
-
+            # 3. الرفع للأرشيف
+            # استدعاء دالة الأرشفة (معطلة حالياً للتجارب)
+            #archive_url = Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
+            # عمل كومنت لسطر "Disabled" أو حذفه تماماً بعد ما تجرب دالة الأرشفة
+            archive_url = "Disabled" 
+            
+            # 4. الرفع لتليجرام
             telegram_direct = None  # تعريف أولي لضمان عدم حدوث NameError
             # 4. الرفع لتليجرام (بالاسم النظيف) مع حماية كاملة
             try:
@@ -1016,10 +1027,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 log.warning(
                     f"⚠️ تنبيه: فشل رفع تليجرام ({error_msg})، لكن الوحش مكمل للسيرفرات التانية..."
                 )
-
-                # تأمين المتغير عشان السكربت ميقفش لما يدور عليه تحت
-                telegram_direct = None
-
                 if e_id:
                     try:
                         supabase.table("episodes").update(
@@ -1183,7 +1190,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     log.info(f"✅ LuluStream Saved!")
                 else:
                     log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
-
             # --- 7. معالجة النتائج وحفظها ---
             # التعديل: استلام 4 قيم ليتوافق مع الـ Return الجديد للدالة
             try:
