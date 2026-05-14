@@ -678,9 +678,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 )  # استخدم \n عشان ميمسحش شريط التحميل
         # سطر جديد
         print("")
-        
+
         # ⚡ الإجراء التصحيحي: انتظر العملية لتحديث الـ returncode ⚡
-        await process.wait() 
+        await process.wait()
 
         # الآن returncode لن يكون None أبداً
         if process.returncode != 0:
@@ -826,15 +826,17 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 os.remove(actual_downloaded_path)
         else:
             log.info(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
-            _, file_extension = os.path.splitext(actual_downloaded_path)
-            # نستخدم الاسم النظيف فوراً
-            final_video_path = os.path.join(extract_dir, f"{clean_name}{file_extension}")
-            
-            # لو الملف لسه منقولش للـ extract_dir انقله، لو هو هناك سيبه
-            if actual_downloaded_path != final_video_path:
-                shutil.move(actual_downloaded_path, final_video_path)
-            
-            # إجبار السكربت على رؤية هذا الملف كفيديو وحيد
+            # التأكد من المسار: لو اتمسح من الـ extracted نستخدم الـ stream اللي أمنّاه فوق
+            if not os.path.exists(actual_downloaded_path):
+                final_video_path = vid_path
+            else:
+                _, file_extension = os.path.splitext(actual_downloaded_path)
+                final_video_path = os.path.join(
+                    extract_dir, f"{clean_name}{file_extension}"
+                )
+                if actual_downloaded_path != final_video_path:
+                    shutil.move(actual_downloaded_path, final_video_path)
+
             videos = [final_video_path]
 
         # 2. جرد الفيديوهات (هذا السطر مهم جداً أن يشمل كل الامتدادات)
@@ -866,7 +868,7 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         )
         if not videos:
             # بدل return، خليه يحاول يستخدم vid_path اللي متعرف فوق من الـ Link
-            if 'vid_path' in locals() and os.path.exists(vid_path):
+            if "vid_path" in locals() and os.path.exists(vid_path):
                 videos = [vid_path]
             else:
                 log.error("❌ لم يتم العثور على فيديوهات!")
@@ -1074,7 +1076,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 # --- 🎯 المصدر المعتمد هو رابط السبيس المباشر 🎯 ---
                 if direct_remote_url:
                     remote_source = direct_remote_url
-                    log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream]")
+                    log.info(
+                        f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream]"
+                    )
                 elif archive_url and "archive.org" in archive_url:
                     remote_source = identifier
                     log.info(f"✅ المصدر المعتمد: Archive.org")
