@@ -194,7 +194,7 @@ def Upload_To_Archive(
                 }
             ).eq("id", e_id).execute()
 
-        pbar_archive = tqdm(
+        pbar_archive = tqdm_std(
             total=os.path.getsize(vid_path),
             desc=f"☁️ أرشيف (كامل)",
             unit="B",
@@ -255,40 +255,40 @@ def Upload_To_Archive(
         return "Failed_Archive_Upload"
 
 
-async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
-    # 1. تحديد المسار باحترافية (كشف التزييف)
+# =====================================================================
+# الدوال الجديدة المساعدة (Helper Functions)
+# =====================================================================
+
+def setup_workspace() -> dict:
+    """
+    تجهيز بيئة العمل: تحديد المسارات، إنشاء المجلدات، تحميل اللوجو، تغيير الدليل.
+    تعيد قاموساً يحتوي على BASE_PATH, BASE_DIR, TOOLS_DIR, LOGO_FILE.
+    """
     try:
         BASE_PATH = "/content"
     except ImportError:
-        # إذا فشل الاستيراد، فهذا يعني أننا لسنا في كولاب
         BASE_PATH = (
             "/kaggle/working" if os.path.exists("/kaggle/working") else os.getcwd()
         )
 
-    # 1. تحديد المسار الجذري الحقيقي للمشروع
     current_root = os.getcwd()
-    # إذا كان المسار الحالي ينتهي بـ "project" بالفعل، لا تضفه مرة أخرى
     if current_root.endswith("project"):
         BASE_DIR = current_root
     else:
         BASE_DIR = os.path.join(current_root, "project")
 
-    # 2. التأكد من إنشاء المجلد والدخول إليه "بذكاء"
     os.makedirs(BASE_DIR, exist_ok=True)
     if os.getcwd() != BASE_DIR:
         os.chdir(BASE_DIR)
 
-    # --- 🟢 تجهيز اللوجو (مرة واحدة لكل عملية) ---
-    # مجلد خاص للأدوات الثابتة (اللوجو) بعيد عن مجلد العمليات
     TOOLS_DIR = os.path.join(BASE_PATH, "tools")
     os.makedirs(TOOLS_DIR, exist_ok=True)
 
     LOGO_URL = "https://res.cloudinary.com/dbahqgo8j/image/upload/q_auto,f_auto,w_80,h_80,c_fill,r_max/blogger/logo.webp"
-    LOGO_FILE = os.path.join(TOOLS_DIR, "watermark.webp")  # تغيير المسار لـ TOOLS_DIR
+    LOGO_FILE = os.path.join(TOOLS_DIR, "watermark.webp")
 
     if not os.path.exists(LOGO_FILE):
         try:
-
             with httpx.Client(follow_redirects=True) as client:
                 resp = client.get(LOGO_URL)
                 with open(LOGO_FILE, "wb") as f:
@@ -296,61 +296,57 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             log.info("✅ اللوجو جاهز ومؤمن في مجلد الأدوات.")
         except:
             pass
-    # هذا السطر سيطبع الآن المسار الحقيقي الصحيح (/content/project في كولاب)
+
     log.info(f"🛠️ مسار العمل الحالي للوحش: {os.getcwd()}")
-    # باقي الكود كما هو...
 
-    # تأمين الاستدعاء ومنع أي محاولة لاستقبال قيم
-    try:
-        await ensure_dependencies()
-    except Exception as deps_err:
-        log.warning(f"⚠️ فشل فحص الأدوات (تجاوز): {deps_err}")
-    timestamp = int(time.time())
+    return {
+        "BASE_PATH": BASE_PATH,
+        "BASE_DIR": BASE_DIR,
+        "TOOLS_DIR": TOOLS_DIR,
+        "LOGO_FILE": LOGO_FILE,
+    }
 
-    # --- 1. تنظيف الاسم وجلب البيانات الذكية ---
 
-    if "topcinema.rip" in str(name):
-        decoded = unquote(str(name))
+def extract_clean_media_info(raw_name: str) -> tuple:
+    """
+    تنظيف اسم الميديا واستخراج السنة منه.
+    تعيد (clean_name, extracted_year).
+    تتعامل مع روابط topcinema.rip.
+    """
+    if "topcinema.rip" in str(raw_name):
+        decoded = unquote(str(raw_name))
         match = re.search(r"فيلم-(.*?)-مترجم", decoded)
-        name = (
+        raw_name = (
             match.group(1).replace("-", " ").title()
             if match
             else decoded.split("/")[-2].replace("-", " ").replace("فيلم", "").title()
         )
 
-    log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
-    # احتفظ بالاسم الأصلي وتعيين قيمة أولية لـ display_title فوراً لمنع الأخطاء
-    original_task_name = str(name).strip()
-    display_title = original_task_name
-
-    # استخراج الاسم النظيف للبحث في TMDB
+    original_task_name = str(raw_name).strip()
     year_match = re.search(r"\b((?:19|20)\d{2})\b", original_task_name)
     extracted_year = year_match.group(1) if year_match else None
 
-    if "http" in original_task_name or original_task_name.startswith(("tt", "tmdb")):
-        search_query_clean = original_task_name
-    else:
-        # تأمين Unpacking لمنع خطأ NoneType
-        clean_res = get_clean_media_data(original_task_name)
-        if clean_res and len(clean_res) == 4:
-            search_query_clean, _, _, _ = clean_res
-        else:
-            search_query_clean = original_task_name
+    return original_task_name, extracted_year
 
+
+def fetch_tmdb_metadata(search_query: str, year=None) -> dict:
+    """
+    جلب بيانات الميديا من TMDB/IMDB.
+    تعيد قاموساً بالمفاتيح: tmdb_id, display_title, story, poster, labels,
+    duration, rating, runtime, year.
+    في حالة فشل أو نقص البيانات، تعيد قيماً افتراضية.
+    """
+    log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
     log.info(
-        f"🔎 البحث عن: {search_query_clean} "
-        + (f"({extracted_year})" if extracted_year else "")
+        f"🔎 البحث عن: {search_query} "
+        + (f"({year})" if year else "")
         + " ..."
     )
-    log.info(f"DEBUG: calling get_clean_media_data with {original_task_name}")
+    log.info(f"DEBUG: calling get_movie_data with {search_query}")
 
-    # 2. استدعاء بيانات TMDB مع تأمين الـ Unpacking لمنع خطأ الـ NoneType
-    movie_result = get_movie_data(
-        search_query_clean if search_query_clean else name, year=extracted_year
-    )
+    movie_result = get_movie_data(search_query, year=year)
     log.info(f"DEBUG: get_movie_data returned: {movie_result}")
 
-    # تأمين الاستخراج لمنع الانهيار حتى لو رجعت بيانات ناقصة أو غلط
     if isinstance(movie_result, (list, tuple)) and len(movie_result) >= 9:
         (
             tmdb_id_fetched,
@@ -362,16 +358,14 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             meta_rating,
             meta_runtime,
             meta_year,
-        ) = movie_result[
-            :9
-        ]  # بناخد أول 9 بس للأمان
+        ) = movie_result[:9]
     else:
         log.warning(
-            f"⚠️ بيانات TMDB ناقصة أو غير صالحة لـ {search_query_clean}، سيتم استخدام الافتراضي."
+            f"⚠️ بيانات TMDB ناقصة أو غير صالحة لـ {search_query}، سيتم استخدام الافتراضي."
         )
         tmdb_id_fetched, display_title_tmdb, meta_story, final_poster = (
             None,
-            original_task_name,
+            search_query,
             "",
             "",
         )
@@ -380,68 +374,86 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "",
             "0",
             0,
-            extracted_year or "2026",
+            year or "2026",
         )
-    # دمج الاسم المجلوب مع تفاصيل الحلقة من التاسك الأصلي
-    display_title = display_title_tmdb if display_title_tmdb else original_task_name
-    log.info(f"DEBUG: Final media data - Title: {display_title}, Year: {meta_year}")
 
-    # التأكد من بقاء معلومات الموسم والحلقة في العنوان المعروض
+    return {
+        "tmdb_id": tmdb_id_fetched,
+        "display_title": display_title_tmdb,
+        "story": meta_story,
+        "poster": final_poster,
+        "labels": meta_labels,
+        "duration": meta_duration,
+        "rating": meta_rating,
+        "runtime": meta_runtime,
+        "year": meta_year,
+    }
+
+
+def build_display_title(original_task_name: str, tmdb_title: str, season_ep_info=None) -> str:
+    """
+    بناء الاسم المعروض النهائي مع إضافة معلومات الموسم والحلقة إذا وُجدت.
+    season_ep_info: قاموس اختياري يحتوي على season و/أو episode.
+    """
+    display_title = tmdb_title if tmdb_title else original_task_name
+
     if "الموسم" in original_task_name and "الموسم" not in display_title:
         season_match = re.search(r"(الموسم\s*\d+)", original_task_name)
         if season_match:
             display_title = display_title + " " + season_match.group(1)
 
     if "الحلقة" in original_task_name and "الحلقة" not in display_title:
-        # استخراج "الحلقة X" وإضافتها
         ep_match = re.search(r"(الحلقة\s*\d+|ح\s*\d+)", original_task_name)
         if ep_match:
             display_title = display_title + " " + ep_match.group(1)
 
-    # --- 2. نظام منع التكرار الاحترافي (Supabase) ---
-    # 1. استخراج البيانات النظيفة فوراً قبل أي فحص
-    clean_res_db = get_clean_media_data(display_title)
-    if clean_res_db and len(clean_res_db) == 4:
-        clean_title_search, category_search, current_season_no, current_ep_no = (
-            clean_res_db
-        )
-    else:
-        clean_title_search, category_search, current_season_no, current_ep_no = (
-            display_title,
-            "movie",
-            None,
-            None,
-        )
-    # البحث الذكي عن الميديا (بالاسم المطابق أو المنظف)
+    if season_ep_info:
+        season = season_ep_info.get("season")
+        episode = season_ep_info.get("episode")
+        if season and "الموسم" not in display_title:
+            display_title = f"{display_title} الموسم {season}"
+        if episode and "الحلقة" not in display_title:
+            display_title = f"{display_title} الحلقة {episode}"
+
+    return display_title
+
+
+def check_media_duplicate(clean_title: str, year: str, category: str, season_no, ep_no) -> dict:
+    """
+    التحقق من وجود الميديا/الحلقة مسبقاً في Supabase.
+    تعيد قاموساً بالمفاتيح: exists (bool), media_id (int|None), episode_id (int|None).
+    """
+    result = {"exists": False, "media_id": None, "episode_id": None}
     try:
         media_id = None
         # الخطوة 1: البحث المباشر
         m_query = (
             supabase.table("medias")
             .select("id, title")
-            .eq("title", clean_title_search)
-            .eq("year", meta_year)
+            .eq("title", clean_title)
+            .eq("year", year)
             .execute()
         )
 
         if m_query.data:
             media_id = m_query.data[0]["id"]
         else:
-            # الخطوة 2: البحث الذكي بالاسم المنظف (للمحتوى العربي غير المسجل في TMDB)
+            # الخطوة 2: البحث الذكي بالاسم المنظف
             search_results = (
                 supabase.table("medias")
                 .select("id, title")
-                .ilike("title", f"%{clean_title_search}%")
+                .ilike("title", f"%{clean_title}%")
                 .execute()
             )
             for row in search_results.data:
-                if normalize_title(row["title"]) == clean_title_search:
+                if normalize_title(row["title"]) == clean_title:
                     media_id = row["id"]
                     break
 
+        result["media_id"] = media_id
+
         if media_id:
-            if category_search == "movie":
-                # للأفلام: لو الميديا موجودة ولها حلقات (فيلم واحد)، إذن مكرر
+            if category == "movie":
                 ep_query = (
                     supabase.table("episodes")
                     .select("id")
@@ -449,120 +461,112 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     .execute()
                 )
                 if ep_query.data:
-                    log.info(f"✅ [تخطي]: الفيلم '{display_title}' موجود بالفعل!")
-                    return
-            # للمسلسلات: لا يمكننا الفحص هنا لأننا لا نعرف الحلقات الموجودة في الرابط بعد
-            # سيتم الفحص داخل لووب الحلقات لاحقاً
+                    result["exists"] = True
+                    result["episode_id"] = ep_query.data[0]["id"]
+            elif category == "tv" and season_no is not None and ep_no is not None:
+                s_query = (
+                    supabase.table("seasons")
+                    .select("id")
+                    .eq("media_id", media_id)
+                    .eq("season_number", season_no)
+                    .execute()
+                )
+                if s_query.data:
+                    s_id = s_query.data[0]["id"]
+                    e_query = (
+                        supabase.table("episodes")
+                        .select("id")
+                        .eq("media_id", media_id)
+                        .eq("season_id", s_id)
+                        .eq("episode_number", ep_no)
+                        .execute()
+                    )
+                    if e_query.data:
+                        ep_id_found = e_query.data[0]["id"]
+                        links_query = (
+                            supabase.table("links")
+                            .select("id")
+                            .eq("episode_id", ep_id_found)
+                            .execute()
+                        )
+                        if links_query.data:
+                            result["exists"] = True
+                            result["episode_id"] = ep_id_found
+
     except Exception as e:
-        log.warning(f"⚠️ فشل فحص التكرار الأولي: {e}")
+        log.warning(f"⚠️ فشل فحص التكرار: {e}")
 
-    # --- 3. حجز مكان أولي (للمسلسلات سيتم تحديثه لاحقاً لكل حلقة) ---
-    # إنشاء identifier مؤقت للتحميل
-    temp_id = f"loading_{timestamp}"
+    return result
 
-    # استدعاء الحفظ الأولي للحصول على e_id
-    # التعديل: استلام 4 قيم بدلاً من 3
-    # استدعاء الحفظ الأولي
+
+def initialize_supabase_record(display_title: str, original_task_name: str, tmdb_data: dict, temp_id: str) -> tuple:
+    """
+    إنشاء سجل أولي في Supabase.
+    تعيد (e_id, media_id, meta_story, final_poster).
+    إذا فشل الحفظ، تسجل خطأ وتعيد (None, None, "", "").
+    """
     save_res = save_to_supabase(
         None,
         None,
         "Pending",
         display_title,
         original_task_name,
-        meta_story,
-        final_poster,
-        meta_year,
-        meta_rating,
+        tmdb_data["story"],
+        tmdb_data["poster"],
+        tmdb_data["year"],
+        tmdb_data["rating"],
         temp_id,
         "Pending",
-        tmdb_id=tmdb_id_fetched,
-        labels=meta_labels,
-        runtime=meta_runtime,
-        duration_iso=meta_duration,
+        tmdb_id=tmdb_data["tmdb_id"],
+        labels=tmdb_data["labels"],
+        runtime=tmdb_data["runtime"],
+        duration_iso=tmdb_data["duration"],
     )
 
-    # التأمين النهائي
     if save_res and len(save_res) == 4:
         e_id, media_id, meta_story, final_poster = save_res
+        return e_id, media_id, meta_story, final_poster
     else:
-        # لو فشل الحفظ، نوقف المهمة بشياكة بدل ما السكربت ينهار
         log.error("❌ فشل الحفظ الأولي في قاعدة البيانات (save_to_supabase رجعت None)")
-        return
+        return None, None, "", ""
 
-    if not e_id:
-        log.warning("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")
 
-    # --- 3. استكمال العمل في حال كان الفيلم جديداً ---
-    clean_name = (
-        "".join([c for c in display_title if c.isalnum() or c in (" ", ".", "_")])
-        .strip()
-        .replace(" ", "_")
-    )
-
-    # --- 🟢 التعديل الجوهري الموحد (امسح أي تكرار قبله أو بعده) ---
-    is_local_file = os.path.exists(url)
-    actual_downloaded_path = None
-    timestamp = int(time.time())
-
-    if is_local_file:
-        log.info(f"♻️ اكتشاف ملف محلي: {url} - سيتم تخطي التحميل.")
-        actual_downloaded_path = url
-    else:
-        log.info(f"📡 رابط ويب، جاري التجهيز للسحب...")
-
-    # إنشاء مجلد العمل
-    extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
-    os.makedirs(extract_dir, exist_ok=True)
-
-    # تعريف قالب تحميل مؤقت (سيتم إعادة تسميته لاحقاً بالـ IDs)
-    download_path_template = os.path.join(extract_dir, f"temp_dl_{timestamp}.%(ext)s")
-    # --------------------------------------------------------
-
-    log.info(f"📡 جاري فحص الرابط وبدء السحب...")
-
-    # ══════════════════════════════════════════════════════════════
-    # فحص مبكر للرابط مع نظام المحاولات المتكررة (Retries)
-    # ══════════════════════════════════════════════════════════════
-    # ══════════════════════════════════════════════════════════════
-    # بدء عملية التحميل مباشرة (بدون فحص مبكر)
-    # ══════════════════════════════════════════════════════════════
-    if not is_local_file:
-        log.info(f"   🚀 [Direct Start] الرابط معتمد — جاري التحميل فوراً...")
-
-    # هنا ييجي كود الـ yt-dlp بتاعك مباشرة
-
-    # 1. جلب الهيدرز الذكية بناءً على الرابط الممرر للدالة
-    # --- 2. دمج المنطق داخل دالة التحميل الأساسية ---
-
-    # 1. معالجة روابط VidTube/Lulu
-    if "vidtube.one" in url or "cdn-tube" in url:
+async def resolve_direct_url(raw_url: str) -> str:
+    """
+    معالجة روابط vidtube/lulu/mixdrop واستخراج الرابط المباشر.
+    في حالة mixdrop 404، يرمي Exception.
+    تعيد الرابط المباشر أو الرابط الأصلي إذا فشلت المعالجة.
+    """
+    if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
         log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
-        direct_link = await get_direct_link_via_playwright(url)
+        direct_link = await get_direct_link_via_playwright(raw_url)
         if direct_link:
             log.info(f"✅ تم صيد الرابط بنجاح! سيتم التحميل الآن.")
-            url = direct_link
+            return direct_link
         else:
             log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
+            return raw_url
 
-    # 2. معالجة روابط MixDrop
-    elif "mixdrop" in url:
+    elif "mixdrop" in raw_url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
-        direct_link = await get_mixdrop_direct_link(url)
+        direct_link = await get_mixdrop_direct_link(raw_url)
         if direct_link == "404_DELETED":
-            # رمي خطأ صريح لتشغيل نظام تنظيف الميديا (الذي أعددناه سابقاً)
             raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
-
         if direct_link:
             log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
-            url = direct_link
+            return direct_link
         else:
             log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
+            return raw_url
 
-    # الآن يكمل الكود بناء الـ cmd بالرابط الجديد (url)
-    smart_headers = get_smart_headers(url)
-    # ... باقي كود بناء الـ cmd اللي عندك ...
+    return raw_url
 
-    # 2. بناء أمر الوحش الموحد لضمان تجاوز الحماية في كل الحالات
+
+def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> list:
+    """
+    بناء قائمة أوامر yt-dlp الكاملة مع كل الخيارات.
+    تعيد القائمة الجاهزة لـ asyncio.create_subprocess_exec.
+    """
     cmd = [
         "yt-dlp",
         "-v",
@@ -589,19 +593,16 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     ]
     # دمج هيدرز الخداع من الـ Cookbook
     cmd.extend(smart_headers)
-    # --- المكاااااان الصحيح للكود الجديد هنا ---
+
     if "lulu" in url:
-        # بنجبره يستخدم الـ Referer بتاع موقع الأفلام عشان يفتح السيرفر
         cmd.extend(["--referer", "https://topcinemaa.com/"])
-        # ملاحظة: شيل سطر الـ cookies لو شغال على Colab لأنه مش هيلاقي كروم هناك
-    # ------------------------------------------
-    # دعم إضافي لسيرفرات vidtube و cdn-tube
+
     if "vidtube" in url or "cdn-tube" in url:
         cmd.extend(["--extractor-args", "jwplayer:base-url=https://vidtube.one/"])
+
     cmd.extend(
         [
             "-f",
-            # الشرط الجديد: ابحث عن أي جودة يكون البُعد الأصغر فيها (width أو height) لا يتعدى 720 أو 1080
             "(bestvideo[width<=720][height<=1280]/bestvideo[height<=720][width<=1280]+bestaudio/best[width<=720][height<=1280]/best[height<=720][width<=1280]) / "
             "(bestvideo[width<=1080][height<=1920][filesize<1950M]+bestaudio/best[width<=1080][height<=1920][filesize<1950M]) / "
             "best",
@@ -610,175 +611,627 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             "--max-filesize",
             "1950M",
             "--post-overwrites",
-            "--no-check-certificate",  # زيادة أمان للروابط المحمية
+            "--no-check-certificate",
             "--newline",
             f"{url}",
             "-o",
-            download_path_template,
+            output_template,
         ]
     )
 
-    # --- 🟢 منطق التحميل والتعامل الذكي (Async الكامل - الحل الجذري) ---
-    if not is_local_file:
-        log.info(f"🌐 رابط ويب، جاري التحميل بنظام Async Subprocess...")
+    return cmd
 
-        # استخدام asyncio لضمان السيطرة الكاملة على العملية
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+
+async def download_video(cmd: list, task_id, display_title: str, extract_dir: str):
+    """
+    تنفيذ عملية التحميل باستخدام asyncio، مع تتبع التقدم وتحديث قاعدة البيانات كل 15 ثانية.
+    تعيد المسار الكامل للملف المحمّل، أو None إذا فشل.
+    """
+    process = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+    )
+
+    last_db_update = 0
+    last_percent_log = -1
+
+    while True:
+        line = await process.stdout.readline()
+        if not line:
+            break
+        line_str = line.decode().strip()
+
+        progress_match = re.search(
+            r"\[download\]\s+(\d+\.\d+)%\s+of\s+([\d\w\.]+)(?:\s+at\s+([\d\w\./s]+))?(?:\s+ETA\s+([\d:]+))?",
+            line_str,
         )
 
-        last_db_update = 0
-        last_percent_log = -1  # <--- ضيف السطر ده هنا
+        if progress_match:
+            percent = progress_match.group(1)
+            total = progress_match.group(2)
+            speed = progress_match.group(3) or "---"
+            eta = progress_match.group(4) or "--:--"
+            percent_int = int(float(percent))
+            now = time.time()
+            if percent_int % 5 == 0 and percent_int != last_percent_log:
+                log.info(
+                    f"📥 {display_title[:15]}.. | {percent_int}% of {total} | ⚡ {speed} | ⏳ ETA: {eta}"
+                )
+                last_percent_log = percent_int
 
-        # قراءة المخرجات واستخراج البيانات الكاملة
-        # قراءة المخرجات واستخراج البيانات الكاملة
-        while True:
-            line = await process.stdout.readline()
-            if not line:
-                break
-            line_str = line.decode().strip()
+            if task_id and (now - last_db_update > 15):
+                try:
+                    supabase.table("download_tasks").update(
+                        {
+                            "progress_percent": percent_int,
+                            "status_message": f"📥 جاري التحميل: {percent_int}%",
+                            "download_speed": speed,
+                        }
+                    ).eq("id", task_id).execute()
+                    last_db_update = now
+                except:
+                    pass
+        elif any(x in line_str.upper() for x in ["ERROR", "WARNING", "FAILED"]):
+            print(f"\n⚠️ ALERT_LOG: {line_str}")
 
-            # Regex شامل يصيد النسبة، الحجم، السرعة، والوقت المتبقي بدقة
-            progress_match = re.search(
-                r"\[download\]\s+(\d+\.\d+)%\s+of\s+([\d\w\.]+)(?:\s+at\s+([\d\w\./s]+))?(?:\s+ETA\s+([\d:]+))?",
-                line_str,
+    print("")
+    await process.wait()
+
+    if process.returncode != 0:
+        if (
+            extract_dir
+            and os.path.exists(extract_dir)
+            and any(
+                os.path.isfile(os.path.join(extract_dir, f))
+                for f in os.listdir(extract_dir)
+            )
+        ):
+            log.info(
+                f"✅ تم تجاوز خطأ المحرك (Code: {process.returncode}) - الملفات موجودة."
+            )
+        else:
+            log.error(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
+
+    await asyncio.sleep(5)
+    actual_downloaded_path = None
+    
+    search_locations = [extract_dir, os.getcwd()]
+
+    for loc in search_locations:
+        if not os.path.exists(loc):
+            continue
+
+        all_files = [os.path.join(loc, f) for f in os.listdir(loc)]
+        actual_files = [
+            f
+            for f in all_files
+            if os.path.isfile(f)
+            and not f.endswith((".part", ".ytdl", ".temp", ".txt", ".md"))
+        ]
+
+        if actual_files:
+            actual_files.sort(key=os.path.getmtime, reverse=True)
+            actual_downloaded_path = actual_files[0]
+            break
+
+    if actual_downloaded_path:
+        log.info(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
+    else:
+        log.error(
+            f"❌ فشل التحميل: المجلد فارغ! المحتوى الموجود: {os.listdir(extract_dir) if os.path.exists(extract_dir) else 'المجلد غير موجود'}"
+        )
+
+    return actual_downloaded_path
+
+
+def rename_and_move_to_stream(file_path: str, media_id: int, episode_id: int, idx: int) -> tuple:
+    """
+    إعادة تسمية الملف بالمعرفات الرقمية ونقله لمجلد stream.
+    تعيد (final_public_path, direct_remote_url).
+    """
+    file_extension = os.path.splitext(file_path)[1]
+    new_file_name = f"f_{media_id}_{episode_id}_{idx}.mp4"
+    new_path = os.path.join(os.path.dirname(file_path), new_file_name)
+
+    try:
+        os.rename(file_path, new_path)
+        file_path = new_path
+        log.info(f"🔄 تم إعادة تسمية الملف إلى المعرف الرقمي: {new_file_name}")
+    except Exception as rename_err:
+        log.error(f"⚠️ فشل إعادة التسمية، سيتم استخدام الاسم الأصلي: {rename_err}")
+        new_file_name = os.path.basename(file_path)
+
+    base_root = os.path.dirname(os.getcwd())
+    stream_dir = os.path.join(base_root, "stream")
+    os.makedirs(stream_dir, exist_ok=True)
+
+    final_public_path = os.path.join(stream_dir, new_file_name)
+    try:
+        shutil.copy2(file_path, final_public_path)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        log.info(f"✅ تم تأمين الملف في المسار العام: {final_public_path}")
+    except Exception as move_err:
+        log.error(f"❌ خطأ في نقل الملف: {move_err}")
+
+    raw_space_id = os.environ.get("SPACE_ID", "eslam315/egypyramid-guardian-ultra")
+    space_domain = raw_space_id.replace("/", "-").lower().strip()
+    direct_remote_url = f"https://{space_domain}.hf.space/stream/{new_file_name}"
+
+    log.info(f"🔗 [Direct Link] الرابط جاهز للاختبار: {direct_remote_url}")
+
+    return final_public_path, direct_remote_url
+
+
+def process_archive_upload(video_path: str, media_id: int, episode_id: int, idx: int, task_id) -> str:
+    """
+    رفع نسخة احتياطية إلى Archive.org.
+    تعيد رابط الأرشيف أو "Disabled" أو "Failed_Archive_Upload".
+    """
+    rand_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    identifier = f"v{rand_id}x{media_id}x{episode_id}x{idx}"
+    final_file_name = f"f_{media_id}_{episode_id}_{idx}.mp4"
+
+    # archive_url = Upload_To_Archive(video_path, media_id, episode_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
+    archive_url = "Disabled"
+    return archive_url
+
+
+async def upload_to_all_servers(
+    video_path: str,
+    episode_label: str,
+    media_id: int,
+    episode_id: int,
+    remote_source: str,
+    task_id,
+    final_file_name: str,
+) -> dict:
+    """
+    الرفع المتوازي الخماسي لجميع السيرفرات: VK, Voe, Dood, Streamtape, Lulu.
+    تحفظ الروابط الناجحة في Supabase.
+    تعيد قاموساً بالمفاتيح: vk_url, voe_watch, voe_download, dood_url, tape_url, lulu_url.
+    """
+    e_id = episode_id
+
+    if task_id:
+        supabase.table("download_tasks").update(
+            {
+                "status_message": "🚀 ضخ السيرفرات: VK, Voe, Dood, Tape, Lulu",
+                "progress_percent": 95,
+            }
+        ).eq("id", task_id).execute()
+
+    if e_id:
+        supabase.table("episodes").update(
+            {
+                "status_message": "🚀 جاري ضخ الملف لـ VK والرفع المتوازي للبقية...",
+                "progress_percent": 90,
+            }
+        ).eq("id", e_id).execute()
+
+    log.info(f"🚀 البدء في الرفع المتوازي الخماسي (VK + Voe + Dood + Tape + Lulu)...")
+
+    if remote_source:
+        task_voe = upload_to_voe_api(video_path, remote_source)
+        await asyncio.sleep(15)
+        task_dood = upload_to_doodstream(dood_api_key, remote_source, final_file_name)
+        await asyncio.sleep(15)
+        task_tape = upload_to_streamtape(st_login, st_key, remote_source, final_file_name)
+        await asyncio.sleep(15)
+        task_lulu = upload_to_lulustream(lu_key, remote_source, final_file_name)
+    else:
+        task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(0, result=None)
+
+    loop = asyncio.get_event_loop()
+    task_vk = loop.run_in_executor(None, upload_to_vk_local, episode_label, video_path)
+
+    vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
+        task_vk, task_voe, task_dood, task_tape, task_lulu
+    )
+
+    vk_url = vk_result if vk_result else "Failed"
+    voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
+    voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
+
+    # حفظ النتائج في Supabase
+    if vk_url != "Failed":
+        supabase.table("links").upsert(
+            {"episode_id": e_id, "server_name": "vk", "url": vk_url},
+            on_conflict="episode_id, server_name",
+        ).execute()
+        log.info(f"✅ VK Link Saved to Supabase!")
+    else:
+        log.warning(f"⚠️ VK upload failed or returned empty URL.")
+
+    if file_id:
+        log.info(f"✅ Voe Saved! ID: {file_id}")
+    else:
+        log.warning(f"⚠️ Voe upload failed or returned empty ID.")
+
+    if d_url:
+        supabase.table("links").upsert(
+            {"episode_id": e_id, "server_name": "doodstream", "url": d_url},
+            on_conflict="episode_id, server_name",
+        ).execute()
+        log.info(f"✅ DoodStream Saved!")
+    else:
+        log.warning(f"⚠️ DoodStream upload failed or returned empty URL.")
+
+    if s_url:
+        supabase.table("links").upsert(
+            {"episode_id": e_id, "server_name": "streamtape", "url": s_url},
+            on_conflict="episode_id, server_name",
+        ).execute()
+        log.info(f"✅ Streamtape Saved!")
+    else:
+        log.warning(f"⚠️ Streamtape upload failed or returned empty URL.")
+
+    if lu_url:
+        supabase.table("links").upsert(
+            {"episode_id": e_id, "server_name": "lulustream", "url": lu_url},
+            on_conflict="episode_id, server_name",
+        ).execute()
+        log.info(f"✅ LuluStream Saved!")
+    else:
+        log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
+
+    return {
+        "vk_url": vk_url,
+        "voe_watch": voe_watch,
+        "voe_download": voe_down,
+        "dood_url": d_url,
+        "tape_url": s_url,
+        "lulu_url": lu_url,
+    }
+
+
+async def finalize_episode(
+    episode_id,
+    media_id,
+    task_id,
+    upload_results: dict,
+    tmdb_data: dict,
+    category: str,
+    original_task_name: str,
+    loop_display_title: str,
+    meta_story: str,
+    final_poster: str,
+    meta_year: str,
+    meta_rating: str,
+    meta_labels: list,
+    meta_runtime: int,
+    meta_duration: str,
+    video_path: str,
+    archive_url: str,
+    url: str,
+):
+    """
+    إنهاء معالجة الحلقة: رفع MixDrop، التحديث النهائي في Supabase،
+    التحقق من الجودة، إطلاق الجاهزية، إرسال تليجرام،
+    إغلاق التاسك، حذف الملف المحلي، تحديث حالة الحلقة.
+    """
+    e_id = episode_id
+    voe_watch = upload_results.get("voe_watch", "Failed")
+    voe_down = upload_results.get("voe_download", "Failed")
+    vk_url = upload_results.get("vk_url", "Failed")
+
+    # --- 9. الرفع لـ MixDrop ---
+    try:
+        if e_id:
+            supabase.table("episodes").update(
+                {
+                    "status_message": "💧 جاري الرفع لـ MixDrop...",
+                    "progress_percent": 99,
+                }
+            ).eq("id", e_id).execute()
+
+        mix_url = await upload_to_mixdrop(video_path, mix_user, mix_key)
+        if mix_url:
+            supabase.table("links").upsert(
+                {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
+                on_conflict="episode_id, server_name",
+            ).execute()
+            log.info(f"✅ تم رفع وحفظ رابط MixDrop: {mix_url}")
+    except Exception as e:
+        log.warning(f"⚠️ فشل MixDrop: {e}")
+
+    # --- 10. التحديث النهائي الشامل ---
+    try:
+        save_res = save_to_supabase(
+            voe_watch, voe_down, vk_url,
+            loop_display_title, original_task_name,
+            meta_story, final_poster, meta_year, meta_rating,
+            video_path, archive_url, tmdb_id=tmdb_data["tmdb_id"],
+            labels=meta_labels, runtime=meta_runtime, duration_iso=meta_duration
+        )
+    except Exception as e:
+        log.error(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
+        save_res = None
+
+    if save_res:
+        e_id, media_id, meta_story, final_poster = save_res
+        log.info(f"🏁 تم إغلاق المهمة بنجاح وحفظ كافة البيانات.")
+
+        row_data_for_tg = {
+            "title": loop_display_title,
+            "story": meta_story if meta_story else "لا يوجد وصف متاح حالياً.",
+            "poster_url": final_poster,
+            "labels": meta_labels,
+            "year": meta_year,
+        }
+
+        status = send_to_telegram(
+            row=row_data_for_tg,
+            content_type=category,
+            action_text="المشاهدة",
+            post_url=final_poster,
+            lang_val="لغة أصلية (مترجم)",
+        )
+
+        if status:
+            log.info(f"✅ كولاب أرسل تمبلت تليجرام بنجاح")
+
+        quality_pass = False
+        has_metadata = False
+        if media_id:
+            link_check = (
+                supabase.table("links")
+                .select("id", count="exact")
+                .eq("episode_id", e_id)
+                .execute()
+            )
+            links_count = link_check.count if link_check.count is not None else 0
+
+            has_metadata = bool(meta_story and meta_story.strip()) and bool(
+                final_poster and final_poster.strip()
             )
 
-            if progress_match:
-                percent = progress_match.group(1)
-                total = progress_match.group(2)
-                speed = progress_match.group(3) or "---"
-                eta = progress_match.group(4) or "--:--"
-                percent_int = int(float(percent))
-                now = time.time()
-                if percent_int % 5 == 0 and percent_int != last_percent_log:
-                    # هذه ستظهر كسطر جديد ومنظم كل 5%
+            if links_count >= 3:
+                quality_pass = True
+                if has_metadata:
+                    supabase.table("medias").update({"is_ready": True}).eq(
+                        "id", media_id
+                    ).execute()
                     log.info(
-                        f"📥 {display_title[:15]}.. | {percent_int}% of {total} | ⚡ {speed} | ⏳ ETA: {eta}"
+                        f"🚀 تم إطلاق إشارة الجاهزية الكاملة (سيرفرات: {links_count})"
                     )
-                    last_percent_log = percent_int
-
-                # لتحديث الـ UI الخاص بـ Supabase (بدون طباعة)
-                if task_id and (now - last_db_update > 15):
-                    try:
-                        supabase.table("download_tasks").update(
-                            {
-                                "progress_percent": percent_int,
-                                "status_message": f"📥 جاري التحميل: {percent_int}%",
-                                "download_speed": speed,
-                            }
-                        ).eq("id", task_id).execute()
-                        last_db_update = now
-                    except:
-                        pass
-            # 3. طباعة الأخطاء الحقيقية فقط في سطر جديد
-            elif any(x in line_str.upper() for x in ["ERROR", "WARNING", "FAILED"]):
-                print(
-                    f"\n⚠️ ALERT_LOG: {line_str}"
-                )  # استخدم \n عشان ميمسحش شريط التحميل
-        # سطر جديد
-        print("")
-
-        # ⚡ الإجراء التصحيحي: انتظر العملية لتحديث الـ returncode ⚡
-        await process.wait()
-
-        # الآن returncode لن يكون None أبداً
-        if process.returncode != 0:
-            if (
-                extract_dir
-                and os.path.exists(extract_dir)
-                and any(
-                    os.path.isfile(os.path.join(extract_dir, f))
-                    for f in os.listdir(extract_dir)
-                )
-            ):
-                log.info(
-                    f"✅ تم تجاوز خطأ المحرك (Code: {process.returncode}) - الملفات موجودة."
-                )
+                else:
+                    log.warning(
+                        f"🟡 تم الحفظ بنجاح ولكن بدون جاهزية (نقص في الصورة أو الوصف)"
+                    )
             else:
-                log.error(f"❌ فشل محرك التحميل! كود الخطأ: {process.returncode}")
-        # --- ⚡ التعديل المنقذ للوحش ⚡ ---
-        await asyncio.sleep(5)
-        actual_downloaded_path = None
+                quality_pass = False
 
-        # محاولة البحث في المجلد المخصص أولاً، ثم المجلد الحالي كخطة بديلة
-        search_locations = [extract_dir, os.getcwd()]
+        if task_id:
+            try:
+                if media_id and not quality_pass:
+                    supabase.table("medias").delete().eq("id", media_id).execute()
+                    log.warning(f"🗑️ تم حذف الميديا لعدم وجود روابط كافية.")
+                    final_status, final_msg = "failed", "❌ فشل: السيرفرات أقل من 3"
+                else:
+                    final_status = "completed"
+                    final_msg = "✅ اكتملت بنجاح!" if has_metadata else "⚠️ اكتملت (بدون بيانات وصفية)"
 
-        for loc in search_locations:
-            if not os.path.exists(loc):
-                continue
+                supabase.table("download_tasks").update({
+                    "status": final_status,
+                    "progress_percent": 100,
+                    "status_message": final_msg,
+                }).eq("id", task_id).execute()
+                log.info(f"✅ تم إغلاق التاسك {task_id} بحالة: {final_status}")
+            except Exception as task_err:
+                log.error(f"❌ فشل تحديث حالة التاسك في سوبابيز: {task_err}")
+            else:
+                msg = (
+                    "✅ اكتملت بنجاح!"
+                    if has_metadata
+                    else "⚠️ اكتملت بنجاح (يرجى إضافة الصورة والوصف يدوياً)"
+                )
+                supabase.table("download_tasks").update(
+                    {
+                        "status": "completed",
+                        "progress_percent": 100,
+                        "status_message": msg,
+                    }
+                ).eq("id", task_id).execute()
 
-            all_files = [os.path.join(loc, f) for f in os.listdir(loc)]
-            # فلترة الملفات (استبعاد المجلدات والملفات المؤقتة)
-            actual_files = [
-                f
-                for f in all_files
-                if os.path.isfile(f)
-                and not f.endswith((".part", ".ytdl", ".temp", ".txt", ".md"))
-            ]
+    # تنظيف الملف المحلي
+    if os.path.exists(video_path):
+        try:
+            os.remove(video_path)
+            log.info(f"🗑️ تم تنظيف الملف المحلي: {os.path.basename(video_path)}")
+        except Exception as e:
+            log.warning(f"⚠️ لم يتم مسح الملف المؤقت: {e}")
 
-            if actual_files:
-                # ترتيب حسب وقت التعديل لجلب أحدث ملف نزل فعلاً
-                actual_files.sort(key=os.path.getmtime, reverse=True)
-                actual_downloaded_path = actual_files[0]
-                break  # وجدنا الملف! اخرج من اللوب
+    # تحديث الحالة النهائية للحلقة
+    try:
+        supabase.table("episodes").update(
+            {
+                "progress_percent": 100,
+                "status_message": "✅ اكتملت المعالجة والرفع بنجاح",
+                "download_speed": "Done",
+            }
+        ).eq("id", e_id).execute()
+    except:
+        pass
+
+
+def is_compressed(file_path: str) -> bool:
+    """فحص إذا كان الملف مضغوطاً باستخدام أمر file."""
+    file_info = subprocess.getoutput(f'file "{file_path}"').lower()
+    return "rar archive" in file_info or "zip archive" in file_info
+
+
+def extract_archive(archive_path: str, extract_dir: str) -> None:
+    """استخراج ملف مضغوط باستخدام unrar."""
+    subprocess.run(
+        ["unrar", "e", "-y", archive_path, os.path.join(extract_dir, "")],
+        capture_output=True,
+    )
+    if os.path.exists(archive_path):
+        os.remove(archive_path)
+
+
+def list_videos(directory: str) -> list:
+    """
+    جرد ملفات الفيديو في مجلد.
+    يشمل امتدادات متعددة وملفات حجمها أكبر من 5 ميجا.
+    """
+    if not os.path.exists(directory):
+        return []
+
+    all_contents = os.listdir(directory)
+    videos = [
+        os.path.join(directory, f)
+        for f in all_contents
+        if f.lower().endswith((".mp4", ".mkv", ".avi", ".ts", ".mov", ".webm"))
+    ]
+
+    if not videos:
+        for f in all_contents:
+            full_p = os.path.join(directory, f)
+            if os.path.isfile(full_p) and os.path.getsize(full_p) > 5 * 1024 * 1024:
+                log.info(f"🎯 تم العثور على الفيديو بالحجم وليس الامتداد: {f}")
+                videos.append(full_p)
+
+    videos.sort()
+    return videos
+
+
+# =====================================================================
+# الدالة الرئيسية المُعاد هيكلتها
+# =====================================================================
+
+async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
+    # --- 1. تجهيز بيئة العمل ---
+    ws = setup_workspace()
+    BASE_PATH = ws["BASE_PATH"]
+    BASE_DIR = ws["BASE_DIR"]
+    TOOLS_DIR = ws["TOOLS_DIR"]
+    LOGO_FILE = ws["LOGO_FILE"]
+
+    try:
+        await ensure_dependencies()
+    except Exception as deps_err:
+        log.warning(f"⚠️ فشل فحص الأدوات (تجاوز): {deps_err}")
+
+    timestamp = int(time.time())
+
+    # --- 2. تنظيف الاسم واستخراج السنة ---
+    original_task_name, extracted_year = extract_clean_media_info(name)
+    display_title = original_task_name
+
+    # --- 3. تحديد query البحث ---
+    if "http" in original_task_name or original_task_name.startswith(("tt", "tmdb")):
+        search_query_clean = original_task_name
+    else:
+        clean_res = get_clean_media_data(original_task_name)
+        log.info(f"DEBUG: calling get_clean_media_data with {original_task_name}")
+        if clean_res and len(clean_res) == 4:
+            search_query_clean, _, _, _ = clean_res
+        else:
+            search_query_clean = original_task_name
+
+    # --- 4. جلب بيانات TMDB ---
+    tmdb_data = fetch_tmdb_metadata(
+        search_query_clean if search_query_clean else name,
+        year=extracted_year,
+    )
+    log.info(f"DEBUG: Final media data - Title: {tmdb_data['display_title']}, Year: {tmdb_data['year']}")
+
+    # --- 5. بناء الاسم المعروض النهائي ---
+    display_title = build_display_title(original_task_name, tmdb_data["display_title"])
+
+    # --- 6. جلب بيانات التنظيف للـ DB ---
+    clean_res_db = get_clean_media_data(display_title)
+    if clean_res_db and len(clean_res_db) == 4:
+        clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
+    else:
+        clean_title_search, category_search, current_season_no, current_ep_no = (
+            display_title, "movie", None, None,
+        )
+
+    # --- 7. فحص التكرار الأولي ---
+    try:
+        dup_check = check_media_duplicate(
+            clean_title_search, tmdb_data["year"], category_search,
+            current_season_no, current_ep_no
+        )
+        if dup_check["exists"] and category_search == "movie":
+            log.info(f"✅ [تخطي]: الفيلم '{display_title}' موجود بالفعل!")
+            return
+    except Exception as e:
+        log.warning(f"⚠️ فشل فحص التكرار الأولي: {e}")
+
+    # --- 8. الحجز الأولي في Supabase ---
+    temp_id = f"loading_{timestamp}"
+    e_id, media_id, meta_story, final_poster = initialize_supabase_record(
+        display_title, original_task_name, tmdb_data, temp_id
+    )
+
+    if e_id is None and media_id is None:
+        return
+
+    if not e_id:
+        log.warning("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")
+
+    # سحب بيانات tmdb للمتغيرات المحلية
+    tmdb_id_fetched = tmdb_data["tmdb_id"]
+    meta_labels = tmdb_data["labels"]
+    meta_duration = tmdb_data["duration"]
+    meta_rating = tmdb_data["rating"]
+    meta_runtime = tmdb_data["runtime"]
+    meta_year = tmdb_data["year"]
+
+    # --- 9. تحديد نوع المصدر (محلي أم رابط) ---
+    clean_name = (
+        "".join([c for c in display_title if c.isalnum() or c in (" ", ".", "_")])
+        .strip()
+        .replace(" ", "_")
+    )
+
+    is_local_file = os.path.exists(url)
+    actual_downloaded_path = None
+    extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
+    os.makedirs(extract_dir, exist_ok=True)
+    download_path_template = os.path.join(extract_dir, f"temp_dl_{timestamp}.%(ext)s")
+    final_direct_url = None
+    log.info(f"📡 جاري فحص الرابط وبدء السحب...")
+
+    if is_local_file:
+        log.info(f"♻️ اكتشاف ملف محلي: {url} - سيتم تخطي التحميل.")
+        actual_downloaded_path = url
+        final_public_path, direct_remote_url = rename_and_move_to_stream(actual_downloaded_path, media_id, e_id, 1)
+        actual_downloaded_path = final_public_path
+        vid_path = final_public_path
+        final_direct_url = direct_remote_url   # حفظ الرابط الديناميكي
+        class MockProcess:
+            returncode = 0
+        process = MockProcess()
+    else:
+        log.info(f"📡 رابط ويب، جاري التجهيز للسحب...")
+        log.info(f"   🚀 [Direct Start] الرابط معتمد — جاري التحميل فوراً...")
+
+        # --- 10. حل الرابط المباشر ---
+        url = await resolve_direct_url(url)
+
+        # --- 11. بناء أمر yt-dlp ---
+        smart_headers = get_smart_headers(url)
+        cmd = build_ytdlp_command(url, download_path_template, smart_headers)
+
+        # --- 12. التحميل ---
+        actual_downloaded_path = await download_video(cmd, task_id, display_title, extract_dir)
 
         if actual_downloaded_path:
-            log.info(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
-
-            # --- [بداية التعديل: إعادة التسمية بـ IDs سوبابيز] ---
-            file_extension = os.path.splitext(actual_downloaded_path)[1]
-            # نستخدم e_id و media_id اللي رجعوا من save_res
-            # idx هنا هنفترض إنه 1 طالما مفيش لوب للفيديوهات لسه
-            new_file_name = f"f_{media_id}_{e_id}_1{file_extension}"
-            
-            new_path = os.path.join(os.path.dirname(actual_downloaded_path), new_file_name)
-            
-            try:
-                os.rename(actual_downloaded_path, new_path)
-                actual_downloaded_path = new_path
-                file_name = new_file_name # تحديث المتغير عشان باقي الكود يستخدم الاسم الجديد
-                log.info(f"🔄 تم إعادة تسمية الملف إلى المعرف الرقمي: {file_name}")
-            except Exception as rename_err:
-                log.error(f"⚠️ فشل إعادة التسمية، سيتم استخدام الاسم الأصلي: {rename_err}")
-                file_name = os.path.basename(actual_downloaded_path)
-            # --- [نهاية التعديل] ---
-
-            # تحديد مجلد الستريم في الجذر (المجلد الذي فتحه FastAPI)
-            # بما أننا داخل /app/project حالياً، فـ ".." تعود بنا لـ /app/
-            base_root = os.path.dirname(os.getcwd())
-            stream_dir = os.path.join(base_root, "stream")
-            os.makedirs(stream_dir, exist_ok=True)
-
-            # نقل الملف مع تأمين المسار للووركر
-            final_public_path = os.path.join(stream_dir, file_name)
-            try:
-                shutil.copy2(actual_downloaded_path, final_public_path)
-                if os.path.exists(actual_downloaded_path):
-                    os.remove(actual_downloaded_path)
-                log.info(f"✅ تم تأمين الملف في المسار العام: {final_public_path}")
-            except Exception as move_err:
-                log.error(f"❌ خطأ في نقل الملف: {move_err}")
-
-            # بناء الرابط - إجبار الحروف الصغيرة لضمان قبول المنصات للسحب (Remote Upload)
-            raw_space_id = os.environ.get("SPACE_ID", "eslam315/egypyramid-guardian-ultra")
-            # تنظيف المسار وتحويله لـ lowercase بالكامل
-            space_domain = raw_space_id.replace("/", "-").lower().strip()
-            direct_remote_url = f"https://{space_domain}.hf.space/stream/{file_name}"
-
-            log.info(f"🔗 [Direct Link] الرابط جاهز للاختبار: {direct_remote_url}")
-            vid_path = (
-                final_public_path  # تحديث المسار عشان الرفع المحلي لـ VK و MixDrop
-            )
-            # ------------------------------------------
+            final_public_path, direct_remote_url = rename_and_move_to_stream(actual_downloaded_path, media_id, e_id, 1)
+            actual_downloaded_path = final_public_path
+            vid_path = final_public_path
+            final_direct_url = direct_remote_url   # حفظ الرابط الديناميكي
+            class MockProcess:
+                returncode = 0
+            process = MockProcess()
         else:
-            log.error(
-                f"❌ فشل التحميل: المجلد فارغ! المحتوى الموجود: {os.listdir(extract_dir)}"
-            )
-            # --- 🧹 تنظيف الأشباح فور الفشل ---
+            # فشل التحميل - تنظيف وخروج
             if media_id:
                 try:
-                    # حذف الميديا لأن التحميل فشل
                     supabase.table("medias").delete().eq("id", media_id).execute()
                     log.info(f"🧹 تم حذف سجل الميديا الفارغ (ID: {media_id})")
                     if task_id:
@@ -791,18 +1244,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 except Exception as clean_err:
                     log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
             return
-    else:
-        # حالة الملف المحلي
-        log.info(f"⚡ تخطي التحميل: الملف موجود محلياً في {url}")
-        actual_downloaded_path = url
 
-        # تعريف متغير وهمي للعملية لتجنب خطأ الـ NameError لاحقاً
-        class MockProcess:
-            returncode = 0
-
-        process = MockProcess()
-
-    # تحديث سوبابيز قبل بدء المعالجة
+    # --- 13. تحديث سوبابيز قبل المعالجة ---
     if task_id:
         supabase.table("download_tasks").update(
             {
@@ -812,16 +1255,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             }
         ).eq("id", task_id).execute()
 
-    # --- 2. منطق المعالجة والرفع ---
+    # --- 14. منطق المعالجة والرفع ---
     if process and process.returncode == 0 and actual_downloaded_path:
-        # بكمل باقي الكود عادي (فحص النوع، فك الضغط، جرد الفيديوهات...)
-        # فحص الهوية الحقيقية للملف باستخدام أمر النظام
         file_info = subprocess.getoutput(f'file "{actual_downloaded_path}"').lower()
         is_rar = "rar archive" in file_info or "zip archive" in file_info
 
         if is_rar and not is_local_file:
             log.info("🔓 تم اكتشاف ملف مضغوط حقيقي، جاري البدء في فك التجميع...")
-            # (كود فك الضغط واستدعاء run_pyramid_tasks هنا)
         else:
             if is_local_file:
                 log.info(f"🎥 معالجة ملف الفيديو المحلي الجاهز: {name}")
@@ -830,21 +1270,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         if is_rar:
             log.info(f"🔓 تم اكتشاف ملف مضغوط حقيقي، جاري فك الضغط...")
-            subprocess.run(
-                [
-                    "unrar",
-                    "e",
-                    "-y",
-                    actual_downloaded_path,
-                    os.path.join(extract_dir, ""),
-                ],
-                capture_output=True,
-            )
-            if os.path.exists(actual_downloaded_path):
-                os.remove(actual_downloaded_path)
+            extract_archive(actual_downloaded_path, extract_dir)
         else:
             log.info(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
-            # التأكد من المسار: لو اتمسح من الـ extracted نستخدم الـ stream اللي أمنّاه فوق
             if not os.path.exists(actual_downloaded_path):
                 final_video_path = vid_path
             else:
@@ -857,42 +1285,18 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             videos = [final_video_path]
 
-        # 2. جرد الفيديوهات (هذا السطر مهم جداً أن يشمل كل الامتدادات)
-        # 1. جرد الفيديوهات
-        # 1. جرد الفيديوهات المفكوكة
-        # 1. جرد الفيديوهات بذكاء
-        all_contents = os.listdir(extract_dir)
-        # #print(f"DEBUG: فحص المجلد {extract_dir} وجدنا فيه: {all_contents}")
+        # --- 15. جرد الفيديوهات ---
+        log.debug(f"DEBUG: الملفات الموجودة في المجلد حالياً: {os.listdir(extract_dir)}")
+        videos = list_videos(extract_dir)
 
-        videos = [
-            os.path.join(extract_dir, f)
-            for f in all_contents
-            if f.lower().endswith(
-                (".mp4", ".mkv", ".avi", ".ts", ".mov", ".webm")
-            )  # أضفنا webm و mov
-        ]
-
-        # لو لسه مفيش فيديوهات، جرب نبحث عن أي ملف حجمه أكبر من 5 ميجا (أكيد ده الفيديو)
         if not videos:
-            for f in all_contents:
-                full_p = os.path.join(extract_dir, f)
-                if os.path.isfile(full_p) and os.path.getsize(full_p) > 5 * 1024 * 1024:
-                    log.info(f"🎯 تم العثور على الفيديو بالحجم وليس الامتداد: {f}")
-                    videos.append(full_p)
-
-        videos.sort()
-        log.debug(
-            f"DEBUG: الملفات الموجودة في المجلد حالياً: {os.listdir(extract_dir)}"
-        )
-        if not videos:
-            # بدل return، خليه يحاول يستخدم vid_path اللي متعرف فوق من الـ Link
             if "vid_path" in locals() and os.path.exists(vid_path):
                 videos = [vid_path]
             else:
                 log.error("❌ لم يتم العثور على فيديوهات!")
                 return
 
-        # --- ⚡ التعديل الجوهري: تحويل المسار لو اكتشفنا أكتر من حلقة ⚡ ---
+        # --- 16. لو أكثر من حلقة، فرخ مهام جديدة ---
         if len(videos) > 1:
             log.info(
                 f"🎊 كنز! تم اكتشاف {len(videos)} حلقة. جاري إعادة توزيع المهام..."
@@ -901,17 +1305,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             new_task_list = []
             for vid in videos:
                 v_name = os.path.basename(vid)
-                # بناء اسم المهمة الجديد (بندمج اسم المسلسل مع اسم الملف عشان الـ Regex يلقط رقم الحلقة)
                 full_task_name = f"{display_title} {v_name}"
+                new_task_list.append({"url": vid, "name": full_task_name})
 
-                new_task_list.append(
-                    {
-                        "url": vid,  # بنمرر مسار الملف المحلي كـ URL
-                        "name": full_task_name,
-                    }
-                )
-
-            # تحديث حالة المهمة الأم في سوبابيز قبل القفل
             if task_id:
                 supabase.table("download_tasks").update(
                     {
@@ -920,143 +1316,57 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     }
                 ).eq("id", task_id).execute()
 
-            # إرسال المهام للمايسترو ليقوم بمعالجة كل حلقة كأنها "تاسك منفصل"
             await run_pyramid_tasks(new_task_list)
 
-            # تنظيف المجلد الأصلي بعد انتهاء كل المهام الفرعية
             if os.path.exists(extract_dir):
                 shutil.rmtree(extract_dir)
-            return  # إنهاء الدالة الحالية هنا لأنها "فرخت" مهام جديدة
-        # --- نهاية التعديل ---
-        # 2. جلب البيانات الذكية (الاعتماد الكلي على قاعدة البيانات)
-        log.info(f"✅ تم اعتماد البيانات المجلوبة مسبقاً لـ: {display_title}")
+            return
 
+        log.info(f"✅ تم اعتماد البيانات المجلوبة مسبقاً لـ: {display_title}")
         log.info(
             f"✅ تم اكتشاف {len(videos)} ملف. جاري المعالجة والرفع باسم: {display_title}"
         )
-        # 3. تحديد الحجم الكلي لكل حلقة
+
+        # --- 17. لووب الحلقات ---
         for idx, vid_path in enumerate(videos, 1):
-            # --- [ بداية منطقة التحصين والتمويه - EGY PYRAMID ] ---
-            # استدعاء دالة التحصين (تقدر تعمل كومنت للسطر ده بس وقت التجارب)
             # apply_media_disguise(vid_path, idx, display_title, LOGO_FILE)
-
             file_size_gb = os.path.getsize(vid_path) / (1024**3)
-            # ... باقي الكود (جلب البيانات، الأرشفة، تليجرام) سيكمل عمله بـ vid_path الجديد
-
-            # محاولة استخراج الاسم النظيف من اسم الملف الفعلي (خاصة في حالة تحميل سيزون كامل)
             current_file_name = os.path.basename(vid_path)
-            # إذا كان هناك أكثر من ملف، نستخدم اسم الملف لاستخراج رقم الحلقة بدقة
             if len(videos) > 1:
-                # ندمج اسم الميديا مع اسم الملف لضمان استخراج سياق كامل
                 loop_display_title = f"{display_title} {current_file_name}"
             else:
                 loop_display_title = display_title
 
+            # فحص تكرار الحلقة للمسلسلات
             if category_search == "tv":
-                # 1. استدعاء آمن للدالة وتخزينها في متغير وسيط
                 clean_res_loop = get_clean_media_data(loop_display_title)
-
-                # 2. التحقق من النتيجة قبل فك التغليف (Unpacking)
                 if clean_res_loop and len(clean_res_loop) == 4:
                     c_title_l, c_cat_l, c_season_l, c_ep_l = clean_res_loop
-
-                    # 3. محاولة البحث في قاعدة البيانات (حطينا الـ try هنا بس لجزء الداتابيز)
-                    try:
-                        m_id_l = None
-                        m_query = (
-                            supabase.table("medias")
-                            .select("id, title")
-                            .eq("title", c_title_l)
-                            .execute()
-                        )
-                        if m_query.data:
-                            m_id_l = m_query.data[0]["id"]
-                        else:
-                            search_res = (
-                                supabase.table("medias")
-                                .select("id, title")
-                                .ilike("title", f"%{c_title_l}%")
-                                .execute()
-                            )
-                            for row in search_res.data:
-                                if normalize_title(row["title"]) == c_title_l:
-                                    m_id_l = row["id"]
-                                    break
-
-                        if m_id_l:
-                            s_query = (
-                                supabase.table("seasons")
-                                .select("id")
-                                .eq("media_id", m_id_l)
-                                .eq("season_number", c_season_l)
-                                .execute()
-                            )
-                            if s_query.data:
-                                s_id_l = s_query.data[0]["id"]
-                                e_query = (
-                                    supabase.table("episodes")
-                                    .select("id")
-                                    .eq("media_id", m_id_l)
-                                    .eq("season_id", s_id_l)
-                                    .eq("episode_number", c_ep_l)
-                                    .execute()
-                                )
-                                if e_query.data:
-                                    ep_id_found = e_query.data[0]["id"]
-                                    links_query = (
-                                        supabase.table("links")
-                                        .select("id")
-                                        .eq("episode_id", ep_id_found)
-                                        .execute()
-                                    )
-                                    if links_query.data:
-                                        log.info(
-                                            f"✅ [تخطي]: الحلقة {c_ep_l} من الموسم {c_season_l} موجودة ولها روابط!"
-                                        )
-                                        continue
-                                    else:
-                                        log.info(
-                                            f"🔄 [تحديث]: الحلقة {c_ep_l} موجودة بدون روابط..."
-                                        )
-                    except Exception as e:
-                        log.warning(f"⚠️ فشل فحص تكرار الحلقة في الداتابيز: {e}")
+                    dup_check = check_media_duplicate(c_title_l, meta_year, "tv", c_season_l, c_ep_l)
+                    if dup_check["exists"]:
+                        log.info(f"✅ [تخطي]: الحلقة {c_ep_l} من الموسم {c_season_l} موجودة ولها روابط!")
+                        continue
+                    elif dup_check["media_id"]:
+                        log.info(f"🔄 [تحديث]: الحلقة {c_ep_l} موجودة بدون روابط...")
                 else:
-                    log.warning(
-                        f"⚠️ فشل تنظيف بيانات الحلقة {loop_display_title} - سيتم تجاوز فحص التكرار"
-                    )
+                    log.warning(f"⚠️ فشل تنظيف بيانات الحلقة {loop_display_title} - سيتم تجاوز فحص التكرار")
 
-            # لاحظ أن السطور التالية خارج الـ if ومرتبة معها في نفس المستوى
-            # ... (كود توليد الـ identifier والـ final_file_name)
+            # --- 18. تجهيز المعرفات ---
             episode_label = f"{loop_display_title}"
-            # توليد 4 رموز عشوائية فقط لكسر "بصمة" الاسم مع الحفاظ على أرقامك
             rand_id = "".join(
                 random.choices(string.ascii_lowercase + string.digits, k=4)
             )
-            # المعرف الجديد يجمع بين الرمز العشوائي وقيمك الأساسية
-            # تنسيق يدمج الأرقام بدون شرطات كثيرة لضمان القبول
-            identifier = f"v{rand_id}x{media_id}x{e_id}x{idx}"  # --- تعريف مفاتيح السيرفرات (يجب أن تكون هنا داخل اللوب أو الدالة) ---
-            # archive_url = "Failed_Archive_Upload"
+            identifier = f"v{rand_id}x{media_id}x{e_id}x{idx}"
             final_file_name = f"f_{media_id}_{e_id}_{idx}.mp4"
-            # 3. الرفع للأرشيف
-            log.info(f"📦 أرشفة النسخة الكاملة: {episode_label}")
-            # 3. الرفع للأرشيف
-            # استدعاء دالة الأرشفة (معطلة حالياً للتجارب)
-            # archive_url = Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
-            # عمل كومنت لسطر "Disabled" أو حذفه تماماً بعد ما تجرب دالة الأرشفة
-            archive_url = "Disabled"
-            # --- 0. صمامات الأمان (تعريف افتراضي لمنع NameError) ---
-            vk_url = "Pending"
-            voe_watch = "Pending"
-            voe_down = "Pending"
-            mix_url = None
-            # -------------------------------------------------------
-            # --- 4. تجهيز المصدر المباشر (Direct Space Stream) ---
-            # تخطي تليجرام تماماً لتجنب الـ FloodWait وتعطيل السكربت
-            file_name = os.path.basename(vid_path)
-            space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"
-            direct_remote_url = f"https://{space_domain}/stream/{file_name}"
 
-            log.info(f"🔗 [Direct Link] تم التجهيز للرفع الخماسي: {direct_remote_url}")
+            # --- 19. الأرشفة ---
+            log.info(f"📦 أرشفة النسخة الكاملة: {episode_label}")
+            archive_url = process_archive_upload(vid_path, media_id, e_id, idx, task_id)
+            # --- 20. استخدام الرابط الديناميكي المحفوظ ---
+            if final_direct_url:
+                log.info(f"🔗 [Direct Link] استخدام الرابط الديناميكي: {final_direct_url}")
+            else:
+                log.warning("⚠️ الرابط الديناميكي غير متاح، سيتم استخدام الرابط الأصلي")
 
             if e_id:
                 try:
@@ -1068,291 +1378,56 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                     ).eq("id", e_id).execute()
                 except:
                     pass
-            # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
-            # نستخدم vid_path عشان نضمن الدخول للرفع طالما التحميل نجح
-            if vid_path and os.path.exists(vid_path):
-                # --- التعديل هنا (إظهار السيرفرات) ---
-                if task_id:
-                    supabase.table("download_tasks").update(
-                        {
-                            "status_message": "🚀 ضخ السيرفرات: VK, Voe, Dood, Tape, Lulu",
-                            "progress_percent": 95,
-                        }
-                    ).eq("id", task_id).execute()
-                # ------------------------------------
-                log.info(
-                    f"🚀 البدء في الرفع المتوازي الخماسي (VK + Voe + Dood + Tape + Lulu)..."
-                )
 
-                if e_id:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "🚀 جاري ضخ الملف لـ VK والرفع المتوازي للبقية...",
-                            "progress_percent": 90,
-                        }
-                    ).eq("id", e_id).execute()
-                # --- 🎯 المصدر المعتمد هو رابط السبيس المباشر 🎯 ---
-                if direct_remote_url:
-                    remote_source = direct_remote_url
-                    log.info(
-                        f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream]"
-                    )
+            # --- 21. الرفع المتوازي الخماسي ---
+            if vid_path and os.path.exists(vid_path):
+                if final_direct_url:
+                    remote_source = final_direct_url
+                    log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream]")
                 elif archive_url and "archive.org" in archive_url:
                     remote_source = identifier
                     log.info(f"✅ المصدر المعتمد: Archive.org")
                 else:
                     remote_source = url
-                    log.warning(
-                        f"⚠️ الرابط المباشر غير متاح، استخدام الرابط الأصلي: {url}"
-                    )
+                    log.warning(f"⚠️ الرابط الديناميكي غير متاح، استخدام الرابط الأصلي: {url}")
+
                 log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
                 await asyncio.sleep(10)
-                # 1. تحضير مهام الريموت باستخدام المصدر المتاح (أرشيف أو تليجرام)
-                if remote_source:
-                    task_voe = upload_to_voe_api(vid_path, remote_source)
-                    await asyncio.sleep(15)
-                    task_dood = upload_to_doodstream(
-                        dood_api_key, remote_source, final_file_name
-                    )
-                    await asyncio.sleep(15)
-                    task_tape = upload_to_streamtape(
-                        st_login, st_key, remote_source, final_file_name
-                    )
-                    await asyncio.sleep(15)
-                    task_lulu = upload_to_lulustream(
-                        lu_key, remote_source, final_file_name
-                    )
-                else:
-                    # في حالة انعدام المصادر، نضع مهام وهمية تعيد None
-                    task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(
-                        0, result=None
-                    )
-                # 2. تحضير مهمة VK (رفع محلي ثقيل لا يحتاج لرابط ريموت)
-                loop = asyncio.get_event_loop()
-                task_vk = loop.run_in_executor(
-                    None, upload_to_vk_local, episode_label, vid_path
+
+                upload_results = await upload_to_all_servers(
+                    vid_path, episode_label, media_id, e_id,
+                    remote_source, task_id, final_file_name
                 )
-                # 3. إطلاق الصواريخ الخمسة معاً وانتظار الجميع
-                # الترتيب مهم جداً لاستلام النتائج بشكل صحيح
-                vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
-                    task_vk, task_voe, task_dood, task_tape, task_lulu
-                )
-                # تعيين رابط VK المستخرج
-                vk_url = vk_result if vk_result else "Failed"
-                # --- 6. معالجة النتائج وحفظها ---
-                # نتائج VK (إضافة الحفظ لسوبابيز)
-                if vk_url != "Failed":
-                    supabase.table("links").upsert(
-                        {"episode_id": e_id, "server_name": "vk", "url": vk_url},
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    log.info(f"✅ VK Link Saved to Supabase!")
-                else:
-                    log.warning(f"⚠️ VK upload failed or returned empty URL.")
-                # نتائج Voe
-                voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
-
-                voe_down = (
-                    f"https://voe.sx/{file_id}/download" if file_id else "Failed"
-                )  # أضف هذا السطر
-                if file_id:
-                    log.info(f"✅ Voe Saved! ID: {file_id}")
-                else:
-                    log.warning(f"⚠️ Voe upload failed or returned empty ID.")
-                # نتائج DoodStream
-                if d_url:
-                    supabase.table("links").upsert(
-                        {"episode_id": e_id, "server_name": "doodstream", "url": d_url},
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    log.info(f"✅ DoodStream Saved!")
-                else:
-                    log.warning(f"⚠️ DoodStream upload failed or returned empty URL.")
-                # نتائج Streamtape
-                if s_url:
-                    supabase.table("links").upsert(
-                        {"episode_id": e_id, "server_name": "streamtape", "url": s_url},
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    log.info(f"✅ Streamtape Saved!")
-
-                else:
-                    log.warning(f"⚠️ Streamtape upload failed or returned empty URL.")
-                # نتائج LuluStream (إضافة الحفظ لسوبابيز)
-                if lu_url:
-                    supabase.table("links").upsert(
-                        {
-                            "episode_id": e_id,
-                            "server_name": "lulustream",
-                            "url": lu_url,
-                        },
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    log.info(f"✅ LuluStream Saved!")
-                else:
-                    log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
-
-            # --- 9. الرفع لـ MixDrop ---
-            try:
-                if e_id:
-                    supabase.table("episodes").update(
-                        {
-                            "status_message": "💧 جاري الرفع لـ MixDrop...",
-                            "progress_percent": 99,
-                        }
-                    ).eq("id", e_id).execute()
-
-                # تأكد أن vid_path هنا هي المسار الجديد بعد النقل (final_public_path)
-                mix_url = await upload_to_mixdrop(vid_path, mix_user, mix_key)
-                if mix_url:
-                    supabase.table("links").upsert(
-                        {"episode_id": e_id, "server_name": "mixdrop", "url": mix_url},
-                        on_conflict="episode_id, server_name",
-                    ).execute()
-                    log.info(f"✅ تم رفع وحفظ رابط MixDrop: {mix_url}")
-            except Exception as e:
-                log.warning(f"⚠️ فشل MixDrop: {e}")
-
-            # --- 10. التحديث النهائي الشامل ---
-            try:
-                # نرسل كل شيء في استدعاء واحد نهائي يغلق المهمة بـ Success
-                save_res = save_to_supabase(
-                    voe_watch, voe_down, vk_url, 
-                    loop_display_title, original_task_name,
-                    meta_story, final_poster, meta_year, meta_rating,
-                    vid_path, archive_url, tmdb_id=tmdb_id_fetched,
-                    labels=meta_labels, runtime=meta_runtime, duration_iso=meta_duration
-                )
-            except Exception as e:
-                log.error(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
-                save_res = None
-
-            # --- ⚡ بلوك النجاح (خارج الـ except ليعمل عند النجاح فقط) ⚡ ---
-            if save_res:
-                e_id, media_id, meta_story, final_poster = save_res
-                log.info(f"🏁 تم إغلاق المهمة بنجاح وحفظ كافة البيانات.")
-
-                # --- ⚡ بلوك النجاح (يجب أن يكون هنا وليس في الـ except) ⚡ ---
-
-                # 2. تحضير بيانات تليجرام من الذاكرة الحية
-                # 2. تحضير بيانات تليجرام من الذاكرة الحية (زي ما هي)
-                row_data_for_tg = {
-                    "title": loop_display_title,
-                    "story": meta_story if meta_story else "لا يوجد وصف متاح حالياً.",
-                    "poster_url": final_poster,
-                    "labels": meta_labels,
-                    "year": meta_year,
+            else:
+                upload_results = {
+                    "vk_url": "Failed", "voe_watch": "Failed",
+                    "voe_download": "Failed", "dood_url": None,
+                    "tape_url": None, "lulu_url": None,
                 }
 
-                # 3. إرسال تمبلت تليجرام (التعديل هنا)
-                # بنبعت النوع الحقيقي اللي "الوحش" عرفه من TMDB أو من فحص الرابط
-                status = send_to_telegram(
-                    row=row_data_for_tg,
-                    content_type=category_search,  # <--- استخدم المتغير ده بدل الشرط اليدوي
-                    action_text="المشاهدة",
-                    post_url=final_poster,  # يفضل وضع رابط المقال الفعلي لو متاح
-                    lang_val="لغة أصلية (مترجم)",
-                )
+            # --- 22. الإنهاء والتحديث النهائي ---
+            await finalize_episode(
+                episode_id=e_id,
+                media_id=media_id,
+                task_id=task_id,
+                upload_results=upload_results,
+                tmdb_data=tmdb_data,
+                category=category_search,
+                original_task_name=original_task_name,
+                loop_display_title=loop_display_title,
+                meta_story=meta_story,
+                final_poster=final_poster,
+                meta_year=meta_year,
+                meta_rating=meta_rating,
+                meta_labels=meta_labels,
+                meta_runtime=meta_runtime,
+                meta_duration=meta_duration,
+                video_path=vid_path,
+                archive_url=archive_url,
+                url=url,
+            )
 
-                if status:
-                    log.info(f"✅ كولاب أرسل تمبلت تليجرام بنجاح")
-
-                # 4. فحص الجودة قبل تفعيل الجاهزية (المنطق الجديد)
-                quality_pass = False
-                if media_id:
-                    # التحقق من وجود 3 سيرفرات على الأقل
-                    link_check = (
-                        supabase.table("links")
-                        .select("id", count="exact")
-                        .eq("episode_id", e_id)
-                        .execute()
-                    )
-                    links_count = (
-                        link_check.count if link_check.count is not None else 0
-                    )
-
-                    # التحقق من وجود بوستر ووصف (ليسوا فارغين)
-                    has_metadata = bool(meta_story and meta_story.strip()) and bool(
-                        final_poster and final_poster.strip()
-                    )
-
-                    # المنطق الجديد: النجاح يعتمد على الروابط فقط، والجاهزية تعتمد على الكل
-                    if links_count >= 3:
-                        quality_pass = True  # اعتبر المهمة نجحت طالما فيه لينكات
-
-                        if has_metadata:
-                            # لو فيه لينكات + داتا = أطلق الجاهزية فوراً
-                            supabase.table("medias").update({"is_ready": True}).eq(
-                                "id", media_id
-                            ).execute()
-                            log.info(
-                                f"🚀 تم إطلاق إشارة الجاهزية الكاملة (سيرفرات: {links_count})"
-                            )
-                        else:
-                            # لو فيه لينكات بس مفيش داتا = سيبها False واطبع تحذير
-                            log.warning(
-                                f"🟡 تم الحفظ بنجاح ولكن بدون جاهزية (نقص في الصورة أو الوصف)"
-                            )
-                    else:
-                        quality_pass = False  # هنا فعلاً فشل لأن مفيش لينكات كافية
-
-                # 5. إغلاق المهمة (حذف فقط في حالة انعدام الروابط)
-                # 5. إغلاق المهمة - تأمين الإغلاق النهائي مهما حدث
-                if task_id:
-                    try:
-                        if media_id and not quality_pass:
-                            supabase.table("medias").delete().eq("id", media_id).execute()
-                            log.warning(f"🗑️ تم حذف الميديا لعدم وجود روابط كافية.")
-                            final_status, final_msg = "failed", "❌ فشل: السيرفرات أقل من 3"
-                        else:
-                            final_status = "completed"
-                            final_msg = "✅ اكتملت بنجاح!" if has_metadata else "⚠️ اكتملت (بدون بيانات وصفية)"
-
-                        # التحديث الفعلي الذي يمنع سحب التاسك مرة أخرى
-                        supabase.table("download_tasks").update({
-                            "status": final_status,
-                            "progress_percent": 100,
-                            "status_message": final_msg,
-                        }).eq("id", task_id).execute()
-                        log.info(f"✅ تم إغلاق التاسك {task_id} بحالة: {final_status}")
-                    except Exception as task_err:
-                        log.error(f"❌ فشل تحديث حالة التاسك في سوبابيز: {task_err}")
-                    else:
-                        # هنا هيدخل لو quality_pass بـ True (سواء بـ is_ready أو لأ)
-                        msg = (
-                            "✅ اكتملت بنجاح!"
-                            if has_metadata
-                            else "⚠️ اكتملت بنجاح (يرجى إضافة الصورة والوصف يدوياً)"
-                        )
-                        supabase.table("download_tasks").update(
-                            {
-                                "status": "completed",
-                                "progress_percent": 100,
-                                "status_message": msg,
-                            }
-                        ).eq("id", task_id).execute()
-            # 6. تنظيف الملف المحلي (خارج الـ try/except لضمان التنفيذ)
-            if os.path.exists(vid_path):
-                try:
-                    os.remove(vid_path)
-                    log.info(f"🗑️ تم تنظيف الملف المحلي: {os.path.basename(vid_path)}")
-                except Exception as e:
-                    log.warning(f"⚠️ لم يتم مسح الملف المؤقت: {e}")
-
-            # --- هذا هو المكان الصحيح للكود الجديد ---
-            # تحديث الحالة النهائية للحلقة (بمحاذاة بلوك الـ try/except بالأعلى)
-            try:
-                supabase.table("episodes").update(
-                    {
-                        "progress_percent": 100,
-                        "status_message": "✅ اكتملت المعالجة والرفع بنجاح",
-                        "download_speed": "Done",
-                    }
-                ).eq("id", e_id).execute()
-            except:
-                pass
-
-        # --- خارج لووب الحلقات: مسح المجلد بالكامل ---
-        if os.path.exists(extract_dir):
-            shutil.rmtree(extract_dir)
-        log.info(f"\n✨ المهمة انتهت بنجاح!")
+    # --- خارج لووب الحلقات: مسح المجلد بالكامل ---
+    if os.path.exists(extract_dir):
+        shutil.rmtree(extract_dir)
+    log.info(f"\n✨ المهمة انتهت بنجاح!")
