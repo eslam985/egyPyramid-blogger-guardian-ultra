@@ -47,13 +47,14 @@ ARCHIVE_SECRET_KEY = os.getenv("ARCHIVE_SECRET_KEY")
 # جلب القيم كمناص نصية أولاً
 TELE_ID_RAW = os.getenv("TELEGRAM_API_ID")
 TELE_HASH_RAW = os.getenv("TELEGRAM_API_HASH")
-
-# سيتم التحويل والتحقق داخل دالة الرفع لضمان عدم توقف السكريبت بالكامل
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
+# التعديل ليتوافق مع أسماء المتغيرات في خلية الحقن
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_DESTINATION") or os.getenv("DESTINATIONS")
 # جلب الوجهات وتجنب خطأ القائمة الفارغة
 dest_raw = os.getenv("DESTINATIONS") or os.getenv("TELEGRAM_CHAT_ID") or ""
 DESTINATIONS = [d.strip() for d in dest_raw.split(",") if d.strip()]
+# سيتم التحويل والتحقق داخل دالة الرفع لضمان عدم توقف السكريبت بالكامل
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # تعريف العميل باستخدام المفتاح الموجود في ملف .env
 # هذا السطر هو الذي سيحل خطأ Undefined name "client_groq"
@@ -61,13 +62,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # إنشاء العميل فقط إذا كان المفتاح موجوداً لتجنب انهيار الاستيراد
 client_groq = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# التعديل ليتوافق مع أسماء المتغيرات في خلية الحقن
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_DESTINATION") or os.getenv("DESTINATIONS")
 
 # استدعاء المفاتيح من ملف .env
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 
 class PyrogramProgress:
@@ -176,7 +173,7 @@ async def upload_to_telegram_only(file_path, display_name, episode_id=None):
                 session_string=tele_string,
                 api_id=f_api_id,
                 api_hash=f_api_hash,
-                workers=1,  # تقييد عدد العمال لمنع الـ Flood
+                workers=1,
                 sleep_threshold=300,
             ) as app:
                 await asyncio.sleep(2)

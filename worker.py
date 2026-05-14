@@ -1,3 +1,4 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/worker.py
 import sys
 import os
 import time
@@ -187,8 +188,6 @@ def ultimate_beast_worker():
             except:
                 pass
             time.sleep(20)
-
-
 # تشغيل المحرك
 if __name__ == "__main__":
     ultimate_beast_worker()

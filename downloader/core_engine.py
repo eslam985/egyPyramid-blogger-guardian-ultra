@@ -87,6 +87,7 @@ def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
         disguised_file = os.path.join(extract_dir_current, f"disguised_{idx}.mp4")
 
         log.info(f"🕵️ جاري تطبيق التمويه لكسر البصمة: {os.path.basename(vid_path)}")
+
         def get_duration(file):
             cmd = [
                 "ffprobe",
@@ -158,7 +159,18 @@ def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
     except Exception as e:
         log.warning(f"⚠️ خطأ في التمويه، سيتم الرفع الأصلي: {e}")
 
-def Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id=None):
+
+def Upload_To_Archive(
+    vid_path,
+    media_id,
+    e_id,
+    idx,
+    identifier,
+    final_file_name,
+    ARCHIVE_ACCESS_KEY,
+    ARCHIVE_SECRET_KEY,
+    task_id=None,
+):
     """
     تقوم هذه الدالة برفع نسخة احتياطية من الملف الخام إلى Archive.org وتحديث روابط سوبابيز.
     """
@@ -201,8 +213,8 @@ def Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name
 
         try:
             # التصحيح هنا: استدعاء upload من المكتبة وليس اسم دالتك الحالية
-            from internetarchive import upload 
-            
+            from internetarchive import upload
+
             upload(
                 identifier,
                 files={
@@ -221,28 +233,26 @@ def Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name
         finally:
             stream.close()
             pbar_archive.close()
-        direct_download_url = f"https://archive.org/download/{identifier}/{final_file_name}"
-        
+        direct_download_url = (
+            f"https://archive.org/download/{identifier}/{final_file_name}"
+        )
+
         # حقن الرابط في سوبابيز
-        supabase.table("links").insert({
-            "episode_id": e_id,
-            "url": direct_download_url,
-            "server_name": "archive",
-            "last_check_status": "valid",
-        }).execute()
-        
+        supabase.table("links").insert(
+            {
+                "episode_id": e_id,
+                "url": direct_download_url,
+                "server_name": "archive",
+                "last_check_status": "valid",
+            }
+        ).execute()
+
         log.info(f"✅ تم الأرشفة بنجاح: {direct_download_url}")
-        return direct_download_url # مهم جداً للـ Loop
+        return direct_download_url  # مهم جداً للـ Loop
 
     except Exception as e:
         log.error(f"❌ خطأ أرشيف: {e}")
         return "Failed_Archive_Upload"
-
-
-
-
-
-
 
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
@@ -711,6 +721,21 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         if actual_downloaded_path:
             log.info(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
+
+            # --- ⚡ توليد رابط الـ Direct Remote ⚡ ---
+            # استخراج اسم الملف (مثلاً down_123.mp4)
+            file_name = os.path.basename(actual_downloaded_path)
+            # دومين السبيس بتاعك
+            space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"
+            # الرابط السحري اللي هنبعته للسيرفرات (Voe, Dood, etc.)
+            direct_remote_url = f"https://{space_domain}/stream/{file_name}"
+
+            log.info(f"🔗 [Direct Link] جاهز للرفع الخماسي: {direct_remote_url}")
+
+            # تخزين الرابط في الـ meta_data أو متغير لاستخدامه في الدوال القادمة
+            if meta_data is not None:
+                meta_data["direct_link"] = direct_remote_url
+            # ------------------------------------------
         else:
             log.error(
                 f"❌ فشل التحميل: المجلد فارغ! المحتوى الموجود: {os.listdir(extract_dir)}"
@@ -972,71 +997,28 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             log.info(f"📦 أرشفة النسخة الكاملة: {episode_label}")
             # 3. الرفع للأرشيف
             # استدعاء دالة الأرشفة (معطلة حالياً للتجارب)
-            #archive_url = Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
+            # archive_url = Upload_To_Archive(vid_path, media_id, e_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
             # عمل كومنت لسطر "Disabled" أو حذفه تماماً بعد ما تجرب دالة الأرشفة
-            archive_url = "Disabled" 
-            
-            # 4. الرفع لتليجرام
-            telegram_direct = None  # تعريف أولي لضمان عدم حدوث NameError
-            # 4. الرفع لتليجرام (بالاسم النظيف) مع حماية كاملة
-            try:
-                if e_id:
+            archive_url = "Disabled"
+
+            # --- 4. تجهيز المصدر المباشر (Direct Space Stream) ---
+            # تخطي تليجرام تماماً لتجنب الـ FloodWait وتعطيل السكربت
+            file_name = os.path.basename(vid_path)
+            space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"
+            direct_remote_url = f"https://{space_domain}/stream/{file_name}"
+
+            log.info(f"🔗 [Direct Link] تم التجهيز للرفع الخماسي: {direct_remote_url}")
+
+            if e_id:
+                try:
                     supabase.table("episodes").update(
                         {
-                            "status_message": "📤 جاري الرفع إلى تليجرام...",
-                            "progress_percent": 0,
+                            "status_message": "🚀 جاري الضخ للسيرفرات الخماسية عبر الرابط المباشر...",
+                            "progress_percent": 85,
                         }
                     ).eq("id", e_id).execute()
-
-                if file_size_gb > 1.9:
-                    log.info(f"✂️ الملف كبير ({file_size_gb:.2f}GB)، جاري التقسيم...")
-                    duration_cmd = f'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "{vid_path}"'
-                    total_seconds = float(
-                        subprocess.check_output(duration_cmd, shell=True)
-                    )
-                    half_time = total_seconds / 2
-                    part1, part2 = f"{vid_path}_part1.mp4", f"{vid_path}_part2.mp4"
-
-                    subprocess.run(
-                        f'ffmpeg -i "{vid_path}" -t {half_time} -c copy "{part1}" -ss {half_time} -c copy "{part2}"',
-                        shell=True,
-                        check=True,
-                    )
-
-                    await upload_to_telegram_only(
-                        part1, f"{episode_label} - ج1", episode_id=e_id
-                    )
-                    await upload_to_telegram_only(
-                        part2, f"{episode_label} - ج2", episode_id=e_id
-                    )
-
-                    if os.path.exists(part1):
-                        os.remove(part1)
-                    if os.path.exists(part2):
-                        os.remove(part2)
-                else:
-                    # رفع الملف ككتلة واحدة إذا كان أصغر من 1.9 جيجا
-                    # رفع الملف واستقبال الرابط المباشر في المتغير المطلوب
-                    telegram_direct = await upload_to_telegram_only(
-                        vid_path, episode_label, episode_id=e_id
-                    )
-
-            except Exception as e:
-                # تحويل الخطأ لنص صريح لمنع كراش اللوجر (NoneType Error)
-                error_msg = str(e) if e else "Unknown Telegram Error"
-                log.warning(
-                    f"⚠️ تنبيه: فشل رفع تليجرام ({error_msg})، لكن الوحش مكمل للسيرفرات التانية..."
-                )
-                if e_id:
-                    try:
-                        supabase.table("episodes").update(
-                            {
-                                "status_message": "⚠️ تليجرام فشل - جاري الرفع للسيرفرات البديلة",
-                            }
-                        ).eq("id", e_id).execute()
-                    except:
-                        pass  # لو حتى سوبابيز هنج ميتعطلش التحميل
-
+                except:
+                    pass
             # --- 5. الرفع المتوازي للرباعي (Voe + Dood + Tape + Lulu) عبر الأرشيف ---
             # --- 5. الرفع المتوازي الخماسي (VK محلي + الباقي ريموت) ---
             if identifier:
@@ -1060,64 +1042,32 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                             "progress_percent": 90,
                         }
                     ).eq("id", e_id).execute()
-                # --- ⚡ التحول للحل البديل (Telegram Fallback) ⚡ ---
-                # --- ⚡ التحول للحل البديل (The Ultimate Fallback) ⚡ ---
-                if not (archive_url and "archive.org" in archive_url):
-                    log.info("⏳ جاري انتظار رابط تليجرام المباشر (صبر الوحش)...")
-                    retry_wait = 0
-                    while (
-                        not telegram_direct or telegram_direct == "failed_but_continue"
-                    ) and retry_wait < 15:
-                        await asyncio.sleep(5)
-                        # محاولة جلب الرابط من الداتابيز
-                        if e_id:
-                            try:
-                                res = (
-                                    supabase.table("links")
-                                    .select("url")
-                                    .eq("episode_id", e_id)
-                                    .eq("server_name", "telegram_direct")
-                                    .execute()
-                                )
-                                if res.data:
-                                    telegram_direct = res.data[0]["url"]
-                                    break
-                            except:
-                                pass
-                        retry_wait += 1
-
-                # --- 🎯 المنطق الجديد: اختيار المصدر النهائي 🎯 ---
-                if telegram_direct and telegram_direct != "failed_but_continue":
-                    remote_source = telegram_direct
-                    log.info(f"✅ المصدر المعتمد: Telegram Direct Link")
+                # --- 🎯 المنطق الجديد والمبسط: المصدر هو السبيس فوراً 🎯 ---
+                if "direct_remote_url" in locals() and direct_remote_url:
+                    remote_source = direct_remote_url
+                    log.info(f"✅ المصدر المعتمد: [Hugging Face Direct Stream]")
                 elif archive_url and "archive.org" in archive_url:
                     remote_source = identifier
                     log.info(f"✅ المصدر المعتمد: Archive.org")
-                elif url and ("http" in url) and ("mixdrop" not in url.lower()):
-                    # 🔥 هنا السحر: لو تليجرام فشل، استخدم رابط الصيد المباشر (اللي الوحش جابه في البداية)
+                else:
                     remote_source = url
                     log.warning(
-                        f"⚠️ تليجرام فشل، تم استخدام الرابط المباشر الأصلي كمصدر ريموت: {url}"
-                    )
-                else:
-                    remote_source = None
-                    log.error(
-                        "❌ لا يوجد مصدر ريموت نهائياً.. الرفع سيعمل محلياً (بطيء)."
+                        f"⚠️ الرابط المباشر غير متاح، استخدام الرابط الأصلي: {url}"
                     )
                 log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
                 await asyncio.sleep(10)
                 # 1. تحضير مهام الريموت باستخدام المصدر المتاح (أرشيف أو تليجرام)
                 if remote_source:
                     task_voe = upload_to_voe_api(vid_path, remote_source)
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(15)
                     task_dood = upload_to_doodstream(
                         dood_api_key, remote_source, final_file_name
                     )
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(15)
                     task_tape = upload_to_streamtape(
                         st_login, st_key, remote_source, final_file_name
                     )
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(15)
                     task_lulu = upload_to_lulustream(
                         lu_key, remote_source, final_file_name
                     )

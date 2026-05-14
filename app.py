@@ -36,7 +36,15 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # 1. تهيئة التطبيق والميدلوير (يجب أن يكونا أول شيء)
 app = FastAPI()
 
+# --- ⚡ نظام السحب المباشر (Guardian Direct Stream) ⚡ ---
+# المسار اللي الوحش شغال فيه وبيرمي فيه الفيديوهات
+STREAM_DIR = os.path.join(os.getcwd(), "project")
+os.makedirs(STREAM_DIR, exist_ok=True)
 
+# فتح المجلد للوصول العام: https://.../stream/video.mp4
+app.mount("/stream", StaticFiles(directory=STREAM_DIR), name="stream")
+print(f"📡 [Direct Stream] البوابة مفتوحة على المسار: {STREAM_DIR}")
+# ----------------------------------
 # تشغيل "الوحش" في خلفية النظام عند بدء التشغيل
 @app.on_event("startup")
 async def startup_event():

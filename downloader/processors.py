@@ -644,10 +644,8 @@ async def upload_to_voe_api(file_path, identifier):
         async with httpx.AsyncClient(timeout=30.0) as client:  # أضف هذا السطر هنا
 
             file_name = os.path.basename(file_path).replace(" ", "%20")
-            if str(identifier).startswith("http"):
-                remote_url = identifier
-            else:
-                remote_url = f"https://archive.org/download/{identifier}/{file_name}"
+            # إذا كان الرابط جاهز نستخدمه، وإلا نبنيه من أرشيف
+            remote_url = identifier if str(identifier).startswith("http") else f"https://archive.org/download/{identifier}/{file_name}"
             params = {"key": VOE_API_KEY, "url": remote_url}
 
             # 1. طلب الرفع مع محاولات إعادة في حال تذبذب الرابط
@@ -744,10 +742,8 @@ async def upload_to_doodstream(api_key, identifier, file_name):
         "doodstream.com",
     ]
     clean_file_name = urllib.parse.quote(file_name)
-    if str(identifier).startswith("http"):
-        remote_url = identifier
-    else:
-        remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+    # المصدر هو الرابط المباشر أو بناء رابط الأرشيف
+    remote_url = identifier if str(identifier).startswith("http") else f"https://archive.org/download/{identifier}/{clean_file_name}"
 
     headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -849,10 +845,8 @@ async def upload_to_streamtape(login, key, identifier, file_name):
     print(f"📡 Streamtape: إرسال أمر سحب من الأرشيف...")
     try:
         clean_file_name = urllib.parse.quote(file_name)
-        if str(identifier).startswith("http"):
-            remote_url = identifier
-        else:
-            remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+        # إذا كان المعرف يبدأ بـ http (مثل رابط السبيس الجديد)، نستخدمه مباشرة كمصدر
+        remote_url = identifier if str(identifier).startswith("http") else f"https://archive.org/download/{identifier}/{clean_file_name}"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             # نقوم بعمل quote للاسم لضمان وصول الحروف العربية للسيرفر بشكل سليم
@@ -949,10 +943,8 @@ async def upload_to_lulustream(key, identifier, file_name):
         # التعديل هنا: إضافة www لتجنب خطأ الـ 301
         base_api = "https://www.lulustream.com/api"
         clean_file_name = urllib.parse.quote(file_name)
-        if str(identifier).startswith("http"):
-            remote_url = identifier
-        else:
-            remote_url = f"https://archive.org/download/{identifier}/{clean_file_name}"
+        # إذا كان المعرف يبدأ بـ http (مثل رابط السبيس الجديد)، نستخدمه مباشرة كمصدر
+        remote_url = identifier if str(identifier).startswith("http") else f"https://archive.org/download/{identifier}/{clean_file_name}"
 
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             add_url = f"{base_api}/upload/url?key={key}&url={urllib.parse.quote(remote_url, safe='')}"
