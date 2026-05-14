@@ -1380,15 +1380,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             # --- 21. الرفع المتوازي الخماسي ---
             if vid_path and os.path.exists(vid_path):
-                if final_direct_url:
-                    remote_source = final_direct_url
-                    log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream]")
-                elif archive_url and "archive.org" in archive_url:
-                    remote_source = identifier
-                    log.info(f"✅ المصدر المعتمد: Archive.org")
-                else:
-                    remote_source = url
-                    log.warning(f"⚠️ الرابط الديناميكي غير متاح، استخدام الرابط الأصلي: {url}")
+                # بناء الرابط بنفس طريقة النسخة الأصلية التي كانت تعمل
+                file_name = os.path.basename(vid_path)        # اسم الملف الفعلي بعد النقل والتسمية
+                space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"   # ثابت كما كان في الأصل
+                direct_remote_url = f"https://{space_domain}/stream/{file_name}"
+                remote_source = direct_remote_url
+                log.info(f"✅ المصدر المعتمد للرفع الخماسي: [Hugging Face Direct Stream] - {direct_remote_url}")
 
                 log.info(f"📡 القيمة المرسلة لمهام الرفع: {remote_source}")
                 await asyncio.sleep(10)
