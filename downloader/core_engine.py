@@ -826,13 +826,16 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 os.remove(actual_downloaded_path)
         else:
             log.info(f"🎬 تم اكتشاف فيديو، جاري التحضير للرفع...")
-            # نقل الفيديو وتغيير اسمه للاسم النظيف للعمل
-            # بدلاً من فرض .mp4، استخرج الامتداد الأصلي
             _, file_extension = os.path.splitext(actual_downloaded_path)
-            final_video_path = os.path.join(
-                extract_dir, f"{clean_name}{file_extension}"
-            )
-            shutil.move(actual_downloaded_path, final_video_path)
+            # نستخدم الاسم النظيف فوراً
+            final_video_path = os.path.join(extract_dir, f"{clean_name}{file_extension}")
+            
+            # لو الملف لسه منقولش للـ extract_dir انقله، لو هو هناك سيبه
+            if actual_downloaded_path != final_video_path:
+                shutil.move(actual_downloaded_path, final_video_path)
+            
+            # إجبار السكربت على رؤية هذا الملف كفيديو وحيد
+            videos = [final_video_path]
 
         # 2. جرد الفيديوهات (هذا السطر مهم جداً أن يشمل كل الامتدادات)
         # 1. جرد الفيديوهات
@@ -862,8 +865,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             f"DEBUG: الملفات الموجودة في المجلد حالياً: {os.listdir(extract_dir)}"
         )
         if not videos:
-            log.error("❌ لم يتم العثور على فيديوهات!")
-            return
+            # بدل return، خليه يحاول يستخدم vid_path اللي متعرف فوق من الـ Link
+            if 'vid_path' in locals() and os.path.exists(vid_path):
+                videos = [vid_path]
+            else:
+                log.error("❌ لم يتم العثور على فيديوهات!")
+                return
 
         # --- ⚡ التعديل الجوهري: تحويل المسار لو اكتشفنا أكتر من حلقة ⚡ ---
         if len(videos) > 1:
