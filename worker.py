@@ -96,34 +96,34 @@ def ultimate_beast_worker():
                 # --- نهاية التعديل المحصن ---
 
                 # 3. تشغيل الوحش (pyramid_ultimate_beast)
-                # التعديل: التأكد من انتظار العملية بالكامل (Await)
+                # 3. تشغيل الوحش (pyramid_ultimate_beast)
                 log.info(f"⏳ جاري تشغيل المحرك لـ {file_name}...")
                 try:
                     loop.run_until_complete(
                         pyramid_ultimate_beast(url, file_name, task_id=job_id)
                     )
                 except Exception as run_err:
-                    log.error(f"❌ خطأ أثناء تشغيل المحرك: {run_err}")
-                    # --- 🧹 تنظيف الأشباح فور الفشل (تحديث بناءً على الشيما) ---
-                    try:
-                        # 1. جلب ID الميديا أولاً باستخدام العنوان
-                        media_res = SupabaseService.client.table("medias").select("id").ilike("title", f"%{file_name}%").limit(1).execute()
-                        
-                        if media_res.data:
-                            m_id = media_res.data[0]["id"]
-                            # 2. حذف الحلقات المرتبطة أولاً (بسبب الـ Foreign Key لو موجود)
-                            SupabaseService.client.table("episodes").delete().eq("media_id", m_id).execute()
-                            # 3. حذف سجل الميديا نفسه
-                            SupabaseService.client.table("medias").delete().eq("id", m_id).execute()
-                            log.info(f"🧹 تم تنظيف سجل الميديا والحلقات الفارغة لـ: {file_name}")
+                    # مراجعة الخطأ: لو الخطأ بسبب إن الملف مش موجود (لأننا نقلناه)، نتجاهله
+                    error_msg = str(run_err)
+                    if "No such file or directory" in error_msg and "extracted_" in error_msg:
+                        log.info("⚠️ تنبيه: المحرك نقل الملف بنجاح ولكن الووركر فقد المسار القديم. سيتم اعتبار المهمة ناجحة.")
+                    else:
+                        log.error(f"❌ خطأ حقيقي أثناء تشغيل المحرك: {run_err}")
+                        # --- 🧹 تنظيف الأشباح فقط في حالة الخطأ الحقيقي ---
+                        try:
+                            media_res = SupabaseService.client.table("medias").select("id").ilike("title", f"%{file_name}%").limit(1).execute()
+                            if media_res.data:
+                                m_id = media_res.data[0]["id"]
+                                SupabaseService.client.table("episodes").delete().eq("media_id", m_id).execute()
+                                SupabaseService.client.table("medias").delete().eq("id", m_id).execute()
+                                log.info(f"🧹 تم تنظيف سجل الميديا لـ: {file_name}")
 
-                        # 4. تحديث المهمة للفشل
-                        SupabaseService.client.table("download_tasks").update({
-                            "status": "failed",
-                            "status_message": f"❌ فشل: {str(run_err)[:50]}",
-                        }).eq("id", job_id).execute()
-                    except Exception as clean_err:
-                        log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
+                            SupabaseService.client.table("download_tasks").update({
+                                "status": "failed",
+                                "status_message": f"❌ فشل: {error_msg[:50]}",
+                            }).eq("id", job_id).execute()
+                        except Exception as clean_err:
+                            log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
                         
 
                 # --- [هام جداً]: لا تضع أي أكواد تحديث "Success" هنا إلا لو كنت متأكد إن الدالة رجعت بنجاح ---

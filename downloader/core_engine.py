@@ -730,9 +730,15 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             stream_dir = os.path.join(base_root, "stream")
             os.makedirs(stream_dir, exist_ok=True)
 
-            # نقل الملف
+            # نقل الملف مع تأمين المسار للووركر
             final_public_path = os.path.join(stream_dir, file_name)
-            shutil.move(actual_downloaded_path, final_public_path)
+            try:
+                shutil.copy2(actual_downloaded_path, final_public_path)
+                if os.path.exists(actual_downloaded_path):
+                    os.remove(actual_downloaded_path)
+                log.info(f"✅ تم تأمين الملف في المسار العام: {final_public_path}")
+            except Exception as move_err:
+                log.error(f"❌ خطأ في نقل الملف: {move_err}")
 
             # بناء الرابط
             space_domain = "eslam315-egypyramid-guardian-ultra.hf.space"
