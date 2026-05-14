@@ -744,9 +744,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             except Exception as move_err:
                 log.error(f"❌ خطأ في نقل الملف: {move_err}")
 
-            # بناء الرابط
-            space_domain = "eslam315-egypyramid-guardian-ultra.hf.space"
-            direct_remote_url = f"https://{space_domain}/stream/{file_name}"
+            # بناء الرابط - إجبار الحروف الصغيرة لضمان قبول المنصات للسحب (Remote Upload)
+            space_id = os.environ.get('SPACE_ID', 'eslam315/egypyramid-guardian-ultra')
+            space_domain = space_id.replace('/', '-').lower()
+            direct_remote_url = f"https://{space_domain}.hf.space/stream/{file_name}"
 
             log.info(f"🔗 [Direct Link] الرابط جاهز للاختبار: {direct_remote_url}")
             vid_path = (
@@ -1199,6 +1200,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             # --- 10. التحديث النهائي الشامل (هذا هو الأهم) ---
             try:
+                # تنظيف الملف من الـ stream بعد التأكد من انتهاء الرفع لجميع السيرفرات
+                if os.path.exists(vid_path):
+                    os.remove(vid_path)
+                    log.info(f"🧹 تم تنظيف مسار الستريم العام: {vid_path}")
+
                 # نرسل كل شيء في استدعاء واحد نهائي يغلق المهمة بـ Success
                 save_res = save_to_supabase(
                     voe_watch,
