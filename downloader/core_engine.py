@@ -514,8 +514,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
     os.makedirs(extract_dir, exist_ok=True)
 
-    # تعريف قالب التحميل
-    download_path_template = os.path.join(extract_dir, f"down_{timestamp}.%(ext)s")
+    # تعريف قالب تحميل مؤقت (سيتم إعادة تسميته لاحقاً بالـ IDs)
+    download_path_template = os.path.join(extract_dir, f"temp_dl_{timestamp}.%(ext)s")
     # --------------------------------------------------------
 
     log.info(f"📡 جاري فحص الرابط وبدء السحب...")
@@ -726,7 +726,23 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         if actual_downloaded_path:
             log.info(f"✅ تم اكتمال التحميل الفعلي: {actual_downloaded_path}")
 
-            file_name = os.path.basename(actual_downloaded_path)
+            # --- [بداية التعديل: إعادة التسمية بـ IDs سوبابيز] ---
+            file_extension = os.path.splitext(actual_downloaded_path)[1]
+            # نستخدم e_id و media_id اللي رجعوا من save_res
+            # idx هنا هنفترض إنه 1 طالما مفيش لوب للفيديوهات لسه
+            new_file_name = f"f_{media_id}_{e_id}_1{file_extension}"
+            
+            new_path = os.path.join(os.path.dirname(actual_downloaded_path), new_file_name)
+            
+            try:
+                os.rename(actual_downloaded_path, new_path)
+                actual_downloaded_path = new_path
+                file_name = new_file_name # تحديث المتغير عشان باقي الكود يستخدم الاسم الجديد
+                log.info(f"🔄 تم إعادة تسمية الملف إلى المعرف الرقمي: {file_name}")
+            except Exception as rename_err:
+                log.error(f"⚠️ فشل إعادة التسمية، سيتم استخدام الاسم الأصلي: {rename_err}")
+                file_name = os.path.basename(actual_downloaded_path)
+            # --- [نهاية التعديل] ---
 
             # تحديد مجلد الستريم في الجذر (المجلد الذي فتحه FastAPI)
             # بما أننا داخل /app/project حالياً، فـ ".." تعود بنا لـ /app/
