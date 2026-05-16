@@ -1,4 +1,4 @@
-import uvicorn, logging, json, re, html, requests, sys, os, jwt, threading
+import uvicorn, logging, json, re, html, requests, sys, os, jwt, threading, asyncio
 import worker  # استيراد ملف الووركر للوصول للمتغير العالمي
 from dotenv import load_dotenv
 from fastapi import (
@@ -46,22 +46,40 @@ os.makedirs(STREAM_DIR, exist_ok=True)
 app.mount("/stream", StaticFiles(directory=STREAM_DIR), name="stream")
 print(f"📡 [Direct Stream] البوابة مفتوحة الآن على: {STREAM_DIR}")
 # ----------------------------------
-# تشغيل "الوحش" في خلفية النظام عند بدء التشغيل
+# تشغيل "الوحش" وصياد الروابط (Feeder) في خلفية النظام عند بدء التشغيل
 @app.on_event("startup")
 async def startup_event():
+    # 1. إطلاق الووركر الأساسي (الوحش) في Thread مستقل كالعادة
     try:
         from worker import ultimate_beast_worker
-
-        # daemon=True تضمن إغلاق الووركر إذا توقف السيرفر
         thread = threading.Thread(target=ultimate_beast_worker, daemon=True)
         thread.start()
-        print(
-            "🚀 [Background] Guardian Monster has been unleashed in the background..."
-        )
+        print("🚀 [Background] Guardian Monster has been unleashed in the background...")
     except ImportError:
         print("⚠️ [Warning] worker.py not found. Monster is still in the cage.")
     except Exception as e:
         print(f"❌ [Error] Failed to start background worker: {e}")
+
+    # 2. حلقة التغذية التلقائية للإسكربر (تشتغل في الخلفية كـ Async Task صامتة)
+    async def auto_feeder_loop():
+        import asyncio
+        # استيراد الدالة الـ Async اللي جهزناها في ملف الإسكربر الجديد
+        try:
+            from scraper_feeder import run_scraper_async
+            print("⏳ [Feeder] Auto-loop initialised. Will pulse every 4 hours.")
+            while True:
+                try:
+                    await run_scraper_async()
+                except Exception as fe:
+                    print(f"❌ [Feeder Error] Error inside scraper cycle: {fe}")
+                
+                # انتظر 4 ساعات (4 * 3600 ثانية) قبل اللفة الجاية
+                await asyncio.sleep(14400)
+        except ImportError:
+            print("⚠️ [Warning] scraper_feeder.py not found. Auto-feeder is disabled.")
+
+    # حقن اللوب جوة الـ FastAPI Event Loop عشان يشتغل أوتوماتيك
+    asyncio.create_task(auto_feeder_loop())
 
 
 app.add_middleware(
@@ -659,36 +677,6 @@ async def delete_table_row(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# 1. تحديد المسار بدقة
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIST = os.path.join(BASE_DIR, "static", "dist")
-
-if os.path.exists(STATIC_DIST):
-    app.mount(
-        "/assets",
-        StaticFiles(directory=os.path.join(STATIC_DIST, "assets")),
-        name="assets",
-    )
-
-    @app.get("/")
-    async def index():
-        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
-
-    @app.get("/{rest_of_path:path}")
-    async def serve_spa(rest_of_path: str):
-        if rest_of_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="API route not found")
-        if rest_of_path.startswith("assets/"):
-            return FileResponse(os.path.join(STATIC_DIST, rest_of_path))
-        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
-
-else:
-    print(f"⚠️ CRITICAL: STATIC_DIST not found at {STATIC_DIST}")
-
-# --- 🕹️ لوحة تحكم الووركر (Guardian Control) ---
-
-
 @app.get("/api/worker/status")
 async def get_worker_status():
     """معرفة حالة الووركر حالياً (شغال ولا واقف)"""
@@ -732,16 +720,16 @@ if os.path.exists(STATIC_DIST):
 
     @app.get("/")
     async def index():
-        return FileResponse(os.path.join(STATIC_DIST, "index.html"))
+        index_path = os.path.join(STATIC_DIST, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"status": "Backend is running successfully, but Front-end build (index.html) is missing from static/dist/"}
 
     @app.get("/{rest_of_path:path}")
-    async def serve_spa(rest_of_path: str):
+    async def serve_spa(    rest_of_path: str):
         # قاعدة صارمة: إذا كان المسار يبدأ بـ api، فلا ترجع ملف الـ index.html أبداً
         if rest_of_path.startswith("api/") or rest_of_path.startswith("api"):
             raise HTTPException(status_code=404, detail="API Route Not Found")
-
-        if rest_of_path.startswith("assets/"):
-            return FileResponse(os.path.join(STATIC_DIST, rest_of_path))
 
         return FileResponse(os.path.join(STATIC_DIST, "index.html"))
 

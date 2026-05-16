@@ -190,6 +190,7 @@ def ultimate_beast_worker():
             except:
                 pass
             time.sleep(20)
-# تشغيل المحرك
+# أمان التشغيل السحابي المباشر
 if __name__ == "__main__":
+    log.info("📌 تم استدعاء الووركر يدوياً.. جاري الإطلاق التجريبي.")
     ultimate_beast_worker()
