@@ -32,10 +32,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_NAME = "download_tasks"
 
-
-START_PAGE = 1  # ابدأ من الصفحة
-END_PAGE = 20  # انتهِ عند الصفحة (غيّرها حسب احتياجك)
-# TARGET_SERVER = "6"  # data-server="6" = GoodStream
+# تم إلغاء أرقام الصفحات الثابتة لتعمل ديناميكياً بالكامل
+MAX_IDLE_BUFFER = 5  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
@@ -376,6 +374,22 @@ async def random_delay():
         log.info(f"  💤 انتظار {t:.1f} ثانية...")
         await asyncio.sleep(t)
 
+async def get_total_pages(page) -> int:
+    """تستخرج رقم آخر صفحة موجودة في الموقع ديناميكياً من أزرار التنقل"""
+    try:
+        pagination_links = await page.query_selector_all("ul.pagination li a")
+        if not pagination_links:
+            return 20  # قيمة احتياطية في حال فشل الاستخراج
+            
+        page_numbers = []
+        for link in pagination_links:
+            text = (await link.inner_text()).strip()
+            if text.isdigit():
+                page_numbers.append(int(text))
+                
+        return max(page_numbers) if page_numbers else 20
+    except Exception:
+        return 20  # كقيمة أمان لو حدث أي تغيير في تصميم الموقع
 # ──────────────────────────────────────────────
 # 🚀  Main Runner
 # ──────────────────────────────────────────────
@@ -407,8 +421,37 @@ async def run_scraper_async():
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=HEADLESS, args=["--no-sandbox", "--disable-setuid-sandbox"])
+        
+        # 1. تحديد حجم الموقع برمجياً من الصفحة الأولى
+        base_page = await browser.new_page(user_agent=random.choice(USER_AGENTS))
+        try:
+            await base_page.goto(build_page_url(1), wait_until="domcontentloaded", timeout=30_000)
+            total_pages = await get_total_pages(base_page)
+            log.info(f"📊 [Dynamic Boundary] تم اكتشاف حجم الموقع تلقائياً: إجمالي الصفحات هو {total_pages}")
+        except Exception as e:
+            total_pages = 50  # قيمة افتراضية واسعة لو فشل الاتصال الأولي
+            log.warning(f"⚠️ فشل استخراج حجم الموقع، سيتم اعتماد قيمة افتراضية ({total_pages}): {e}")
+        finally:
+            await base_page.close()
 
-        for page_num in range(START_PAGE, END_PAGE + 1):
+        # 2. النظام الهجين: اختيار نمط العمل عشوائياً (50% حصري / 50% أرشيف)
+        crawl_mode = random.choice(["FRESH_NEW", "ARCHIVE_WASH"])
+        
+        if crawl_mode == "FRESH_NEW":
+            start_dynamic_page = 1
+            log.info("🎯 [Hybrid Mode: الحصريات] تقرر البدء من الصفحة (1) لصيد أحدث الأعمال الحالية.")
+        else:
+            start_dynamic_page = random.randint(2, total_pages)
+            log.info(f"🎲 [Hybrid Mode: الأرشيف] تقرر البدء من صفحة عشوائية في العمق: ({start_dynamic_page}) لجرف القديم.")
+
+        # حلقة تكرار تمر من نقطة الانطلاق صعوداً حتى نهاية الموقع
+        for page_num in range(start_dynamic_page, total_pages + 1):
+            
+            # فحص سريع قبل فتح قائمة جديدة: هل امتلأ الطابور أثناء العمل؟
+            if get_idle_tasks_count(sb) >= MAX_IDLE_BUFFER:
+                log.warning(f"🛑 [Buffer Guard] تم إيقاف السكريبت.. الطابور ممتلئ بـ {MAX_IDLE_BUFFER} روابط فرش تنتظر الوحش.")
+                break
+
             list_url = build_page_url(page_num)
             log.info(f"\n{'═'*55}")
             log.info(f"📄 صفحة القائمة {page_num}: {list_url}")
@@ -427,18 +470,23 @@ async def run_scraper_async():
 
             log.info(f"🎬 وجدت {len(movie_links)} فيلم في الصفحة")
 
-            # ── تصفّح كل فيلم ───────────────────────────────────
+            found_any_new_in_page = False  # فلاج ذكي: هل الصفحة تحتوي على أي عمل جديد؟
+
+            # ── تصفّح كل فيلم داخل الصفحة ───────────────────────────────────
+# ── تصفّح كل فيلم داخل الصفحة ───────────────────────────────────
             for idx, movie_url in enumerate(movie_links, 1):
+                
+                # فحص داخلي سريع قبل الدخول في تفاصيل الفيلم: هل امتلأ الطابور أثناء العمل؟
+                if get_idle_tasks_count(sb) >= MAX_IDLE_BUFFER:
+                    log.warning(f"🎯 [Buffer Reached] الطابور امتلأ أثناء فحص الأفلام. يكتفي السكريبت بهذا القدر.")
+                    break
+
                 log.info(f"\n  [{idx}/{len(movie_links)}] 🎥 {movie_url}")
 
                 try:
                     movie_page = await browser.new_page(user_agent=random.choice(USER_AGENTS))
-
-                    # صفحة الفيلم
-                    await movie_page.goto(
-                        movie_url, wait_until="domcontentloaded", timeout=30_000
-                    )
-                    # ضيف السطر ده هنا عشان يسحب الاسم من الصفحة الأولى
+                    await movie_page.goto(movie_url, wait_until="domcontentloaded", timeout=30_000)
+                    
                     movie_title = await get_movie_title(movie_page)
                     watch_url = await get_watch_url(movie_page)
                     await movie_page.close()
@@ -448,6 +496,12 @@ async def run_scraper_async():
                         total_failed += 1
                         continue
 
+                    # فحص سريع بالاسم في قاعدة البيانات لمنع فتح صفحات المشاهدة الثقيلة للمكرر
+                    if already_exists(sb, movie_title, None):
+                        log.info(f"  ♻️  الفيلم [{movie_title}] موجود مسبقاً في أرشيفك. تخطي والنزول للتالي في الصفحة...")
+                        total_skipped += 1
+                        continue  # يكمل الفيلم التالي في الـ 60 عمل دون كسر الصفحة
+
                     log.info(f"  🔗 صفحة المشاهدة: {watch_url}")
 
                     # صفحة المشاهدة (تحتاج JavaScript)
@@ -456,39 +510,38 @@ async def run_scraper_async():
                     embed_url, server_status = await get_embed_url(watch_page)
                     await watch_page.close()
 
-                    if server_status in [
-                        "vidtube_fallback",
-                        "mixdrop_dead_no_fallback",
-                    ]:
+                    if server_status in ["vidtube_fallback", "mixdrop_dead_no_fallback"]:
                         mixdrop_dead_count += 1
 
-                    if not embed_url:
-                        log.warning("  ⚠️  لم أجد رابط الإيمباد، تخطي...")
+                    if not embed_url or embed_url == "404_DELETED":
+                        log.warning("  ⚠️  لم أجد رابط الإيمباد أو الرابط ميت، تخطي...")
                         total_failed += 1
-                    elif embed_url == "404_DELETED":
-                        log.error(
-                            "  🚫 تم تخطي الفيلم لأن الرابط ميت (404 من المصدر والسيرفر البديل فشل)"
-                        )
-                        total_failed += 1
-                    else:
-                        log.info(f"  🎯 الإيمباد: {embed_url}")
-                        log.info(f"  📝 الاسم:    {movie_title}")
+                        continue
 
-                        # تحقق من التكرار
-                        if already_exists(sb, movie_title, embed_url):
-                            log.info("  ♻️  موجود مسبقاً، تخطي...")
-                            total_skipped += 1
-                        else:
-                            ok = insert_task(sb, movie_title, embed_url)
-                            if ok:
-                                log.info("  ✅ تم الإدراج بنجاح!")
-                                total_inserted += 1
-                                if server_status == "mixdrop_live":
-                                    mixdrop_live_count += 1
-                                elif server_status == "vidtube_fallback":
-                                    vidtube_saved_count += 1
-                            else:
-                                total_failed += 1
+                    # تأكيد أخير برابط الإيمباد
+                    if already_exists(sb, movie_title, embed_url):
+                        log.info("  ♻️  الرابط موجود مسبقاً، تخطي...")
+                        total_skipped += 1
+                        continue
+
+                    # إذا وصلنا هنا فالعمل جديد تماماً وفرش
+                    found_any_new_in_page = True
+                    
+                    ok = insert_task(sb, movie_title, embed_url)
+                    if ok:
+                        log.info("  ✅ تم الإدراج بنجاح بالتنقيط!")
+                        total_inserted += 1
+                        if server_status == "mixdrop_live":
+                            mixdrop_live_count += 1
+                        elif server_status == "vidtube_fallback":
+                            vidtube_saved_count += 1
+                            
+                        # فحص الطابور فوراً بعد الإدراج الناجح لضبط سرعة التغذية
+                        if get_idle_tasks_count(sb) >= MAX_IDLE_BUFFER:
+                            log.warning(f"🎯 [Buffer Reached] الطابور يحتوي الآن على ({MAX_IDLE_BUFFER}) مهام جاهزة. يكتفي السكريبت بهذا القدر.")
+                            break
+                    else:
+                        total_failed += 1
 
                 except PlaywrightTimeout:
                     log.error("  ⏱️  انتهت المهلة، تخطي هذا الفيلم...")
@@ -497,21 +550,31 @@ async def run_scraper_async():
                     log.error(f"  ❌ خطأ غير متوقع: {exc}")
                     total_failed += 1
                 finally:
-                    # أغلق أي صفحة مفتوحة بأمان فقط لو تم إنشاؤها بنجاح
                     if 'movie_page' in locals():
-                        try:
-                            await movie_page.close()
-                        except Exception:
-                            pass
+                        try: await movie_page.close()
+                        except: pass
                     if 'watch_page' in locals():
-                        try:
-                            await watch_page.close()
-                        except Exception:
-                            pass
+                        try: await watch_page.close()
+                        except: pass
 
                 await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
 
-            await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))  # تأخير إضافي بين صفحات القائمة
+            # ── استراتيجيات الخروج والتحكم الذكي بعد نهاية فحص الصفحة بالكامل ──
+            current_idle = get_idle_tasks_count(sb)
+            if current_idle >= MAX_IDLE_BUFFER:
+                log.info("🛑 تم إنهاء الجولة بنجاح للوصول للحد الأقصى المطلوب في الطابور.")
+                break
+
+            # في نمط الحصريات: لو الصفحة 1 مكررة بالكامل، اقفل فوراً لأن ما بعدها مكرر بالتأكيد
+            if crawl_mode == "FRESH_NEW" and not found_any_new_in_page:
+                log.warning("⚠️ [Stop Strategy] نمط الحصريات: الصفحة 1 مكررة بالكامل. تم إنهاء الجولة لتوفير الموارد.")
+                break
+                
+            # في نمط الأرشيف: لو الصفحة مكررة بالكامل، لا تقفل السكريبت! بل دع الحلقة تنتقل تلقائياً للصفحة التالية صعوداً
+            if crawl_mode == "ARCHIVE_WASH" and not found_any_new_in_page:
+                log.warning(f"🔄 [Archive Wash] الصفحة {page_num} مغسولة بالكامل مسبقاً. نرفض الاستسلام، تلقائياً للانتقال للصفحة التالية صعوداً...")
+
+            await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))  # تأخير إضافي آمن بين صفحات القوائم
 
         await browser.close()
 
@@ -526,3 +589,4 @@ async def run_scraper_async():
     log.info(f"   🍏 روابط Mixdrop السليمة المسحوبة: {mixdrop_live_count}")
     log.info(f"   📺 روابط VidTube (متعدد) المُنقذة:  {vidtube_saved_count}")
     log.info(f"{'═'*55}")
+    
