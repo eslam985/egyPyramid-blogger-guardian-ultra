@@ -109,14 +109,6 @@ def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
         reshaped_text = arabic_reshaper.reshape(raw_text)
         bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
 
-        duration = get_duration(vid_path)
-        mid_time = duration / 2
-
-        # تجهيز النص العربي
-        raw_text = "To see more, please search on Google for EGY PYRAMID"
-        reshaped_text = arabic_reshaper.reshape(raw_text)
-        bidi_text = get_display(reshaped_text)  # النص الآن جاهز للعرض الصحيح
-
         # 1. حساب المدة والتحكم الديناميكي في الجودة والمساحة
         duration = get_duration(vid_path)
         mid_time = duration / 2
@@ -136,17 +128,17 @@ def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
             f'ffmpeg -loglevel error -y -i "{vid_path}" -i "{LOGO_FILE}" -filter_complex '
             f'"[0:v]scale=iw*1.05:-1,crop=iw/1.05:ih/1.05,eq=gamma=1.05:contrast=1.03[v_final]; '
             f"[v_final]drawtext=text='EGY PYRAMID':fontcolor=0xFFD700:fontsize=80:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,10)'[txt1]; "
-            f"[txt1]drawtext=text='{bidi_text}':fontfile=/content/arial.ttf:fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
+            f"[txt1]drawtext=text='{bidi_text}':fontcolor=0xFFD700:fontsize=w/35:x=(w-text_w)/2:y=h-th-40:"
             f"enable='between(t,{mid_time},{mid_time+10})'[txt2]; "
             f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
             f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
             f'" '
             f'-map "[outv]" -map 0:a '
-            f"-c:v libx264 -preset ultrafast -crf {t_crf} "
+            f"-c:v libx264 -preset veryfast -crf {t_crf} "
             f"-maxrate {t_maxrate} -bufsize {t_bufsize} -threads 0 -pix_fmt yuv420p "
             f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
         )
-
+#ultrafast → superfast → veryfast → faster → fast → medium → slow → slower → veryslow
         # تنفيذ العملية
         subprocess.run(ffmpeg_cmd, shell=True, check=True)
 
@@ -496,6 +488,7 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
     except Exception as e:
         log.warning(f"⚠️ فشل فحص التكرار: {e}")
 
+    log.info(f"فحص التكرار: العنوان='{clean_title}', السنة='{year}', الفئة='{category}', النتيجة: exists={result['exists']}, media_id={result['media_id']}")
     return result
 
 
