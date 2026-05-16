@@ -1127,8 +1127,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         log.info(f"DEBUG: calling get_clean_media_data with {original_task_name}")
         if clean_res and len(clean_res) == 4:
             search_query_clean, _, _, _ = clean_res
+            # إعادة تنظيف النص المخصص للبحث للحفاظ على (: و - و ') من أجل TMDB
+            search_query_clean = normalize_title(search_query_clean, for_search=True)
         else:
-            search_query_clean = original_task_name
+            search_query_clean = normalize_title(original_task_name, for_search=True)
 
     # --- 4. جلب بيانات TMDB ---
     tmdb_data = fetch_tmdb_metadata(

@@ -1051,7 +1051,7 @@ async def upload_to_mixdrop(file_path, email, key):
         return None
 
 
-def normalize_title(title):
+def normalize_title(title, for_search=False):
     if not title:
         return ""
 
@@ -1062,8 +1062,11 @@ def normalize_title(title):
     t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
     # --------------------------------
 
-    # تنظيف الرموز (الأرقام اللي هتفضل هنا هي أرقام الأجزاء فقط مثل John Wick 4)
-    t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
+    # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
+    if for_search:
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
+    else:
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
 
     stop_words = [
         "مسلسل",
