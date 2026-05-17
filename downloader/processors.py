@@ -116,6 +116,8 @@ genre_map = {
     "Short": "قصير",
     "Sci-Fi": "خيال علمي",
     "Biography": "سيرة شخصية",
+    "German": "ألماني", "French": "فرنسي", "Japanese": "ياباني",
+    "Whodunnit": "من فعلها", "Superhero": "سوبرهيرو", "Cyberpunk": "سايبربانك",
 }
 
 

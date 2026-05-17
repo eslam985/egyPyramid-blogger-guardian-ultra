@@ -133,10 +133,10 @@ def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
             f"[1:v]format=rgba,colorchannelmixer=aa=1.0[logo_bright]; "
             f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
             f'" '
-            f'-map "[outv]" -map 0:a '
-            f"-c:v libx264 -preset veryfast -crf {t_crf} "
+            f'-map "[outv]" -map 0:a -c:a copy '  # نسخ مسار الصوت الأصلي مباشرة دون إعادة معالجة
+            f"-c:v libx264 -preset superfast -crf {t_crf} "
             f"-maxrate {t_maxrate} -bufsize {t_bufsize} -threads 0 -pix_fmt yuv420p "
-            f'-c:a aac -b:a 128k -ar 44100 "{disguised_file}"'
+            f'"{disguised_file}"'
         )
 #ultrafast → superfast → veryfast → faster → fast → medium → slow → slower → veryslow
         # تنفيذ العملية
