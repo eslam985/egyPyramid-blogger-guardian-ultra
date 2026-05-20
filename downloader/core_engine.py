@@ -134,7 +134,7 @@ def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
             f"[txt2][logo_bright]overlay=W-w-20:20[outv]"
             f'" '
             f'-map "[outv]" -map 0:a -c:a copy '  # نسخ مسار الصوت الأصلي مباشرة دون إعادة معالجة
-            f"-c:v libx264 -preset superfast -crf {t_crf} "
+            f"-c:v libx264 -preset ultrafast -crf {t_crf} "
             f"-maxrate {t_maxrate} -bufsize {t_bufsize} -threads 0 -pix_fmt yuv420p "
             f'"{disguised_file}"'
         )
