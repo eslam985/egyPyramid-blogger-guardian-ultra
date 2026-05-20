@@ -240,10 +240,11 @@ async def get_embed_url(page) -> tuple[Optional[str], str]:
                 iframe_element = await page.query_selector(".player--iframe iframe")
                 if iframe_element:
                     try:
-                        frame = iframe_element.content_frame()
+                        frame = await iframe_element.content_frame()
                         if frame:
                             await page.wait_for_timeout(1000)
-                            frame_content = await frame.content()
+                            # جلب المحتوى باستخدام evaluate بدلاً من content غير الموجودة
+                            frame_content = await frame.evaluate("document.body.innerHTML")
                             # فحص مرن يغطي الصيغتين (file أو video) أو وجود نص WE ARE SORRY الشهير
                             if (
                                 "can't find the" in frame_content
