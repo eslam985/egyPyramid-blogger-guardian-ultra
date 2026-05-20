@@ -9,9 +9,9 @@
         <!-- رأس الصفحة: صورة + معلومات قابلة للتعديل -->
         <div class="details-header flex flex-col md:flex-row-reverse justify-evenly gap-6 mb-8">
             <!-- جانب الصورة -->
-            <div class="poster-side flex-shrink-0">
+            <div class="poster-side shrink-0">
                 <img :src="mediaData.poster_url" :alt="mediaData.title"
-                    class="max-w-[300px] aspect-[1/1]  rounded-xl shadow-lg">
+                    class="max-w-75 aspect-square  rounded-xl shadow-lg">
             </div>
 
             <!-- جانب النماذج -->
@@ -125,7 +125,7 @@
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">قصة
                             العمل</label>
                         <textarea v-model="mediaData.story"
-                            class="form-control w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100 min-h-[200px] max-w-full"></textarea>
+                            class="form-control w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-secondary-dark text-gray-900 dark:text-gray-100 min-h-50 max-w-full"></textarea>
                     </div>
 
                     <!-- زر الحفظ -->
@@ -342,7 +342,12 @@ const isSaving = ref(false); // أضف هذا المتغير
 const saveMediaDetails = async () => {
     isSaving.value = true;
     try {
-        await api.post(`/media/update/${route.params.id}`, mediaData.value);
+        // نأخذ فقط الحقول التي نريد تحديثها فعلياً في جدول medias
+        const { episodes, created_at, updated_at, id, ...dataToUpdate } = mediaData.value;
+
+        // إرسال البيانات "المنقاة" فقط
+        await api.post(`/media/update/${route.params.id}`, dataToUpdate);
+        
         notifySuccess('تم تحديث بيانات العمل بنجاح');
         await loadMedia();
     } catch (e) {

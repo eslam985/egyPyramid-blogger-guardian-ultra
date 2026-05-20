@@ -84,9 +84,10 @@ async def startup_event():
     asyncio.create_task(auto_feeder_loop())
 
 
+# الصحيح هو وضع كل المواقع المسموح بها في قائمة واحدة فقط
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://eslam985.github.io"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -168,6 +169,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": token, "token_type": "bearer"}
 
 
+@app.get("/api/search/id/{media_id}")
+def search_by_id(media_id: int):
+    return SupabaseService.find_media_by_id(media_id)
+
 # 7. المسارات (الـ APIs توضع هنا...)
 # ... (ضع الـ @app.post والـ @app.get الخاصة بك هنا) ...
 @app.get("/api/media/list", include_in_schema=True)
@@ -228,11 +233,12 @@ async def delete_media(media_id: int, user: str = Depends(authenticate)):
 
 
 # 1. عرف الموديل أولاً
+# 1. عرف الموديل أولاً مع Optional لكل الحقول
 class MediaUpdate(BaseModel):
-    title: str
-    story: str
-    category: str
-    poster_url: str
+    title: Optional[str] = None
+    story: Optional[str] = None
+    category: Optional[str] = None
+    poster_url: Optional[str] = None
     year: Optional[str] = None
     rating: Optional[str] = None
     tmdb_id: Optional[str] = None
