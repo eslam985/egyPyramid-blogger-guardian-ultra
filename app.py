@@ -1,3 +1,4 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/app.py
 import uvicorn, logging, json, re, html, requests, sys, os, jwt, threading, asyncio
 import worker  # استيراد ملف الووركر للوصول للمتغير العالمي
 from dotenv import load_dotenv
@@ -66,15 +67,16 @@ async def startup_event():
         # استيراد الدالة الـ Async اللي جهزناها في ملف الإسكربر الجديد
         try:
             from scraper_feeder import run_scraper_async
-            print("⏳ [Feeder] Auto-loop initialised. Will pulse every 4 hours.")
+            print("⏳ [Feeder] Auto-loop initialised. Will pulse every 1 hour.")
             while True:
                 try:
                     await run_scraper_async()
                 except Exception as fe:
                     print(f"❌ [Feeder Error] Error inside scraper cycle: {fe}")
                 
-                # انتظر 4 ساعات (4 * 3600 ثانية) قبل اللفة الجاية
-                await asyncio.sleep(14400)
+                # انتظر ساعة واحدة (3600 ثانية) قبل اللفة الجاية
+                #(إذا كنت تفضل جعلها كل ساعتين، يمكنك تغيير الرقم إلى 7200 وتعديل نص الـ print إلى 2 hours).
+                await asyncio.sleep(3600)
         except ImportError:
             print("⚠️ [Warning] scraper_feeder.py not found. Auto-feeder is disabled.")
 

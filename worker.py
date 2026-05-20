@@ -43,6 +43,7 @@ def ultimate_beast_worker():
     nest_asyncio.apply()
     log.info(f"🚀 الوحش مستعد في {os.getcwd()} وينتظر الأوامر...")
 
+    current_sleep = 15
     while not should_stop_worker:
         # فحص إضافي للتأكد
         if should_stop_worker:
@@ -63,6 +64,7 @@ def ultimate_beast_worker():
             )
 
             if pending_res.data:
+                current_sleep = 15
                 # اختيار مهمة عشوائية من الـ 5 لضمان عدم تصادم الـ 3 تبويبات
                 job = random.choice(pending_res.data)
                 job_id = job["id"]
@@ -170,11 +172,10 @@ def ultimate_beast_worker():
                 log.info(f"✅ المهمة {job_id} انتهت بالكامل.")
 
             else:
-                # استبدال النقطة بلوج رسمي عشان يظهر في Hugging Face فوراً
-                log.info(
-                    "😴 الوحش يبحث في الداتابيز.. لا توجد مهام حالياً (status: idle)"
-                )
-                time.sleep(15)
+                log.info(f"😴 الوحش يبحث في الداتابيز.. لا توجد مهام حالياً (status: idle) | النوم الحالي: {current_sleep} ثانية")
+                time.sleep(current_sleep)
+                # مضاعفة الوقت للمرة القادمة بشرط ألا يتخطى ساعتين (7200 ثانية)
+                current_sleep = min(current_sleep * 2, 7200)
 
         except Exception as e:
             log.error(f"⚠️ خطأ في الـ Worker: {e}")
