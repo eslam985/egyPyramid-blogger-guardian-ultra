@@ -87,7 +87,7 @@ async def startup_event():
 # الصحيح هو وضع كل المواقع المسموح بها في قائمة واحدة فقط
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://eslam985.github.io"], 
+    allow_origins=["https://eslam985.github.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
