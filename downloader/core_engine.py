@@ -235,7 +235,7 @@ def Upload_To_Archive(
                 "episode_id": e_id,
                 "url": direct_download_url,
                 "server_name": "archive",
-                "last_check_status": "valid",
+                "last_check_status": "pending",
             }
         ).execute()
 
@@ -822,7 +822,6 @@ async def upload_to_all_servers(
 
     vk_url = vk_result if vk_result else "Failed"
     voe_watch = f"https://voe.sx/e/{file_id}" if file_id else "Failed"
-    voe_down = f"https://voe.sx/{file_id}/download" if file_id else "Failed"
 
     # حفظ النتائج في Supabase
     if vk_url != "Failed":
@@ -859,17 +858,16 @@ async def upload_to_all_servers(
 
     if lu_url:
         supabase.table("links").upsert(
-            {"episode_id": e_id, "server_name": "lulustream", "url": lu_url},
+            {"episode_id": e_id, "server_name": "lulustream", "url": lu_url, "last_check_status": "pending"},
             on_conflict="episode_id, server_name",
         ).execute()
-        log.info(f"✅ LuluStream Saved!")
+        log.info(f"✅ LuluStream Saved as pending!")
     else:
         log.warning(f"⚠️ LuluStream upload failed or returned empty URL.")
 
     return {
         "vk_url": vk_url,
         "voe_watch": voe_watch,
-        "voe_download": voe_down,
         "dood_url": d_url,
         "tape_url": s_url,
         "lulu_url": lu_url,
@@ -903,7 +901,6 @@ async def finalize_episode(
     """
     e_id = episode_id
     voe_watch = upload_results.get("voe_watch", "Failed")
-    voe_down = upload_results.get("voe_download", "Failed")
     vk_url = upload_results.get("vk_url", "Failed")
 
     # --- 9. الرفع لـ MixDrop ---
@@ -930,7 +927,7 @@ async def finalize_episode(
     # --- 10. التحديث النهائي الشامل ---
     try:
         save_res = save_to_supabase(
-            voe_watch, voe_down, vk_url,
+            voe_watch, vk_url,
             loop_display_title, original_task_name,
             meta_story, final_poster, meta_year, meta_rating,
             video_path, archive_url, tmdb_id=tmdb_data["tmdb_id"],
