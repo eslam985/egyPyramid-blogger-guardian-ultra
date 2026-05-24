@@ -76,7 +76,7 @@ async def startup_event():
                 
                 # انتظر ساعة واحدة (3600 ثانية) قبل اللفة الجاية
                 #(إذا كنت تفضل جعلها كل ساعتين، يمكنك تغيير الرقم إلى 7200 وتعديل نص الـ print إلى 2 hours).
-                await asyncio.sleep(3600)
+                await asyncio.sleep(10800)
         except ImportError:
             print("⚠️ [Warning] scraper_feeder.py not found. Auto-feeder is disabled.")
 
