@@ -583,8 +583,9 @@ def upload_to_vk_local(title, file_path):
         res_save = requests.get(api_url, params=params).json()
 
         if "response" not in res_save:
-            print(f"❌ فشل حجز مكان في VK: {res_save.get('error', {}).get('error_msg')}")
-            print(f"🔍 تفاصيل استجابة VK بالكامل: {res_save}")
+            import logging
+            logging.error(f"❌ فشل حجز مكان في VK: {res_save.get('error', {}).get('error_msg')}")
+            logging.error(f"🔍 تفاصيل استجابة VK بالكامل: {res_save}")
             return None
 
         upload_url = res_save["response"]["upload_url"]
@@ -599,8 +600,9 @@ def upload_to_vk_local(title, file_path):
                 response = requests.post(upload_url, files=files, timeout=600)
 
             if response.status_code != 200:
-                print(f"❌ فشل ضخ الملف لـ VK: Status {response.status_code}")
-                print(f"🔍 تفاصيل الرفض من السيرفر: {response.text}")
+                import logging
+                logging.error(f"❌ فشل ضخ الملف لـ VK: Status {response.status_code}")
+                logging.error(f"🔍 تفاصيل الرفض من السيرفر: {response.text}")
                 return None
             print("   ✅ انتهى الضخ بنجاح. يبدأ الآن فحص المعالجة وقنص الرابط...")
         except Exception as e:
@@ -639,8 +641,9 @@ def upload_to_vk_local(title, file_path):
 
     except Exception as e:
         import traceback
-        print(f"⚠️ فشل VK المحلي: {e}")
-        print(f"🔍 تفاصيل الخطأ البرمجي:\n{traceback.format_exc()}")
+        import logging
+        logging.error(f"⚠️ فشل VK المحلي: {e}")
+        logging.error(f"🔍 تفاصيل الخطأ البرمجي:\n{traceback.format_exc()}")
         return None
 
 

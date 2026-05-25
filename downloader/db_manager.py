@@ -45,7 +45,6 @@ CLOUDINARY_CONFIG = {
     # كمل باقي كود الدالة بتاعك هنا...
 def save_to_supabase(
     current_voe,
-    current_down,
     current_vk,
     display_title,
     original_task_name,
@@ -368,10 +367,7 @@ def save_to_supabase(
                 link_entries.append(
                     {"episode_id": e_id, "server_name": "archive", "url": archive_url}
                 )
-            if current_down and current_down != "Failed":
-                link_entries.append(
-                    {"episode_id": e_id, "server_name": "download", "url": current_down}
-                )
+            
 
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط (تنفيذ الـ upsert لكل رابط في القائمة)
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط مع آلية إعادة المحاولة (Retry)
