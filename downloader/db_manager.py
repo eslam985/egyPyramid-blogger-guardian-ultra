@@ -49,12 +49,12 @@ def save_to_supabase(
     display_title,
     original_task_name,
     meta_story,
-    final_poster,  # أضفهم هنا كمعاملات عادية
+    final_poster,
     meta_year,
     meta_rating,
     identifier,
     archive_url,
-    meta_data=None,
+    meta_data=None, # تم إهماله/لم يستخدم لكنه موجود في التعريف
     tmdb_id=None,
     labels=None,
     runtime=None,

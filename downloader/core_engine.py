@@ -499,21 +499,20 @@ def initialize_supabase_record(display_title: str, original_task_name: str, tmdb
     إذا فشل الحفظ، تسجل خطأ وتعيد (None, None, "", "").
     """
     save_res = save_to_supabase(
-        None,
-        None,
-        "Pending",
-        display_title,
-        original_task_name,
-        tmdb_data["story"],
-        tmdb_data["poster"],
-        tmdb_data["year"],
-        tmdb_data["rating"],
-        temp_id,
-        "Pending",
-        tmdb_id=tmdb_data["tmdb_id"],
-        labels=tmdb_data["labels"],
-        runtime=tmdb_data["runtime"],
-        duration_iso=tmdb_data["duration"],
+        current_voe=None,
+        current_vk="Pending",
+        display_title=display_title,
+        original_task_name=original_task_name,
+        meta_story=tmdb_data.get("story"),
+        final_poster=tmdb_data.get("poster"),
+        meta_year=tmdb_data.get("year"),
+        meta_rating=tmdb_data.get("rating"),
+        identifier=temp_id,
+        archive_url="Pending",
+        tmdb_id=tmdb_data.get("tmdb_id"),
+        labels=tmdb_data.get("labels"),
+        runtime=tmdb_data.get("runtime"),
+        duration_iso=tmdb_data.get("duration")
     )
 
     if save_res and len(save_res) == 4:
@@ -1165,13 +1164,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     if not e_id:
         log.warning("⚠️ فشل الحصول على ID من ساب باز، لن نتمكن من عرض التقدم الحي.")
 
-    # سحب بيانات tmdb للمتغيرات المحلية
-    tmdb_id_fetched = tmdb_data["tmdb_id"]
-    meta_labels = tmdb_data["labels"]
-    meta_duration = tmdb_data["duration"]
-    meta_rating = tmdb_data["rating"]
-    meta_runtime = tmdb_data["runtime"]
-    meta_year = tmdb_data["year"]
+    # سحب بيانات tmdb للمتغيرات المحلية بأمان
+    tmdb_id_fetched = tmdb_data.get("tmdb_id")
+    meta_labels = tmdb_data.get("labels")
+    meta_duration = tmdb_data.get("duration")
+    meta_rating = tmdb_data.get("rating")
+    meta_runtime = tmdb_data.get("runtime")
+    meta_year = tmdb_data.get("year")
 
     is_local_file = os.path.exists(url)
     actual_downloaded_path = None
