@@ -7,3 +7,5 @@ static/downloads/
 extracted_*/
 node_modules/
 venv/
+
+AUDIT.md
