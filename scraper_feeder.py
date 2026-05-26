@@ -218,7 +218,7 @@ async def get_embed_url(page) -> tuple[Optional[str], str]:
 
     if not target_btn:
         log.warning("  ⚠️  لم يتم العثور على سيرفر Mixdrop في القائمة")
-        return None
+        return None, "none"
 
     # 2) النقر على السيرفر
     await target_btn.click()
