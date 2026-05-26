@@ -1,11 +1,10 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/worker.py
-import sys
 import os
 import time
 import random
 import nest_asyncio
 import asyncio
-from downloader.logger_setup import get_beast_logger
+from downloader_new.shared.logger import get_beast_logger
 
 # في Hugging Face المشروع في الجذر دائماً
 PROJECT_ROOT = os.getcwd()
@@ -28,12 +27,8 @@ def ultimate_beast_worker():
     asyncio.set_event_loop(loop)
 
     try:
-        from services.supabase_db import SupabaseService
-        # بننادي على الوحش من ملف الكور مباشرة لأنه هو اللي فيه الدالة الحقيقية دلوقتى
-        try:
-            from downloader.core_engine import pyramid_ultimate_beast
-        except ImportError:
-            from downloader.main_downloader import pyramid_ultimate_beast
+        from downloader_new.db.supabase_client import supabase as client
+        from downloader_new.main_downloader import pyramid_ultimate_beast
 
         log.info("✅ تم تحميل المكتبات بنجاح من محرك الكور")
     except Exception as e:
@@ -55,7 +50,7 @@ def ultimate_beast_worker():
             # 1. سحب المهمة (الأقدم أولاً)
             # جلب أول 5 مهام متاحة بدل واحدة فقط
             pending_res = (
-                SupabaseService.client.table("download_tasks")
+                client.table("download_tasks")
                 .select("*")
                 .eq("status", "idle")
                 .order("created_at", desc=False)
@@ -73,7 +68,7 @@ def ultimate_beast_worker():
 
                 # محاولة "قفل" المهمة (Lock): لا يحدث التحديث إلا لو كانت الحالة لا تزال idle
                 lock_res = (
-                    SupabaseService.client.table("download_tasks")
+                    client.table("download_tasks")
                     .update(
                         {
                             "status": "processing",
@@ -107,26 +102,40 @@ def ultimate_beast_worker():
                 except Exception as run_err:
                     # مراجعة الخطأ: لو الخطأ بسبب إن الملف مش موجود (لأننا نقلناه)، نتجاهله
                     error_msg = str(run_err)
-                    if "No such file or directory" in error_msg and "extracted_" in error_msg:
-                        log.info("⚠️ تنبيه: المحرك نقل الملف بنجاح ولكن الووركر فقد المسار القديم. سيتم اعتبار المهمة ناجحة.")
+                    if (
+                        "No such file or directory" in error_msg
+                        and "extracted_" in error_msg
+                    ):
+                        log.info(
+                            "⚠️ تنبيه: المحرك نقل الملف بنجاح ولكن الووركر فقد المسار القديم. سيتم اعتبار المهمة ناجحة."
+                        )
                     else:
                         log.error(f"❌ خطأ حقيقي أثناء تشغيل المحرك: {run_err}")
                         # --- 🧹 تنظيف الأشباح فقط في حالة الخطأ الحقيقي ---
                         try:
-                            media_res = SupabaseService.client.table("medias").select("id").ilike("title", f"%{file_name}%").limit(1).execute()
+                            media_res = (
+                                client.table("medias")
+                                .select("id")
+                                .ilike("title", f"%{file_name}%")
+                                .limit(1)
+                                .execute()
+                            )
                             if media_res.data:
                                 m_id = media_res.data[0]["id"]
-                                SupabaseService.client.table("episodes").delete().eq("media_id", m_id).execute()
-                                SupabaseService.client.table("medias").delete().eq("id", m_id).execute()
+                                client.table("episodes").delete().eq(
+                                    "media_id", m_id
+                                ).execute()
+                                client.table("medias").delete().eq("id", m_id).execute()
                                 log.info(f"🧹 تم تنظيف سجل الميديا لـ: {file_name}")
 
-                            SupabaseService.client.table("download_tasks").update({
-                                "status": "failed",
-                                "status_message": f"❌ فشل: {error_msg[:50]}",
-                            }).eq("id", job_id).execute()
+                            client.table("download_tasks").update(
+                                {
+                                    "status": "failed",
+                                    "status_message": f"❌ فشل: {error_msg[:50]}",
+                                }
+                            ).eq("id", job_id).execute()
                         except Exception as clean_err:
                             log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
-                        
 
                 # --- [هام جداً]: لا تضع أي أكواد تحديث "Success" هنا إلا لو كنت متأكد إن الدالة رجعت بنجاح ---
 
@@ -135,44 +144,31 @@ def ultimate_beast_worker():
                     f"📡 [Worker]: تم الانتهاء من المعالجة. الاعتماد النهائي تم داخل المحرك."
                 )
                 # --- 🗑️ [منطق حذف المهمة المكتملة] ---
+                # --- 🗑️ تنظيف المهمة بعد الانتهاء ---
                 try:
-                    # 1. جلب حالة المهمة الحالية للتأكد من اكتمالها فعلياً
-                    # استبدل هذا الجزء داخل كود الحذف:
-                    check_task = (
-                        SupabaseService.client.table("download_tasks")
-                        .select("status", "progress_percent", "status_message")
+                    task_check = (
+                        client.table("download_tasks")
+                        .select("status")
                         .eq("id", job_id)
-                        .limit(1)  # أضمن من single في بعض الحالات
                         .execute()
                     )
-
-                    if check_task.data and len(check_task.data) > 0:
-                        task_data = check_task.data[0]
-                        current_status = task_data.get("status")
-                        
-                        # لو الحالة completed (تمت بنجاح) أو failed (فشلت تماماً)
-                        # في الحالتين لازم نحذفها عشان ما تتكررش
-                        if current_status in ["completed", "failed"]:
-                            log.info(f"🧹 تنظيف: المهمة {job_id} انتهت بحالة ({current_status})، جاري حذفها...")
-                            SupabaseService.client.table("download_tasks").delete().eq("id", job_id).execute()
-                            log.info(f"🗑️ تم حذف المهمة {job_id} من قائمة الانتظار.")
-
-                            log.info(
-                                f"🧹 تنظيف: المهمة {job_id} اكتملت بنجاح، جاري حذفها من الجدول..."
-                            )
-
-                            # 3. الحذف من جدول download_tasks
-                            SupabaseService.client.table("download_tasks").delete().eq(
-                                "id", job_id
-                            ).execute()
-                            log.info(f"🗑️ تم حذف المهمة {job_id} بنجاح.")
+                    if task_check.data and task_check.data[0]["status"] in [
+                        "completed",
+                        "failed",
+                    ]:
+                        client.table("download_tasks").delete().eq(
+                            "id", job_id
+                        ).execute()
+                        log.info(f"🗑️ تم تنظيف وحذف المهمة {job_id} من الجدول.")
                 except Exception as del_err:
-                    log.error(f"⚠️ خطأ أثناء محاولة حذف المهمة: {del_err}")
+                    log.error(f"⚠️ خطأ أثناء حذف المهمة: {del_err}")
                 # --- ⚡ [سطر الأمان النهائي]: تأكيد الجاهزية من الـ Worker ⚡ ---
                 log.info(f"✅ المهمة {job_id} انتهت بالكامل.")
 
             else:
-                log.info(f"😴 الوحش يبحث في الداتابيز.. لا توجد مهام حالياً (status: idle) | النوم الحالي: {current_sleep} ثانية")
+                log.info(
+                    f"😴 الوحش يبحث في الداتابيز.. لا توجد مهام حالياً (status: idle) | النوم الحالي: {current_sleep} ثانية"
+                )
                 time.sleep(current_sleep)
                 # مضاعفة الوقت للمرة القادمة بشرط ألا يتخطى ساعتين (7200 ثانية)
                 current_sleep = min(current_sleep * 2, 7200)
@@ -182,7 +178,7 @@ def ultimate_beast_worker():
             # في حالة الخطأ العام، نعيد المهمة لـ idle لتجربتها لاحقاً أو تعليمها بالفشل
             try:
                 if "job_id" in locals():
-                    SupabaseService.client.table("download_tasks").update(
+                    client.table("download_tasks").update(
                         {
                             "status": "failed",  # تغيير لـ failed أفضل عشان ميدخلش في Loop لا نهائي لو الرابط ميت
                             "status_message": f"❌ خطأ فني بالووركر: {str(e)[:100]}",
@@ -191,6 +187,8 @@ def ultimate_beast_worker():
             except:
                 pass
             time.sleep(20)
+
+
 # أمان التشغيل السحابي المباشر
 if __name__ == "__main__":
     log.info("📌 تم استدعاء الووركر يدوياً.. جاري الإطلاق التجريبي.")

@@ -1,10 +1,19 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/app.py
-import uvicorn, logging, json, re, html, requests, sys, os, jwt, threading, asyncio
+import uvicorn
+from contextlib import asynccontextmanager
+import logging
+import json
+import re
+import html
+import requests
+import os
+import jwt
+import threading
+import asyncio
 import worker  # استيراد ملف الووركر للوصول للمتغير العالمي
 from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
-    Request,
     Form,
     Depends,
     HTTPException,
@@ -34,8 +43,40 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-# 1. تهيئة التطبيق والميدلوير (يجب أن يكونا أول شيء)
-app = FastAPI()
+
+# ----------------------------------
+# تشغيل "الوحش" وصياد الروابط (Feeder) في خلفية النظام عند بدء التشغيل
+# دالة التغذية التلقائية (تم نقلها للخارج لتكون متاحة للـ lifespan)
+async def auto_feeder_loop():
+    try:
+        from scraper_feeder import run_scraper_async
+
+        print("⏳ [Feeder] Auto-loop initialised.")
+        while True:
+            try:
+                await run_scraper_async()
+            except Exception as fe:
+                print(f"❌ [Feeder Error]: {fe}")
+            await asyncio.sleep(10800)
+    except ImportError:
+        print("⚠️ [Warning] scraper_feeder.py not found.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup ---
+    # 1. إطلاق الووركر
+    thread = threading.Thread(target=worker.ultimate_beast_worker, daemon=True)
+    thread.start()
+    # 2. إطلاق الفيدر
+    asyncio.create_task(auto_feeder_loop())
+    yield
+    # --- Shutdown ---
+    worker.should_stop_worker = True  # إيقاف الووركر بأمان
+    print("🛑 System shutting down...")
+
+
+app = FastAPI(lifespan=lifespan)
 
 # المسار اللي الوحش شغال فيه وبيرمي فيه الفيديوهات
 # --- ⚡ نظام السحب المباشر (Guardian Direct Stream) ⚡ ---
@@ -46,42 +87,6 @@ os.makedirs(STREAM_DIR, exist_ok=True)
 # فتح المجلد للوصول العام
 app.mount("/stream", StaticFiles(directory=STREAM_DIR), name="stream")
 print(f"📡 [Direct Stream] البوابة مفتوحة الآن على: {STREAM_DIR}")
-# ----------------------------------
-# تشغيل "الوحش" وصياد الروابط (Feeder) في خلفية النظام عند بدء التشغيل
-@app.on_event("startup")
-async def startup_event():
-    # 1. إطلاق الووركر الأساسي (الوحش) في Thread مستقل كالعادة
-    try:
-        from worker import ultimate_beast_worker
-        thread = threading.Thread(target=ultimate_beast_worker, daemon=True)
-        thread.start()
-        print("🚀 [Background] Guardian Monster has been unleashed in the background...")
-    except ImportError:
-        print("⚠️ [Warning] worker.py not found. Monster is still in the cage.")
-    except Exception as e:
-        print(f"❌ [Error] Failed to start background worker: {e}")
-
-    # 2. حلقة التغذية التلقائية للإسكربر (تشتغل في الخلفية كـ Async Task صامتة)
-    async def auto_feeder_loop():
-        import asyncio
-        # استيراد الدالة الـ Async اللي جهزناها في ملف الإسكربر الجديد
-        try:
-            from scraper_feeder import run_scraper_async
-            print("⏳ [Feeder] Auto-loop initialised. Will pulse every 1 hour.")
-            while True:
-                try:
-                    await run_scraper_async()
-                except Exception as fe:
-                    print(f"❌ [Feeder Error] Error inside scraper cycle: {fe}")
-                
-                # انتظر ساعة واحدة (3600 ثانية) قبل اللفة الجاية
-                #(إذا كنت تفضل جعلها كل ساعتين، يمكنك تغيير الرقم إلى 7200 وتعديل نص الـ print إلى 2 hours).
-                await asyncio.sleep(10800)
-        except ImportError:
-            print("⚠️ [Warning] scraper_feeder.py not found. Auto-feeder is disabled.")
-
-    # حقن اللوب جوة الـ FastAPI Event Loop عشان يشتغل أوتوماتيك
-    asyncio.create_task(auto_feeder_loop())
 
 
 # الصحيح هو وضع كل المواقع المسموح بها في قائمة واحدة فقط
@@ -95,7 +100,9 @@ app.add_middleware(
 
 # 2. إعداد المتغيرات الأساسية
 BLOG_ID: str = os.getenv("BLOG_ID") or ""
-SECRET_KEY: str = os.getenv("SECRET_KEY") or "default_secret_key_change_it"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("❌ SECRET_KEY is not set in environment variables.")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 # 3. تهيئة الخدمات
@@ -172,6 +179,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.get("/api/search/id/{media_id}")
 def search_by_id(media_id: int):
     return SupabaseService.find_media_by_id(media_id)
+
 
 # 7. المسارات (الـ APIs توضع هنا...)
 # ... (ضع الـ @app.post والـ @app.get الخاصة بك هنا) ...
@@ -685,6 +693,7 @@ async def delete_table_row(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/worker/status")
 async def get_worker_status():
     """معرفة حالة الووركر حالياً (شغال ولا واقف)"""
@@ -731,10 +740,12 @@ if os.path.exists(STATIC_DIST):
         index_path = os.path.join(STATIC_DIST, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
-        return {"status": "Backend is running successfully, but Front-end build (index.html) is missing from static/dist/"}
+        return {
+            "status": "Backend is running successfully, but Front-end build (index.html) is missing from static/dist/"
+        }
 
     @app.get("/{rest_of_path:path}")
-    async def serve_spa(    rest_of_path: str):
+    async def serve_spa(rest_of_path: str):
         # قاعدة صارمة: إذا كان المسار يبدأ بـ api، فلا ترجع ملف الـ index.html أبداً
         if rest_of_path.startswith("api/") or rest_of_path.startswith("api"):
             raise HTTPException(status_code=404, detail="API Route Not Found")

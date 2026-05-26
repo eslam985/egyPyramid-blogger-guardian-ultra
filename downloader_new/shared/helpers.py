@@ -1,14 +1,16 @@
 
-# Utility Functions Layer (Headers, Formatting, etc.)
-import random
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/shared/helpers.py
+import re
+
 # استيراد اللوجر عشان لو حبيت تسجل أي خطأ في جلب الهيدرز
 try:
-    from .logger_setup import get_beast_logger
+    from .logger import get_beast_logger
 except ImportError:
     import os
     import sys
+
     sys.path.append(os.path.dirname(__file__))
-    from logger_setup import get_beast_logger
+    from .logger import get_beast_logger
 
 log = get_beast_logger("GuardianUltra")
 # قائمة "الخداع" للمواقع المختلفة - ضعها في أعلى الملف
@@ -111,6 +113,7 @@ SITES_COOKBOOK = {
     },
 }
 
+
 def get_smart_headers(url):
     """توليد هيدرز ذكية بناءً على رابط الموقع لكسر الحماية"""
     headers = []
@@ -125,9 +128,34 @@ def get_smart_headers(url):
 
         if not found:
             headers.extend(["--add-header", f"Referer: {url}"])
-            headers.extend(["--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"])
-            
+            headers.extend(
+                [
+                    "--add-header",
+                    "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                ]
+            )
+
     except Exception as e:
         log.error(f"⚠️ خطأ في توليد الهيدرز لـ {url}: {e}")
-        
+
     return headers
+
+
+def minutes_to_iso(minutes):
+    if not minutes or not isinstance(minutes, int):
+        return "PT01H30M"
+    hours = minutes // 60
+    mins = minutes % 60
+    return f"PT{hours:02d}H{mins:02d}M"
+
+
+def is_mostly_english(text):
+    if not text:
+        return True
+    # إزالة الرموز والأرقام
+    clean_text = re.sub(r"[^a-zA-Z\u0600-\u06FF]", "", str(text))
+    if not clean_text:
+        return True
+    english_chars = len(re.findall(r"[a-zA-Z]", clean_text))
+    arabic_chars = len(re.findall(r"[\u0600-\u06FF]", clean_text))
+    return english_chars >= arabic_chars

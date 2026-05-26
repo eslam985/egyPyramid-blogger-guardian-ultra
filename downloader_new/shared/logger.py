@@ -1,5 +1,5 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/shared/logger.py
 import logging
-import os
 from datetime import datetime
 
 

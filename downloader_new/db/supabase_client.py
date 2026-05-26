@@ -1,17 +1,15 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/db/supabase_client.py
+import re
 import os
 import time
-import re
 from supabase import create_client, Client as SupabaseClient
 
-# 1. استيراد اللوجر
-try:
-    from .logger_setup import get_beast_logger
-except ImportError:
-    from logger_setup import get_beast_logger
-
+# الاستدعاء النظيف والمباشر للوجر
+from downloader_new.shared.logger import get_beast_logger
+# في أعلى الملف مع باقي الـ imports
+from downloader_new.metadata.formatter import normalize_title
 log = get_beast_logger("GuardianUltra")
 
-# 2. إعدادات قاعدة البيانات
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -20,29 +18,6 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- دالتك اللي أنت نقلتها بتبدأ من هنا ---
-ARCHIVE_ACCESS_KEY = os.getenv("ARCHIVE_ACCESS_KEY")
-ARCHIVE_SECRET_KEY = os.getenv("ARCHIVE_SECRET_KEY")
-lu_key = os.getenv("LULUSTREAM_API_KEY")
-dood_api_key = os.getenv("DOOD_API_KEY")
-st_login = os.getenv("STREAMTAPE_LOGIN")
-st_key = os.getenv("STREAMTAPE_KEY")
-mix_user = os.getenv("MIXDROP_EMAIL")
-mix_key = os.getenv("MIXDROP_API_KEY")
-TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-OMDB_API_KEY = os.getenv("OMDB_API_KEY")
-VOE_API_KEY = os.getenv("VOE_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-VK_ACCESS_TOKEN = os.getenv("VK_ACCESS_TOKEN")
-VK_GROUP_ID = os.getenv("VK_GROUP_ID")
-VK_ALBUM_ID = os.getenv("VK_ALBUM_ID", "2")  # "2" كقيمة افتراضية إذا لم يوجد سكرت
-# بناء القاموس من متغيرات البيئة
-CLOUDINARY_CONFIG = {
-    "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME"),
-    "upload_preset": os.getenv("CLOUDINARY_UPLOAD_PRESET"),
-}
-    
-    # كمل باقي كود الدالة بتاعك هنا...
 def save_to_supabase(
     current_voe,
     current_vk,
@@ -54,38 +29,33 @@ def save_to_supabase(
     meta_rating,
     identifier,
     archive_url,
-    meta_data=None, # تم إهماله/لم يستخدم لكنه موجود في التعريف
+    meta_data=None, 
     tmdb_id=None,
     labels=None,
     runtime=None,
     duration_iso=None,
+    # المتغيرات الجديدة التي سيتم تمريرها جاهزة من الـ Orchestrator
+    c_title=None,
+    c_cat="movie",
+    extracted_season_no=None,
+    actual_ep_no=None,
+    generated_slug=None
 ):
-    # استيراد الدوال دي "جوه" الدالة عشان نهرب من مشكلة الـ Circular Import
-    # 1. الاستيراد المؤمن
-    # استيراد الدوال دي "جوه" الدالة عشان نهرب من مشكلة الـ Circular Import
-    try: # <--- دي "المظلة" الكبيرة اللي هتحمي الدالة كلها
-        # 1. الاستيراد المؤمن
-        try:
-            from .processors import get_clean_media_data, normalize_title
-        except ImportError:
-            from processors import get_clean_media_data, normalize_title
+    # لا يوجد أي استيراد داخلي هنا (No Try-Except for imports)
+    
+    # التحقق من وجود c_title، وإذا لم يمرره الـ Orchestrator نستخدم بيانات افتراضية
+    if not c_title:
+        log.warning(f"⚠️ لم يتم تمرير بيانات معالجة لـ {display_title}، سيتم استخدام بيانات افتراضية.")
+        c_title = display_title
+        c_cat = "movie"
+        extracted_season_no = None
+        actual_ep_no = None
 
-        # 2. تنفيذ المنطق (لاحظ المسافة: السطر ده بره الـ except تماماً)
-        media_data = get_clean_media_data(display_title)
-        
-        if isinstance(media_data, (list, tuple)) and len(media_data) == 4:
-            c_title, c_cat, extracted_season_no, actual_ep_no = media_data
-        else:
-            log.warning(f"⚠️ فشل تحليل {display_title}، سيتم استخدام بيانات افتراضية.")
-            c_title, c_cat, extracted_season_no, actual_ep_no = (
-                display_title,
-                "movie",
-                None,
-                None,
-            )
-
-        # توليد slug تلقائي للميديا (بره برضه وعلى نفس المحاذاة)
+    # توليد slug تلقائي للميديا
+    if not generated_slug and c_title:
         generated_slug = c_title.lower().strip().replace(" ", "-")
+
+    # ----- هنا يبدأ كود الإدخال لقاعدة البيانات الخاص بك -----
         # ... كمل باقي الكود بتاعك كلو على نفس مستوى المحاذاة دي ...
         # تنظيف الـ slug من الرموز الغريبة مع الحفاظ على الحروف العربية والإنجليزية والأرقام والشرطة
         generated_slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug)
@@ -104,7 +74,7 @@ def save_to_supabase(
             final_title = original_task_name
         else:
             final_title = c_title  # الاسم اللي السكربت نظفه أو جابه من TMDB
-
+    try:
         media_payload = {
             "tmdb_id": str(tmdb_id) if tmdb_id else None,
             "title": final_title,  # العنوان المحمي
@@ -140,15 +110,6 @@ def save_to_supabase(
         e_id = None
         for attempt in range(3):
             try:
-                # 1. البحث عن أو إنشاء الميديا (Media)
-                existing_media = (
-                    supabase.table("medias")
-                    .select("id")
-                    .eq("title", c_title)
-                    .eq("year", str(meta_year))
-                    .execute()
-                )
-
                 # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
                 # 1. البحث عن الميديا (بالـ ID أولاً ثم بالاسم المنظف) لضمان عدم التكرار
                 m_id = None
@@ -398,3 +359,39 @@ def save_to_supabase(
         # نرجع None صريحة عشان سطر الـ 'if save_res' في الكور يحس إن فيه مشكلة ويوقف
         return None
     
+
+
+
+
+def initialize_supabase_record(display_title: str, original_task_name: str, tmdb_data: dict, temp_id: str) -> tuple:
+    """
+    إنشاء سجل أولي في Supabase.
+    تعيد (e_id, media_id, meta_story, final_poster).
+    إذا فشل الحفظ، تسجل خطأ وتعيد (None, None, "", "").
+    """
+    save_res = save_to_supabase(
+        current_voe=None,
+        current_vk="Pending",
+        display_title=display_title,
+        original_task_name=original_task_name,
+        meta_story=tmdb_data.get("story"),
+        final_poster=tmdb_data.get("poster"),
+        meta_year=tmdb_data.get("year"),
+        meta_rating=tmdb_data.get("rating"),
+        identifier=temp_id,
+        archive_url="Pending",
+        tmdb_id=tmdb_data.get("tmdb_id"),
+        labels=tmdb_data.get("labels"),
+        runtime=tmdb_data.get("runtime"),
+        duration_iso=tmdb_data.get("duration")
+    )
+
+    if save_res and len(save_res) == 4:
+        e_id, media_id, meta_story, final_poster = save_res
+        return e_id, media_id, meta_story, final_poster
+    else:
+        log.error("❌ فشل الحفظ الأولي في قاعدة البيانات (save_to_supabase رجعت None)")
+        return None, None, "", ""
+    
+    
+

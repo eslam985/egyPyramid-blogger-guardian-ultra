@@ -1,70 +1,9 @@
-
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/mixdrop_ext.py
 from playwright.async_api import async_playwright
-try:
-    from .logger_setup import get_beast_logger
-except ImportError:
-    from logger_setup import get_beast_logger
+# الاستدعاء النظيف والمباشر للوجر
+from downloader_new.shared.logger import get_beast_logger
 
 log = get_beast_logger("GuardianUltra")
-
-
-# --- الدوال اللي أنت نقلتها (get_direct_link_via_playwright و get_mixdrop_direct_link) بتبدأ هنا ---
-# Link Extraction Layer (Playwright, Mixdrop, etc.)
-# --- 1. إضافة دالة الصيد في أعلى ملف سكربت التحميل ---
-async def get_direct_link_via_playwright(embed_url):
-    # تحويل الرابط للمسار المطلوب
-    target_url = embed_url.replace("embed-", "d/").replace(".html", "_h")
-
-    log.info(f"🔍 جاري محاكاة مستخدم حقيقي لصيد الرابط من: {target_url}")
-
-    async with async_playwright() as p:
-        # إعدادات المتصفح لتبدو كجهاز حقيقي
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-        page = await context.new_page()
-
-        try:
-            # 1. الذهاب للصفحة
-            await page.goto(target_url, wait_until="networkidle", timeout=45000)
-
-            # 2. التعامل مع العداد التنازلي (لو موجود)
-            # هننتظر الزرار يظهر حتى لو اتأخر 15 ثانية
-            btn_selector = "a.btn-gradient.submit-btn"
-
-            log.info("⏳ ننتظر ظهور زر التحميل (قد يستغرق 10 ثوانٍ بسبب العداد)...")
-            await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
-
-            # 3. استخراج الرابط
-            direct_link = await page.get_attribute(btn_selector, "href")
-
-            # تأكيد إضافي: لو الرابط عبارة عن "javascript:void(0)" أو "#"
-            # ده معناه إنه بيحتاج "نقرة" لتوليده
-            if (
-                not direct_link
-                or direct_link.startswith("#")
-                or "javascript" in direct_link
-            ):
-                log.info("🖱️ الرابط يحتاج لنقرة لتوليده، جاري النقر...")
-                await page.click(btn_selector)
-                # ننتظر ثانية لتحديث الرابط
-                await page.wait_for_timeout(2000)
-                direct_link = await page.get_attribute(btn_selector, "href")
-
-            await browser.close()
-
-            if direct_link and "http" in direct_link:
-                log.info(f"✅ تم صيد الكنز بنجاح: {direct_link[:60]}...")
-                return direct_link
-            else:
-                log.error("❌ الرابط المستخرج غير صالح.")
-                return None
-
-        except Exception as e:
-            log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
-            await browser.close()
-            return None
 
 
 async def get_mixdrop_direct_link(embed_url):
