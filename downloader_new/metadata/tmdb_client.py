@@ -7,6 +7,7 @@ from deep_translator import GoogleTranslator
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.metadata.images import upload_poster_to_cloudinary
 from downloader_new.shared.helpers import minutes_to_iso, is_mostly_english
+
 log = get_beast_logger("GuardianUltra")
 translator = GoogleTranslator(source="auto", target="ar")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -36,8 +37,12 @@ genre_map = {
     "Short": "قصير",
     "Sci-Fi": "خيال علمي",
     "Biography": "سيرة شخصية",
-    "German": "ألماني", "French": "فرنسي", "Japanese": "ياباني",
-    "Whodunnit": "من فعلها", "Superhero": "سوبرهيرو", "Cyberpunk": "سايبربانك",
+    "German": "ألماني",
+    "French": "فرنسي",
+    "Japanese": "ياباني",
+    "Whodunnit": "من فعلها",
+    "Superhero": "سوبرهيرو",
+    "Cyberpunk": "سايبربانك",
 }
 
 
@@ -142,10 +147,15 @@ def get_movie_data(name, year=None):  # <--- أضفنا year هنا
             if str(movie_id).startswith("tt"):
                 find_url = f"https://api.themoviedb.org/3/find/{movie_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=ar"
                 res_f = requests.get(find_url).json()
+                # التحقق من الأفلام أو المسلسلات
                 if res_f.get("movie_results"):
                     tmdb_final_id = res_f["movie_results"][0]["id"]
+                    content_kind = "movie"  # تأكيد النوع
+                elif res_f.get("tv_results"):
+                    tmdb_final_id = res_f["tv_results"][0]["id"]
+                    content_kind = "tv"  # تأكيد النوع
             else:
-                tmdb_final_id = movie_id  # إذا كان رقم TMDB مباشر
+                tmdb_final_id = movie_id
 
         # إذا لم يتوفر ID، نبحث بالاسم والسنة كالعادة
         if not tmdb_final_id:
@@ -455,6 +465,15 @@ def get_movie_data(name, year=None):  # <--- أضفنا year هنا
         )
 
 
+def check_local_radar(query, year):
+    """فحص الفهرس المحلي لجلب الـ ID قبل البحث الخارجي"""
+    try:
+        from downloader_new.metadata.local_lookup import search_local_imdb
+
+        return search_local_imdb(query, year)
+    except Exception as e:
+        log.error(f"❌ خطأ في الرادار المحلي: {e}")
+        return None
 
 
 def fetch_tmdb_metadata(search_query: str, year=None) -> dict:
@@ -465,14 +484,19 @@ def fetch_tmdb_metadata(search_query: str, year=None) -> dict:
     في حالة فشل أو نقص البيانات، تعيد قيماً افتراضية.
     """
     log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
-    log.info(
-        f"🔎 البحث عن: {search_query} "
-        + (f"({year})" if year else "")
-        + " ..."
-    )
+    log.info(f"🔎 البحث عن: {search_query} " + (f"({year})" if year else "") + " ...")
     log.info(f"DEBUG: calling get_movie_data with {search_query}")
 
-    movie_result = get_movie_data(search_query, year=year)
+    # --- التعديل هنا: محاولة جلب الـ ID محلياً أولاً ---
+    local_id = check_local_radar(search_query, year)
+    if local_id:
+        log.info(f"✨ تم العثور على ID محلي: {local_id}. سيتم استخدامه مباشرة.")
+        # نرسل الـ ID بدلاً من اسم البحث لضمان الدقة
+        movie_result = get_movie_data(local_id, year=year)
+    else:
+        # المسار القديم في حال لم يجد شيئاً محلياً
+        movie_result = get_movie_data(search_query, year=year)
+    # --- نهاية التعديل ---
     log.info(f"DEBUG: get_movie_data returned: {movie_result}")
 
     if isinstance(movie_result, (list, tuple)) and len(movie_result) >= 9:
