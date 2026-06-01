@@ -72,7 +72,7 @@ async def resolve_direct_url(raw_url: str) -> str:
         log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
         # إضافة timeout حماية بـ 60 ثانية
         try:
-            direct_link = await asyncio.wait_for(get_direct_link_via_playwright(raw_url), timeout=60)
+            direct_link = await asyncio.wait_for(get_direct_link_via_playwright(raw_url), timeout=240)
         except asyncio.TimeoutError:
             log.error("⏳ تجاوز الوقت: Playwright توقف عن الاستجابة (Timeout).")
             return raw_url
@@ -86,7 +86,7 @@ async def resolve_direct_url(raw_url: str) -> str:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
         # إضافة timeout حماية بـ 60 ثانية
         try:
-            direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=60)
+            direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=240)
         except asyncio.TimeoutError:
             log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة (Timeout).")
             raise Exception("Timeout: السكربت عالق في صفحة التحميل، لن أستمر.")
