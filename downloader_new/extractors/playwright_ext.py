@@ -1,5 +1,6 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/playwright_ext.py
 from playwright.async_api import async_playwright
+import asyncio
 # الاستدعاء النظيف والمباشر للوجر
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.extractors.mixdrop_ext import get_mixdrop_direct_link
@@ -69,7 +70,12 @@ async def resolve_direct_url(raw_url: str) -> str:
     """
     if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
         log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
-        direct_link = await get_direct_link_via_playwright(raw_url)
+        # إضافة timeout حماية بـ 60 ثانية
+        try:
+            direct_link = await asyncio.wait_for(get_direct_link_via_playwright(raw_url), timeout=60)
+        except asyncio.TimeoutError:
+            log.error("⏳ تجاوز الوقت: Playwright توقف عن الاستجابة (Timeout).")
+            return raw_url
         if direct_link:
             log.info(f"✅ تم صيد الرابط بنجاح! سيتم التحميل الآن.")
             return direct_link
@@ -79,7 +85,12 @@ async def resolve_direct_url(raw_url: str) -> str:
 
     elif "mixdrop" in raw_url or "miixdrop" in raw_url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
-        direct_link = await get_mixdrop_direct_link(raw_url)
+        # إضافة timeout حماية بـ 60 ثانية
+        try:
+            direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=60)
+        except asyncio.TimeoutError:
+            log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة (Timeout).")
+            return raw_url
         if direct_link == "404_DELETED":
             raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
         if direct_link:

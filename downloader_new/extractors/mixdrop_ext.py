@@ -1,11 +1,20 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/mixdrop_ext.py
+import random
+
 from playwright.async_api import async_playwright
 # الاستدعاء النظيف والمباشر للوجر
 from downloader_new.shared.logger import get_beast_logger
-
+from downloader_new.shared.logger import get_beast_logger
 log = get_beast_logger("GuardianUltra")
 
-
+# قائمة الوكلاء
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+]
 async def get_mixdrop_direct_link(embed_url):
     target_url = embed_url.replace("/e/", "/f/")
     if "?download" not in target_url:
@@ -14,11 +23,19 @@ async def get_mixdrop_direct_link(embed_url):
     log.info(f"🕵️ محاكاة سلوك بشري على: {target_url}")
 
     async with async_playwright() as p:
+        # إضافة args للتمويه وتجاوز حماية الـ Bot Detection
         browser = await p.chromium.launch(
-            headless=True
-        )  # يمكن جعلها False لو بتجرب محلياً
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--window-size=1920,1080"
+            ]
+        )
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+            user_agent=random.choice(USER_AGENTS),
+            viewport={"width": 1920, "height": 1080}
         )
         page = await context.new_page()
 
