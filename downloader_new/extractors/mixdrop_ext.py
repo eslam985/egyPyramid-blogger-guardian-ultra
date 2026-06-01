@@ -2,9 +2,11 @@
 import random
 
 from playwright.async_api import async_playwright
+
 # الاستدعاء النظيف والمباشر للوجر
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.shared.logger import get_beast_logger
+
 log = get_beast_logger("GuardianUltra")
 
 # قائمة الوكلاء
@@ -15,6 +17,8 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
 ]
+
+
 async def get_mixdrop_direct_link(embed_url):
     target_url = embed_url.replace("/e/", "/f/")
     if "?download" not in target_url:
@@ -30,23 +34,26 @@ async def get_mixdrop_direct_link(embed_url):
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                "--window-size=1920,1080"
-            ]
+                "--window-size=1920,1080",
+            ],
         )
         context = await browser.new_context(
             user_agent=random.choice(USER_AGENTS),
-            viewport={"width": 1920, "height": 1080}
+            viewport={"width": 1920, "height": 1080},
         )
         page = await context.new_page()
 
         try:
             # --- 🚀 التنصت الآمن: صيد الروابط من الشبكة مباشرة 🚀 ---
             captured_direct_url = None
-            
+
             async def handle_response(response):
                 nonlocal captured_direct_url
                 # نتأكد أن الرابط هو رابط محتوى فيديو وليس مجرد صفحة إعلانات
-                if any(domain in response.url for domain in ["mxcontent", "mdelivery", "mxdcontent"]):
+                if any(
+                    domain in response.url
+                    for domain in ["mxcontent", "mdelivery", "mxdcontent"]
+                ):
                     captured_direct_url = response.url
 
             page.on("response", handle_response)
@@ -66,10 +73,12 @@ async def get_mixdrop_direct_link(embed_url):
             # رفعنا المدى لـ 10 لضمان وجود محاولات كافية بعد الـ Reload
             for i in range(1, 11):
                 try:
-                    await page.wait_for_selector(
-                        btn_selector, state="visible", timeout=10000
+                    # انتظار الزرار + وجود رابط حقيقي (التحقق من الـ href)
+                    await page.wait_for_function(
+                        "document.querySelector('a.download-btn') && document.querySelector('a.download-btn').getAttribute('href')?.startsWith('http')",
+                        timeout=15000,
                     )
-                    log.info(f"🖱️ نقرة رقم {i}...")
+                    log.info(f"🖱️ الزر جاهز والرابط موجود (محاولة {i})...")
 
                     # --- ⚡ تعديل الـ Reload الذكي ⚡ ---
                     if i == 5:
@@ -96,7 +105,9 @@ async def get_mixdrop_direct_link(embed_url):
 
                     # --- 1. فحص هل تم صيد الرابط السري من الشبكة (AJAX POST) ---
                     if captured_direct_url:
-                        log.info(f"✅ تم صيد الرابط السري من الشبكة بنجاح: {captured_direct_url[:60]}...")
+                        log.info(
+                            f"✅ تم صيد الرابط السري من الشبكة بنجاح: {captured_direct_url[:60]}..."
+                        )
                         await browser.close()
                         return captured_direct_url
 
@@ -105,10 +116,22 @@ async def get_mixdrop_direct_link(embed_url):
 
                     if href and href.startswith("http"):
                         # تصحيح الثغرة: إضافة الدومينات الوهمية الجديدة لمنع التقييم الخاطئ
-                        valid_domains = ["mxcontent", "mdelivery", "mxdcontent", "delivery"]
-                        invalid_terms = ["?download", "mixdrop", "miixdrop", "mixdrop.ps"]
-                        
-                        is_valid_direct = any(domain in href.lower() for domain in valid_domains) or not any(term in href.lower() for term in invalid_terms)
+                        valid_domains = [
+                            "mxcontent",
+                            "mdelivery",
+                            "mxdcontent",
+                            "delivery",
+                        ]
+                        invalid_terms = [
+                            "?download",
+                            "mixdrop",
+                            "miixdrop",
+                            "mixdrop.ps",
+                        ]
+
+                        is_valid_direct = any(
+                            domain in href.lower() for domain in valid_domains
+                        ) or not any(term in href.lower() for term in invalid_terms)
 
                         if is_valid_direct:
                             log.info(f"✅ تم صيد الرابط بنجاح من الزر: {href[:60]}...")
@@ -129,10 +152,11 @@ async def get_mixdrop_direct_link(embed_url):
         except Exception as e:
             try:
                 page_content = await page.content()
-                log.error(f"🔍 [DEBUG] محتوى الصفحة عند الفشل (أول 500 حرف): {page_content[:500]}")
+                log.error(
+                    f"🔍 [DEBUG] محتوى الصفحة عند الفشل (أول 500 حرف): {page_content[:500]}"
+                )
             except:
                 pass
             log.error(f"❌ خطأ أثناء المحاكاة البشرية: {str(e)}")
             await browser.close()
             return None
-
