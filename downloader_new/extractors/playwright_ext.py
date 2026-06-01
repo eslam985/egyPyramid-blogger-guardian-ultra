@@ -79,9 +79,8 @@ async def resolve_direct_url(raw_url: str) -> str:
         if direct_link:
             log.info(f"✅ تم صيد الرابط بنجاح! سيتم التحميل الآن.")
             return direct_link
-        else:
-            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
-            return raw_url
+        
+        raise Exception("فشل استخراج رابط VidTube المباشر - الـ Scraper لم يجد شيئاً.")
 
     elif "mixdrop" in raw_url or "miixdrop" in raw_url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
@@ -93,11 +92,11 @@ async def resolve_direct_url(raw_url: str) -> str:
             return raw_url
         if direct_link == "404_DELETED":
             raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
+            
         if direct_link:
             log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
             return direct_link
-        else:
-            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
-            return raw_url
+            
+        raise Exception("فشل استخراج رابط MixDrop المباشر - الـ Scraper لم يجد شيئاً.")
 
     return raw_url
