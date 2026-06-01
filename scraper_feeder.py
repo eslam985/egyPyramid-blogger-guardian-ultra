@@ -377,10 +377,11 @@ def normalize_title(title, for_search=False):
     # --------------------------------
 
     # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
+    # تنظيف الرموز - تم إضافة ' و : للقائمة المسموح بها
     if for_search:
         t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
     else:
-        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s\':]", " ", t)
 
     stop_words = [
         "مسلسل",
