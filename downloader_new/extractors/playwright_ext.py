@@ -77,7 +77,7 @@ async def resolve_direct_url(raw_url: str) -> str:
             log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
             return raw_url
 
-    elif "mixdrop" in raw_url:
+    elif "mixdrop" in raw_url or "miixdrop" in raw_url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
         direct_link = await get_mixdrop_direct_link(raw_url)
         if direct_link == "404_DELETED":
