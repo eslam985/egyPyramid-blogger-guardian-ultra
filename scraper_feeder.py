@@ -33,7 +33,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_NAME = "download_tasks"
 
 # تم إلغاء أرقام الصفحات الثابتة لتعمل ديناميكياً بالكامل
-MAX_IDLE_BUFFER = 3  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
+MAX_IDLE_BUFFER = 60  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
@@ -198,12 +198,9 @@ async def get_watch_url(page) -> Optional[str]:
             return None
         return await watch_anchor.get_attribute("href")
 
-
+"""
 async def get_embed_url(page) -> tuple[Optional[str], str]:
-    """
-    ترجع توأم: (الرابط المستخرج, حالة السيرفر المستخرج)
-    الحالات: 'mixdrop_live', 'vidtube_fallback', 'mixdrop_dead_no_fallback', 'none'
-    """
+
     # 1) ابحث عن السيرفر المطلوب في القائمة
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
 
@@ -299,6 +296,72 @@ async def get_embed_url(page) -> tuple[Optional[str], str]:
     except PlaywrightTimeout:
         log.warning("  ⏱️  انتهت المهلة: سيرفر Mixdrop لم يستجب")
 
+    return None, "none"
+"""
+# --- دالة مساعدة عامة ---
+async def get_iframe_src(page):
+    """انتظار الحصول على الـ iframe واستخراج الرابط منه."""
+    await page.wait_for_selector(".player--iframe iframe", timeout=15_000)
+    iframe = await page.query_selector(".player--iframe iframe")
+    return (await iframe.get_attribute("src")) if iframe else None
+
+# --- معالج سيرفر VidTube (الأولوية الأولى) ---
+async def extract_vidtube(page):
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "متعدد الجودات" in name:
+            log.info(f"  🎯 محاولة سحب VidTube/متعدد الجودات: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await get_iframe_src(page)
+            if src: return src, "vidtube_live"
+    return None, None
+
+# --- معالج سيرفر MixDrop (الأولوية الثانية) ---
+async def extract_mixdrop(page):
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "Mixdrop" in name:
+            log.info(f"  🎯 محاولة سحب MixDrop: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            
+            # فحص الـ 404 الشهير في مكس دروب
+            iframe = await page.query_selector(".player--iframe iframe")
+            if iframe:
+                frame = await iframe.content_frame()
+                if frame:
+                    content = await frame.evaluate("document.body.innerHTML")
+                    if "can't find the" in content and "looking for" in content:
+                        log.error("  🚫 رابط Mixdrop ميت!")
+                        return None, "mixdrop_dead"
+            
+            src = await get_iframe_src(page)
+            if src: return src, "mixdrop_live"
+    return None, None
+
+# --- الدالة الرئيسية (المنسق) ---
+async def get_embed_url(page) -> tuple[Optional[str], str]:
+    """
+    الدالة الرئيسية التي تتحكم في ترتيب الأولويات.
+    """
+    # 1. حاول أولاً مع VidTube
+    src, status = await extract_vidtube(page)
+    if src:
+        log.info(f"✅ تم سحب الرابط بنجاح عبر VidTube: {src}")
+        return src, status
+
+    # 2. إذا فشل VidTube، حاول مع MixDrop
+    log.warning("⚠️ فشل VidTube، جارٍ تجربة MixDrop...")
+    src, status = await extract_mixdrop(page)
+    if src:
+        log.info(f"✅ تم سحب الرابط بنجاح عبر MixDrop: {src}")
+        return src, status
+
+    # 3. إذا فشل الجميع
+    log.error("❌ لم يتم العثور على أي سيرفر صالح.")
     return None, "none"
 
 
