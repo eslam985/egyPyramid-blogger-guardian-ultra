@@ -65,33 +65,38 @@ async def get_direct_link_via_playwright(embed_url):
 async def resolve_direct_url(raw_url: str) -> str:
     """
     معالجة روابط vidtube/lulu/mixdrop واستخراج الرابط المباشر.
-    في حالة mixdrop 404، يرمي Exception.
-    تعيد الرابط المباشر أو الرابط الأصلي إذا فشلت المعالجة.
     """
     # 1. معالجة روابط VidTube/Lulu
-    if "vidtube.one" in url or "cdn-tube" in url:
+    if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
         log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
-        direct_link = await get_direct_link_via_playwright(url)
-        if direct_link:
-            log.info(f"✅ تم صيد الرابط بنجاح! سيتم التحميل الآن.")
-            url = direct_link
-        else:
-            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
+        try:
+            # حماية لمنع السكربت من التعليق (Hang)
+            direct_link = await asyncio.wait_for(get_direct_link_via_playwright(raw_url), timeout=240)
+            if direct_link:
+                log.info(f"✅ تم صيد الرابط بنجاح!")
+                raw_url = direct_link
+            else:
+                log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي.")
+        except asyncio.TimeoutError:
+            log.error("⏳ تجاوز الوقت: Playwright توقف عن الاستجابة.")
 
     # 2. معالجة روابط MixDrop
-    elif "mixdrop" in url:
-        log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
-        direct_link = await get_mixdrop_direct_link(url)
-
-        if direct_link == "404_DELETED":
-            # رمي خطأ صريح لتشغيل نظام تنظيف الميديا (الذي أعددناه سابقاً)
-            raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
-
-        if direct_link:
-            log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
-            url = direct_link
-        else:
-            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
-
+    elif "mixdrop" in raw_url:
+        log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد...")
+        try:
+            # حماية لمنع السكربت من التعليق
+            direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=240)
+            
+            if direct_link == "404_DELETED":
+                raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
+            
+            if direct_link:
+                log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
+                raw_url = direct_link
+            else:
+                log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي.")
+        except asyncio.TimeoutError:
+            log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة.")
+            raise Exception("Timeout: السكربت عالق في صفحة التحميل.")
 
     return raw_url
