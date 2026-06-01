@@ -23,6 +23,28 @@ async def get_mixdrop_direct_link(embed_url):
         page = await context.new_page()
 
         try:
+            # --- 🚀 التعديل الذكي: اصطياد طلب الـ POST المخفي (AJAX) 🚀 ---
+            captured_direct_url = None
+
+            async def handle_response(response):
+                nonlocal captured_direct_url
+                try:
+                    # نستمع لأي استجابة POST جاية من دومينات ميكس دروب
+                    if response.request.method == "POST" and ("mixdrop" in response.url or "miixdrop" in response.url):
+                        json_data = await response.json()
+                        # بناءً على تحليلك: الاستجابة بتكون {"type": "ok", "url": "..."}
+                        if json_data.get("type") == "ok" and "url" in json_data:
+                            url = json_data["url"]
+                            if url.startswith("//"):
+                                url = "https:" + url
+                            captured_direct_url = url
+                except Exception:
+                    pass
+
+            # تفعيل التنصت
+            page.on("response", handle_response)
+            # -------------------------------------------------------------
+
             await page.goto(target_url, wait_until="domcontentloaded")
 
             # --- 🔍 فحص هل الملف محذوف فعلياً من المصدر ---
@@ -65,18 +87,24 @@ async def get_mixdrop_direct_link(embed_url):
 
                     await page.bring_to_front()
 
-                    # فحص الرابط المباشر - صيد الدومينات الفرعية الجديدة
+                    # --- 1. فحص هل تم صيد الرابط السري من الشبكة (AJAX POST) ---
+                    if captured_direct_url:
+                        log.info(f"✅ تم صيد الرابط السري من الشبكة بنجاح: {captured_direct_url[:60]}...")
+                        await browser.close()
+                        return captured_direct_url
+
+                    # --- 2. فحص الرابط المباشر بالطريقة الكلاسيكية (من الـ href) ---
                     href = await page.get_attribute(btn_selector, "href")
 
                     if href and href.startswith("http"):
-                        # فحص ذكي: هل الرابط يحتوي على كلمة mxcontent (بأي شكل) أو ليس له علاقة بـ mixdrop؟
-                        is_valid_direct = "mxcontent" in href or (
-                            not ("?download" in href or "mixdrop" in href)
-                        )
+                        # تصحيح الثغرة: إضافة الدومينات الوهمية الجديدة لمنع التقييم الخاطئ
+                        valid_domains = ["mxcontent", "mdelivery", "mxdcontent", "delivery"]
+                        invalid_terms = ["?download", "mixdrop", "miixdrop", "mixdrop.ps"]
+                        
+                        is_valid_direct = any(domain in href.lower() for domain in valid_domains) or not any(term in href.lower() for term in invalid_terms)
 
                         if is_valid_direct:
-                            log.info(f"✅ تم صيد الرابط بنجاح: {href[:60]}...")
-
+                            log.info(f"✅ تم صيد الرابط بنجاح من الزر: {href[:60]}...")
                             await browser.close()
                             return href
 
