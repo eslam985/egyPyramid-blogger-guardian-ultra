@@ -28,15 +28,10 @@ async def get_mixdrop_direct_link(embed_url):
 
     async with async_playwright() as p:
         # إضافة args للتمويه وتجاوز حماية الـ Bot Detection
-        # إعدادات البروكسي (Tor)
-        proxy_settings = {
-            "server": "socks5://127.0.0.1:9050"
-        }
 
-        # تشغيل المتصفح مع البروكسي لاستخراج الرابط فقط
+        # تشغيل المتصفح لاستخراج الرابط
         browser = await p.chromium.launch(
             headless=True,
-            proxy=proxy_settings,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
