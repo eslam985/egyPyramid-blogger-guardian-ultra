@@ -302,18 +302,23 @@ async def get_embed_url(page) -> tuple[Optional[str], str]:
     return None, "none"
 
 
-def normalize_title(title):
+def normalize_title(title, for_search=False):
     if not title:
         return ""
 
-    t = str(title)
+    t = str(title).lower()
 
-    # 1. استخراج السنة قبل البدء
-    year_match = re.search(r"\b((?:19|20)\d{2})\b", t)
-    year = year_match.group(1) if year_match else ""
+    # --- الخطوة الناقصة والضرورية ---
+    # حذف أي سنة (19xx أو 20xx) قبل أي عملية تنظيف تانية
+    t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
+    # --------------------------------
 
-    # 2. إزالة الكلمات الزائدة مع تجاهل حالة الأحرف (Case Insensitive)
-    # ضفنا "flags=re.IGNORECASE" عشان يحذف HD أو hd أو Hd بدون ما يلمس الاسم
+    # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
+    if for_search:
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
+    else:
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
+
     stop_words = [
         "مسلسل",
         "فيلم",
@@ -340,21 +345,10 @@ def normalize_title(title):
         "لاين",
     ]
     for w in stop_words:
-        t = re.sub(rf"\b{w}\b", " ", t, flags=re.IGNORECASE)
+        t = re.sub(rf"\b{w}\b", " ", t)
 
-    # 3. إزالة الرموز مع الحفاظ على الحروف والأرقام والمسافات
-    t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]", " ", t)
-
-    # 4. تنظيف الاسم من السنة (لأننا استخرجناها بالفعل)
-    t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
-
-    # 5. توحيد المسافات (Trim & Clean Whitespaces)
-    clean_name = " ".join(t.split())
-
-    # النتيجة النهائية: الاسم بالحالة الأصلية (Proper Case) + السنة
-    final_title = f"{clean_name} {year}".strip()
-
-    return final_title
+    t = " ".join(t.split())
+    return t
 
 
 async def get_movie_title(page) -> str:
