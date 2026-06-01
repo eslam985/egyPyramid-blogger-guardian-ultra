@@ -14,7 +14,8 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
     تعيد القائمة الجاهزة لـ asyncio.create_subprocess_exec.
     """
     if "mixdrop" in url or "miixdrop" in url:
-        url = re.sub(r'https?://(www\.)?[a-zA-Z0-9\-]+\.[a-zA-Z]+/e/', 'https://mixdrop.co/e/', url)
+        # تحويل أي دومين ميكس دروب إلى miixdrop.net ودعم روابط /e/ و /f/ معاً
+        url = re.sub(r'https?://(www\.)?[a-zA-Z0-9\-]+\.[a-zA-Z]+/(e|f)/', r'https://miixdrop.net/\2/', url)
 
     cmd = [
         "yt-dlp",

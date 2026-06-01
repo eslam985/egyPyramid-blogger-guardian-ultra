@@ -66,7 +66,12 @@ async def get_mixdrop_direct_link(embed_url):
             page.on("response", handle_response)
             # -------------------------------------------------------------
 
-            await page.goto(target_url, wait_until="domcontentloaded")
+            # زيادة وقت الانتظار لـ 60 ثانية لأن Tor بطيء في الاتصال الأول
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
+
+            # 👁️ الكشاف: طباعة عنوان الصفحة لمعرفة هل حظرنا Cloudflare أم نحن في الموقع
+            page_title = await page.title()
+            log.info(f"👁️ عنوان الصفحة التي فتحها المتصفح الآن: {page_title}")
 
             # --- 🔍 فحص هل الملف محذوف فعلياً من المصدر ---
             page_content = await page.content()
