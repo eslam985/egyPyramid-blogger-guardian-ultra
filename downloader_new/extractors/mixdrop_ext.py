@@ -46,32 +46,12 @@ async def get_mixdrop_direct_link(embed_url):
         page = await context.new_page()
 
         try:
-            # --- 🚀 التنصت الآمن: صيد الروابط من الشبكة مباشرة 🚀 ---
-            captured_direct_url = None
-
-            async def handle_response(response):
-                nonlocal captured_direct_url
-                # نتأكد أن الرابط هو رابط محتوى فيديو وليس مجرد صفحة إعلانات
-                if any(
-                    domain in response.url
-                    for domain in ["mxcontent", "mdelivery", "mxdcontent"]
-                ):
-                    captured_direct_url = response.url
-
-            page.on("response", handle_response)
-            # -------------------------------------------------------------
-
-            # زيادة وقت الانتظار لـ 60 ثانية لأن Tor بطيء في الاتصال الأول
-            await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
-
-            # 👁️ الكشاف: طباعة عنوان الصفحة لمعرفة هل حظرنا Cloudflare أم نحن في الموقع
-            page_title = await page.title()
-            log.info(f"👁️ عنوان الصفحة التي فتحها المتصفح الآن: {page_title}")
+            await page.goto(target_url, wait_until="domcontentloaded")
 
             # --- 🔍 فحص هل الملف محذوف فعلياً من المصدر ---
             page_content = await page.content()
             if "can't find the file you are looking for" in page_content:
-                log.error("🚫 الرابط ميت: MixDrop بيقول We can't find the file")
+                print("🚫 الرابط ميت: MixDrop بيقول We can't find the file")
                 await browser.close()
                 return "404_DELETED"
 
@@ -83,11 +63,11 @@ async def get_mixdrop_direct_link(embed_url):
                     await page.wait_for_selector(
                         btn_selector, state="visible", timeout=10000
                     )
-                    log.info(f"🖱️ نقرة رقم {i}...")
+                    print(f"🖱️ نقرة رقم {i}...")
 
                     # --- ⚡ تعديل الـ Reload الذكي ⚡ ---
                     if i == 5:
-                        log.info(
+                        print(
                             "🔄 الموقع يبدو متجمداً.. جاري إعادة تحميل الصفحة (Reload) للتنشيط..."
                         )
                         await page.reload(wait_until="domcontentloaded")
@@ -99,69 +79,42 @@ async def get_mixdrop_direct_link(embed_url):
                             await page.click(btn_selector)
 
                         ad_page = await new_page_info.value
-                        log.info(f"📺 إعلان ظهر، ننتظره قليلاً...")
+                        print(f"📺 إعلان ظهر، ننتظره قليلاً...")
                         await page.wait_for_timeout(5000)
                         await ad_page.close()
                     except Exception:
-                        log.warning(f"⚠️ النقرة {i} لم تفتح إعلاناً.")
+                        print(f"⚠️ النقرة {i} لم تفتح إعلاناً.")
                     # ----------------------------------
 
                     await page.bring_to_front()
 
-                    # --- 1. فحص هل تم صيد الرابط السري من الشبكة (AJAX POST) ---
-                    if captured_direct_url:
-                        log.info(
-                            f"✅ تم صيد الرابط السري من الشبكة بنجاح: {captured_direct_url[:60]}..."
-                        )
-                        await browser.close()
-                        return captured_direct_url
-
-                    # --- 2. فحص الرابط المباشر بالطريقة الكلاسيكية (من الـ href) ---
+                    # فحص الرابط المباشر - صيد الدومينات الفرعية الجديدة
                     href = await page.get_attribute(btn_selector, "href")
 
                     if href and href.startswith("http"):
-                        # تصحيح الثغرة: إضافة الدومينات الوهمية الجديدة لمنع التقييم الخاطئ
-                        valid_domains = [
-                            "mxcontent",
-                            "mdelivery",
-                            "mxdcontent",
-                            "delivery",
-                        ]
-                        invalid_terms = [
-                            "?download",
-                            "mixdrop",
-                            "miixdrop",
-                            "mixdrop.ps",
-                        ]
-
-                        is_valid_direct = any(
-                            domain in href.lower() for domain in valid_domains
-                        ) or not any(term in href.lower() for term in invalid_terms)
+                        # فحص ذكي: هل الرابط يحتوي على كلمة mxcontent (بأي شكل) أو ليس له علاقة بـ mixdrop؟
+                        is_valid_direct = "mxcontent" in href or (
+                            not ("?download" in href or "mixdrop" in href)
+                        )
 
                         if is_valid_direct:
-                            log.info(f"✅ تم صيد الرابط بنجاح من الزر: {href[:60]}...")
+                            print(f"✅ تم صيد الرابط بنجاح: {href[:60]}...")
+
                             await browser.close()
                             return href
 
-                    log.info("⏳ الرابط لم يظهر بعد، ننتظر ثواني للنقرة التالية...")
+                    print("⏳ الرابط لم يظهر بعد، ننتظر ثواني للنقرة التالية...")
                     await page.wait_for_timeout(
                         5000
                     )  # زودنا الانتظار لـ 5 ثواني عشان ندي فرصة للسيرفر
                 except Exception as e:
-                    log.warning(f"⚠️ خطأ في المحاولة {i}: {str(e)}")
+                    print(f"⚠️ خطأ في المحاولة {i}: {str(e)}")
                     continue  # لو محاولة فشلت يكمل للي بعدها ميفصلش السكريبت
 
             await browser.close()
             return None
 
         except Exception as e:
-            try:
-                page_content = await page.content()
-                log.error(
-                    f"🔍 [DEBUG] محتوى الصفحة عند الفشل (أول 500 حرف): {page_content[:500]}"
-                )
-            except:
-                pass
-            log.error(f"❌ خطأ أثناء المحاكاة البشرية: {str(e)}")
+            print(f"❌ خطأ أثناء المحاكاة البشرية: {str(e)}")
             await browser.close()
             return None
