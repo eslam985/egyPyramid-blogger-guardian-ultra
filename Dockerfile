@@ -1,7 +1,7 @@
 # استخدم نسخة بايثون الكاملة لضمان استقرار المكتبات
 FROM python:3.11-slim
 
-# 1. تثبيت أدوات النظام (إضافة wget لتحميل ملفات IMDb)
+# 1. تثبيت أدوات النظام (إضافة wget لتحميل ملفات IMDb وتور للبروكسي)
 RUN apt-get update && apt-get install -y \
     fonts-liberation \
     ffmpeg \
@@ -11,7 +11,12 @@ RUN apt-get update && apt-get install -y \
     p7zip-full \
     unzip \
     ca-certificates \
+    tor \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# إعطاء صلاحيات الكتابة لمسارات Tor حتى يعمل بدون مشاكل مع مستخدم Hugging Face (الذي لا يملك صلاحيات Root كاملة)
+RUN mkdir -p /var/run/tor /var/lib/tor /var/log/tor && \
+    chmod -R 777 /var/run/tor /var/lib/tor /var/log/tor /etc/tor
 
 WORKDIR /app
 
@@ -46,6 +51,6 @@ RUN chmod -R 777 /app
 
 EXPOSE 7860
 
-# 7. التشغيل (هنا هنشغل الـ FastAPI)
+# 7. التشغيل (تشغيل Tor في الخلفية، يليه تشغيل تطبيق FastAPI)
 # ملاحظة: في الخطوة الجاية هعلمك إزاي تخلي الـ app.py يشغل الـ Worker في الخلفية
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "tor & uvicorn app:app --host 0.0.0.0 --port 7860"]

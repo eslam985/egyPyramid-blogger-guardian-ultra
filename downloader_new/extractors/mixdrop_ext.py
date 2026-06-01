@@ -28,14 +28,21 @@ async def get_mixdrop_direct_link(embed_url):
 
     async with async_playwright() as p:
         # إضافة args للتمويه وتجاوز حماية الـ Bot Detection
+        # إعدادات البروكسي (Tor)
+        proxy_settings = {
+            "server": "socks5://127.0.0.1:9050"
+        }
+
+        # تشغيل المتصفح مع البروكسي لاستخراج الرابط فقط
         browser = await p.chromium.launch(
-            headless=False,  # إيقاف التخفي لأن Cloudflare يكتشفه ويمنع توليد الرابط
+            headless=True,
+            proxy=proxy_settings,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                "--window-size=1920,1080",
-            ],
+                "--window-size=1920,1080"
+            ]
         )
         context = await browser.new_context(
             user_agent=random.choice(USER_AGENTS),
