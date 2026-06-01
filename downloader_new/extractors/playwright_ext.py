@@ -68,35 +68,30 @@ async def resolve_direct_url(raw_url: str) -> str:
     في حالة mixdrop 404، يرمي Exception.
     تعيد الرابط المباشر أو الرابط الأصلي إذا فشلت المعالجة.
     """
-    if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
+    # 1. معالجة روابط VidTube/Lulu
+    if "vidtube.one" in url or "cdn-tube" in url:
         log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
-        # إضافة timeout حماية بـ 60 ثانية
-        try:
-            direct_link = await asyncio.wait_for(get_direct_link_via_playwright(raw_url), timeout=240)
-        except asyncio.TimeoutError:
-            log.error("⏳ تجاوز الوقت: Playwright توقف عن الاستجابة (Timeout).")
-            return raw_url
+        direct_link = await get_direct_link_via_playwright(url)
         if direct_link:
             log.info(f"✅ تم صيد الرابط بنجاح! سيتم التحميل الآن.")
-            return direct_link
-        
-        raise Exception("فشل استخراج رابط VidTube المباشر - الـ Scraper لم يجد شيئاً.")
+            url = direct_link
+        else:
+            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
 
-    elif "mixdrop" in raw_url or "miixdrop" in raw_url:
+    # 2. معالجة روابط MixDrop
+    elif "mixdrop" in url:
         log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد من صفحة التحميل...")
-        # إضافة timeout حماية بـ 60 ثانية
-        try:
-            direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=240)
-        except asyncio.TimeoutError:
-            log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة (Timeout).")
-            raise Exception("Timeout: السكربت عالق في صفحة التحميل، لن أستمر.")
+        direct_link = await get_mixdrop_direct_link(url)
+
         if direct_link == "404_DELETED":
+            # رمي خطأ صريح لتشغيل نظام تنظيف الميديا (الذي أعددناه سابقاً)
             raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
-            
+
         if direct_link:
             log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
-            return direct_link
-            
-        raise Exception("فشل استخراج رابط MixDrop المباشر - الـ Scraper لم يجد شيئاً.")
+            url = direct_link
+        else:
+            log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي (قد يفشل).")
+
 
     return raw_url
