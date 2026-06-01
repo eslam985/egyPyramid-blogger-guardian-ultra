@@ -89,7 +89,7 @@ async def resolve_direct_url(raw_url: str) -> str:
             direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=60)
         except asyncio.TimeoutError:
             log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة (Timeout).")
-            return raw_url
+            raise Exception("Timeout: السكربت عالق في صفحة التحميل، لن أستمر.")
         if direct_link == "404_DELETED":
             raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
             

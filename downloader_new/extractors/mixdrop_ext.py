@@ -127,6 +127,11 @@ async def get_mixdrop_direct_link(embed_url):
             return None
 
         except Exception as e:
+            try:
+                page_content = await page.content()
+                log.error(f"🔍 [DEBUG] محتوى الصفحة عند الفشل (أول 500 حرف): {page_content[:500]}")
+            except:
+                pass
             log.error(f"❌ خطأ أثناء المحاكاة البشرية: {str(e)}")
             await browser.close()
             return None
