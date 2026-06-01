@@ -23,25 +23,15 @@ async def get_mixdrop_direct_link(embed_url):
         page = await context.new_page()
 
         try:
-            # --- 🚀 التعديل الذكي: اصطياد طلب الـ POST المخفي (AJAX) 🚀 ---
+            # --- 🚀 التنصت الآمن: صيد الروابط من الشبكة مباشرة 🚀 ---
             captured_direct_url = None
-
+            
             async def handle_response(response):
                 nonlocal captured_direct_url
-                try:
-                    # نستمع لأي استجابة POST جاية من دومينات ميكس دروب
-                    if response.request.method == "POST" and ("mixdrop" in response.url or "miixdrop" in response.url):
-                        json_data = await response.json()
-                        # بناءً على تحليلك: الاستجابة بتكون {"type": "ok", "url": "..."}
-                        if json_data.get("type") == "ok" and "url" in json_data:
-                            url = json_data["url"]
-                            if url.startswith("//"):
-                                url = "https:" + url
-                            captured_direct_url = url
-                except Exception:
-                    pass
+                # نتأكد أن الرابط هو رابط محتوى فيديو وليس مجرد صفحة إعلانات
+                if any(domain in response.url for domain in ["mxcontent", "mdelivery", "mxdcontent"]):
+                    captured_direct_url = response.url
 
-            # تفعيل التنصت
             page.on("response", handle_response)
             # -------------------------------------------------------------
 

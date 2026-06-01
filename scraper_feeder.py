@@ -33,7 +33,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_NAME = "download_tasks"
 
 # تم إلغاء أرقام الصفحات الثابتة لتعمل ديناميكياً بالكامل
-MAX_IDLE_BUFFER = 24  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
+MAX_IDLE_BUFFER = 3  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
