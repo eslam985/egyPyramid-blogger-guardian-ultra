@@ -29,7 +29,7 @@ async def get_mixdrop_direct_link(embed_url):
     async with async_playwright() as p:
         # إضافة args للتمويه وتجاوز حماية الـ Bot Detection
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,  # إيقاف التخفي لأن Cloudflare يكتشفه ويمنع توليد الرابط
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
@@ -73,12 +73,10 @@ async def get_mixdrop_direct_link(embed_url):
             # رفعنا المدى لـ 10 لضمان وجود محاولات كافية بعد الـ Reload
             for i in range(1, 11):
                 try:
-                    # انتظار الزرار + وجود رابط حقيقي (التحقق من الـ href)
-                    await page.wait_for_function(
-                        "document.querySelector('a.download-btn') && document.querySelector('a.download-btn').getAttribute('href')?.startsWith('http')",
-                        timeout=15000,
+                    await page.wait_for_selector(
+                        btn_selector, state="visible", timeout=10000
                     )
-                    log.info(f"🖱️ الزر جاهز والرابط موجود (محاولة {i})...")
+                    log.info(f"🖱️ نقرة رقم {i}...")
 
                     # --- ⚡ تعديل الـ Reload الذكي ⚡ ---
                     if i == 5:
