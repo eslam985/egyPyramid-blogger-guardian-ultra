@@ -334,7 +334,8 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
                 file_name = os.path.basename(
                     vid_path
                 )  # المفتاح: استخدم اسم الملف الفعلي
-                space_domain = "Eslam315-egyPyramid-guardian-ultra.hf.space"  # أو احسبها من SPACE_ID بدون lower()
+                space_domain = "egystreamer-guardian-ultra.hf.space"
+                # egystreamer/guardian-ultra
                 direct_remote_url = f"https://{space_domain}/stream/{file_name}"
                 remote_source = direct_remote_url
                 log.info(
