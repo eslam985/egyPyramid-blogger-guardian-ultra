@@ -19,6 +19,9 @@ USER_AGENTS = [
 
 async def get_mixdrop_direct_link(embed_url):
     
+    # 🩹 تصحيح إجباري للخطأ الإملائي القادم من الخارج حتى يعمل المحرك الاحتياطي
+    embed_url = embed_url.replace("mixdrop", "miixdrop")
+    
     target_url = embed_url.replace("/e/", "/f/")
     if "?download" not in target_url:
         target_url += "?download"
@@ -137,12 +140,20 @@ async def get_mixdrop_direct_link(embed_url):
                         continue
                     # ----------------------------------
 
-                    # 🕵️ فحص خصائص الزر الحالية
+                    # 🕵️ فحص شامل لحالة الزر والـ DOM المحيط به
                     try:
                         cf_key = await page.get_attribute(btn_selector, "data-cf-key")
                         current_href = await page.get_attribute(btn_selector, "href")
                         log.info(f"📋 [حالة الزر قبل النقرة {i}]: data-cf-key=[{cf_key}], href=[{current_href}]")
-                    except Exception: pass
+                        
+                        # 🔬 طباعة الـ HTML الخاص بالزر لاكتشاف أي تغييرات أو سكريبتات مخفية بداخله
+                        btn_html = await page.evaluate(f"document.querySelector('{btn_selector}') ? document.querySelector('{btn_selector}').outerHTML : 'الزر اختفى'")
+                        log.info(f"🧬 [HTML للزر]: {btn_html}")
+                        
+                        # 🔬 طباعة عدد الإطارات (iframes) لمعرفة هل Cloudflare Turnstile يعمل أم لا
+                        log.info(f"🔍 [Iframes]: عدد الإطارات المحملة في الصفحة حالياً: {len(page.frames)}")
+                    except Exception as e:
+                        log.error(f"⚠️ تعذر جلب تفاصيل الزر: {e}")
 
                     # --- 🧍‍♂️ محاكاة بشرية صريحة (بدون تدمير عناصر الموقع) ---
                     try:
@@ -151,27 +162,30 @@ async def get_mixdrop_direct_link(embed_url):
                         await page.wait_for_timeout(random.randint(200, 500))
                         
                         async with context.expect_page(timeout=8000) as new_page_info:
-                            # 2. تحديد مكان الزر بدقة
                             box = await page.locator(btn_selector).bounding_box()
                             if box:
-                                # التوجيه نحو منتصف الزر مع انحراف بسيط (Jitter)
                                 target_x = box['x'] + (box['width'] / 2) + random.randint(-10, 10)
                                 target_y = box['y'] + (box['height'] / 2) + random.randint(-5, 5)
-                                
-                                # 3. تحريك الماوس للزر ببطء كإنسان (steps عالية)
                                 await page.mouse.move(target_x, target_y, steps=25)
                                 await page.wait_for_timeout(random.randint(100, 300))
-                                
-                                # 4. ضغطة بشرية كاملة (نزول الماوس، انتظار، رفع الماوس) بدلاً من Click السريعة
                                 await page.mouse.down()
                                 await page.wait_for_timeout(random.randint(50, 150))
                                 await page.mouse.up()
                             else:
-                                await page.click(btn_selector) # ضغطة عادية كبديل
+                                await page.click(btn_selector)
                                 
                         ad_page = await new_page_info.value
-                        log.info("📺 إعلان فتح في نافذة جديدة، جاري إغلاقه...")
-                        await ad_page.close()
+                        ad_url = ad_page.url
+                        log.info(f"📺 نافذة جديدة ظهرت! الرابط الخاص بها: {ad_url}")
+                        
+                        # تحليل النافذة: هل هي إعلان أم أن الموقع نقل التحميل إلى نافذة جديدة؟
+                        if "mixdrop" in ad_url or "delivery" in ad_url or ".mp4" in ad_url or "download" in ad_url:
+                            log.warning("⚠️ النافذة الجديدة تبدو وكأنها رابط التحميل المطلوب! لن يتم إغلاقها.")
+                            # فحص محتوى النافذة الجديدة مباشرة
+                            intercepted_url["url"] = ad_url
+                        else:
+                            log.info("🗑️ الرابط لا يخص التحميل (إعلان خارجي)، جاري إغلاقه...")
+                            await ad_page.close()
                     except Exception:
                         log.info(f"⚠️ النقرة {i} تمت بهدوء ولم تفتح إعلاناً.")
                     # ----------------------------------
