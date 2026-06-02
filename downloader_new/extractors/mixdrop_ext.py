@@ -54,18 +54,27 @@ async def get_mixdrop_direct_link(embed_url):
         page = await context.new_page()
         #زرع مراقب الشبكة (Network Interceptor) لصيد الـ JSON
         # متغير لتخزين الرابط لو تم إرجاعه عبر POST Request
+        # --- 📡 رادار متطور للشبكة والكونسول ---
         intercepted_url = {"url": None}
 
-        async def handle_response(response):
-            if "?download" in response.url and response.request.method == "POST":
-                try:
-                    json_data = await response.json()
-                    if json_data.get("type") == "ok" and json_data.get("url"):
-                        intercepted_url["url"] = json_data["url"]
-                        print(f"📡 تم التقاط الرابط من الـ Network: {intercepted_url['url'][:60]}...")
-                except:
-                    pass
+        # مراقبة أخطاء الجافاسكريبت (لقراءة رسائل الحظر أو الكابتشا)
+        page.on("console", lambda msg: log.debug(f"🌐 [Browser Console]: {msg.text}"))
 
+        async def handle_request(request):
+            if request.method == "POST" and "mixdrop" in request.url:
+                log.info(f"📤 [Network]: محاولة إرسال POST Request إلى: {request.url[:50]}...")
+
+        async def handle_response(response):
+            if "mixdrop" in response.url and response.request.method == "POST":
+                try:
+                    log.info(f"📥 [Network]: استجابة POST وصلت بكود: {response.status}")
+                    json_data = await response.json()
+                    if json_data.get("url"):
+                        intercepted_url["url"] = json_data["url"]
+                        log.info(f"✅ تم صيد الرابط السري: {intercepted_url['url'][:50]}")
+                except: pass
+
+        page.on("request", handle_request)
         page.on("response", handle_response)
 
         try:
@@ -148,15 +157,22 @@ async def get_mixdrop_direct_link(embed_url):
                         log.error(f"❌ تعذر قراءة خصائص الزر في المحاولة {i}: {str(attr_err)}")
 
                     try:
+                        # قبل النقر، نتأكد من تنظيف أي عوائق مرة أخرى
+                        await page.evaluate("document.querySelectorAll('div[style*=\"fixed\"], .mask').forEach(el => el.remove())")
+                        
                         async with context.expect_page(timeout=8000) as new_page_info:
-                            # النقر بمحاكاة فيزيائية حقيقية (Trusted Event) بدلاً من جافاسكريبت
-                            await page.click(btn_selector, force=True)
+                            # تحريك الماوس للزر ثم الضغط (محاكاة أدق)
+                            box = await page.locator(btn_selector).bounding_box()
+                            if box:
+                                await page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                            else:
+                                await page.click(btn_selector, force=True)
                             
                         ad_page = await new_page_info.value
-                        log.info("📺 إعلان ظهر (Pop-up)، جاري إغلاقه...")
+                        log.info("📺 إعلان فتح في نافذة جديدة، جاري إغلاقه...")
                         await ad_page.close()
                     except Exception:
-                        log.info(f"⚠️ النقرة {i} تمت فيزيائياً ولكن لم تفتح نافذة منبثقة (أو تم حظرها).")
+                        log.info(f"⚠️ النقرة {i} لم تفتح نافذة (ربما تم حظر الـ Pop-up أو لم يستجب الموقع).")
                     # ----------------------------------
 
                     await page.bring_to_front()
