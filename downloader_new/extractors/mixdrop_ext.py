@@ -70,20 +70,22 @@ async def get_mixdrop_direct_link(embed_url):
                 return "404_DELETED"
 
             # --- 🛡️ تجاوز الـ Brave Alert / Interstitial ---
-            # --- 🛡️ تجاوز الـ Brave Alert / Interstitial ---
-            ok_btn_selector = 'button[data-area="area1"]'
+            # حذفنا كلمة button ليصطاد العنصر سواء كان p أو div أو button
+            ok_btn_selector = '[data-area="area1"]'
             try:
-                log.info("⏳ جاري فحص وجود Brave Alert...")
+                log.info("⏳ جاري فحص وجود غلاف الحماية (Brave Alert أو غيره)...")
                 ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=7000)
                 if ok_btn:
-                    log.info("🛡️ تم رصد Brave Alert.. جاري المحاكاة وتخطيه...")
+                    log.info("🛡️ تم رصد الغلاف المغطي للزر.. جاري المحاكاة وتخطيه...")
                     await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
                     await page.wait_for_timeout(1500)
-                    await ok_btn.click()
-                    log.info("✅ تم الضغط على OK، ننتظر التفاعل...")
+                    
+                    # استخدام force=True لضمان الضغط حتى لو كان هناك طبقة شفافة فوقه
+                    await ok_btn.click(force=True)
+                    log.info("✅ تم الضغط على زر التأكيد (حسنا/OK)، ننتظر التفاعل وبناء الـ Session...")
                     await page.wait_for_timeout(random.randint(4000, 6000))
-            except Exception:
-                log.info("⏩ لم يظهر Brave Alert (أو اختفى تلقائياً).")
+            except Exception as e:
+                log.info(f"⏩ لم يظهر غلاف الحماية: {str(e)}")
 
             btn_selector = "a.download-btn"
 
