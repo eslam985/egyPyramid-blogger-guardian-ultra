@@ -42,6 +42,15 @@ async def get_mixdrop_direct_link(embed_url):
             user_agent=random.choice(USER_AGENTS),
             viewport={"width": 1920, "height": 1080},
         )
+        
+        # --- 🛡️ حقن سكريبت التخفي (Stealth) لمحو بصمة البوت وتجاوز فحص جافاسكريبت الحماية ---
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.navigator.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        """)
+        
         page = await context.new_page()
         #زرع مراقب الشبكة (Network Interceptor) لصيد الـ JSON
         # متغير لتخزين الرابط لو تم إرجاعه عبر POST Request
