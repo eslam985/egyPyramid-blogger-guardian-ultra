@@ -18,6 +18,7 @@ USER_AGENTS = [
 
 
 async def get_mixdrop_direct_link(embed_url):
+    
     target_url = embed_url.replace("/e/", "/f/")
     if "?download" not in target_url:
         target_url += "?download"
@@ -64,42 +65,37 @@ async def get_mixdrop_direct_link(embed_url):
             # --- 🔍 فحص هل الملف محذوف فعلياً من المصدر ---
             page_content = await page.content()
             if "can't find the file you are looking for" in page_content:
-                print("🚫 الرابط ميت: MixDrop بيقول We can't find the file")
+                log.error("🚫 الرابط ميت: MixDrop بيقول We can't find the file")
                 await browser.close()
                 return "404_DELETED"
 
             # --- 🛡️ تجاوز الـ Brave Alert / Interstitial ---
+            # --- 🛡️ تجاوز الـ Brave Alert / Interstitial ---
             ok_btn_selector = 'button[data-area="area1"]'
             try:
-                # ننتظر 5 ثوانٍ كحد أقصى لظهور الغلاف الوهمي
-                ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=5000)
+                log.info("⏳ جاري فحص وجود Brave Alert...")
+                ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=7000)
                 if ok_btn:
-                    print("🛡️ تم رصد Brave Alert.. جاري المحاكاة وتخطيه...")
-                    # حركة ماوس عشوائية لإقناع نظام RUM
+                    log.info("🛡️ تم رصد Brave Alert.. جاري المحاكاة وتخطيه...")
                     await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-                    await page.wait_for_timeout(1000)
-                    
+                    await page.wait_for_timeout(1500)
                     await ok_btn.click()
-                    print("✅ تم الضغط على OK، ننتظر لتسجيل التفاعل وبناء الـ Session...")
-                    await page.wait_for_timeout(random.randint(3000, 4500))
+                    log.info("✅ تم الضغط على OK، ننتظر التفاعل...")
+                    await page.wait_for_timeout(random.randint(4000, 6000))
             except Exception:
-                print("⏩ لم يظهر Brave Alert، نستكمل الإجراءات الطبيعية.")
+                log.info("⏩ لم يظهر Brave Alert (أو اختفى تلقائياً).")
 
             btn_selector = "a.download-btn"
 
-            # رفعنا المدى لـ 10 لضمان وجود محاولات كافية بعد الـ Reload
             for i in range(1, 11):
-                # التحقق المبكر: هل تم التقاط الرابط بالفعل أثناء الانتظار؟
                 if intercepted_url["url"]:
+                    log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {i}")
                     await browser.close()
                     return intercepted_url["url"]
 
                 try:
-                    await page.wait_for_selector(
-                        btn_selector, state="visible", timeout=10000
-                    )
-                    print(f"🖱️ نقرة رقم {i}...")
-
+                    log.info(f"🖱️ محاولة فحص زر التحميل رقم {i}...")
+                    await page.wait_for_selector(btn_selector, state="visible", timeout=12000)
                     # --- ⚡ تعديل الـ Reload الذكي ⚡ ---
                     if i == 5:
                         print(
@@ -110,15 +106,14 @@ async def get_mixdrop_direct_link(embed_url):
                         continue
                     # ----------------------------------
                     try:
-                        async with context.expect_page(timeout=10000) as new_page_info:
+                        async with context.expect_page(timeout=8000) as new_page_info:
                             await page.click(btn_selector)
-
+                        
                         ad_page = await new_page_info.value
-                        print(f"📺 إعلان ظهر، ننتظره قليلاً...")
-                        await page.wait_for_timeout(5000)
+                        log.info("📺 إعلان ظهر (Pop-up)، جاري إغلاقه...")
                         await ad_page.close()
                     except Exception:
-                        print(f"⚠️ النقرة {i} لم تفتح إعلاناً.")
+                        log.info(f"⚠️ النقرة {i} لم تفتح نافذة منبثقة.")
                     # ----------------------------------
 
                     await page.bring_to_front()
