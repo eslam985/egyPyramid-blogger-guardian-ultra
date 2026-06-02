@@ -69,31 +69,29 @@ async def get_mixdrop_direct_link(embed_url):
                 await browser.close()
                 return "404_DELETED"
 
-            # --- 🛡️ تجاوز الـ Brave Alert / Interstitial ---
-            # حذفنا كلمة button ليصطاد العنصر سواء كان p أو div أو button
-            ok_btn_selector = '[data-area="area1"]'
-            try:
-                log.info("⏳ جاري فحص وجود غلاف الحماية (Brave Alert أو غيره)...")
-                ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=7000)
-                if ok_btn:
-                    log.info("🛡️ تم رصد الغلاف المغطي للزر.. جاري المحاكاة وتخطيه...")
-                    await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-                    await page.wait_for_timeout(1500)
-                    
-                    # استخدام force=True لضمان الضغط حتى لو كان هناك طبقة شفافة فوقه
-                    await ok_btn.click(force=True)
-                    log.info("✅ تم الضغط على زر التأكيد (حسنا/OK)، ننتظر التفاعل وبناء الـ Session...")
-                    await page.wait_for_timeout(random.randint(4000, 6000))
-            except Exception as e:
-                log.info(f"⏩ لم يظهر غلاف الحماية: {str(e)}")
-
             btn_selector = "a.download-btn"
+            ok_btn_selector = '[data-area="area1"]'
 
             for i in range(1, 11):
                 if intercepted_url["url"]:
                     log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {i}")
                     await browser.close()
                     return intercepted_url["url"]
+
+                # --- 🛡️ فحص ديناميكي متكرر لغلاف الحماية قبل النقر ---
+                try:
+                    # فحص سريع جداً (Timeout: 1500ms) لعدم تعطيل الحلقة إذا لم يكن موجوداً
+                    ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=1500)
+                    if ok_btn:
+                        log.warning(f"🛡️ [حماية ديناميكية] تم رصد غلاف الحماية في المحاولة {i}! جاري تخطيه...")
+                        await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                        await page.wait_for_timeout(500)
+                        await ok_btn.click(force=True)
+                        log.info("✅ تم ضرب غلاف الحماية بنجاح، ننتظر لتحديث الصفحة...")
+                        await page.wait_for_timeout(3000)
+                except Exception:
+                    # إذا لم يظهر، نتابع السكربت بشكل طبيعي دون تضييع وقت
+                    pass
 
                 try:
                     log.info(f"🖱️ محاولة فحص زر التحميل رقم {i}...")
