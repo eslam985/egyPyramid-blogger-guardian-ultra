@@ -65,8 +65,8 @@ def get_movie_data(name, year=None):  # <--- أضفنا year هنا
             "DramaBox",
             "PT01H00M",
             "8.5",
-            "2026",
-            "2026",
+            "N/A",
+            "N/A",
         )
     movie_id = None
 
@@ -276,7 +276,7 @@ def get_movie_data(name, year=None):  # <--- أضفنا year هنا
                         # 4. جلب التقييم وسنة العرض - ضمان تحويل التقييم لنص رقمي
                         raw_rating = res_o.get("imdbRating", "0")
                         rating = str(raw_rating) if raw_rating != "N/A" else "0.0"
-                        release_year = res_o.get("Year", final_year or "2026")
+                        release_year = res_o.get("Year", final_year or "N/A")
 
                         # 5. معالجة البوستر
                         omdb_poster = res_o.get("Poster")
@@ -330,7 +330,7 @@ def get_movie_data(name, year=None):  # <--- أضفنا year هنا
                 "PT01H30M",
                 "N/A",
                 "غير محدد",
-                year or "2026",
+                final_year or "غير محدد",
             )
 
         if tmdb_final_id:
@@ -526,7 +526,7 @@ def fetch_tmdb_metadata(search_query: str, year=None) -> dict:
             "",
             "0",
             0,
-            year or "2026",
+            year or "N/A",
         )
 
     return {

@@ -453,7 +453,7 @@ def start_publishing_from_supabase():
                     .replace("{{CUSTOM_LINK}}", slug_name)
                     .replace("{{EPISODES_BUTTONS}}", final_buttons)
                     .replace("{{DOWNLOAD_URL}}", down_link)
-                    .replace("{{DISPLAY_DATE}}", row.get("Year", "2026"))
+                    .replace("{{DISPLAY_DATE}}", row.get("Year", "N/A"))
                     .replace("{{RATING}}", row.get("Rating", "7.5"))
                     .replace("{{RUNTIME}}", row.get("Movie Runtime", "غير محدد"))
                     .replace("{{LABELS}}", row.get("labels", "Movies"))

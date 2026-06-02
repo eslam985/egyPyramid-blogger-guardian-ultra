@@ -7,18 +7,12 @@ from datetime import datetime
 from dotenv import load_dotenv
 from groq import Groq  # استيراد المكتبة
 from deep_translator import GoogleTranslator
-
 # 1. شحن المتغيرات
 load_dotenv()
-
 # 2. تهيئة الاتصال (الآن أصبح كائناً جاهزاً للاتصال)
 client_groq = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-# --- لا تغير أي شيء آخر في الدوال، التعديل أعلاه سيصلح الخطأ ---
-
 # 2. استدعاء المفاتيح   
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 
 def ar_to_en(text):
     if not isinstance(text, str):
