@@ -46,9 +46,14 @@ async def get_mixdrop_direct_link(embed_url):
                 "--window-size=1920,1080",
             ],
         )
+        # داخل context.new_page() تأكد من هذا الترتيب:
         context = await browser.new_context(
             user_agent=random.choice(USER_AGENTS),
             viewport={"width": 1920, "height": 1080},
+            # أضف هيدرز إضافية لتبدو كمتصفح حقيقي
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+            }
         )
         
         # --- 🛡️ حقن سكريبت التخفي (Stealth) لمحو بصمة البوت وتجاوز فحص جافاسكريبت الحماية ---
@@ -72,14 +77,21 @@ async def get_mixdrop_direct_link(embed_url):
             if request.method == "POST" and "mixdrop" in request.url:
                 log.info(f"📤 [Network]: محاولة إرسال POST Request إلى: {request.url[:50]}...")
 
+        # --- 📡 رادار شامل لصيد أي رابط يحتوي على "mxcontent" أو "download" ---
         async def handle_response(response):
-            if "mixdrop" in response.url and response.request.method == "POST":
+            url = response.url
+            # الرابط الحقيقي للفيديو غالباً ما يحتوي على mxcontent.net
+            if "mxcontent.net" in url or ("mixdrop" in url and "dl" in url):
+                log.info(f"🎯 [Network Match]: تم العثور على رابط محتمل: {url}")
+                intercepted_url["url"] = url
+            
+            # إذا كان الموقع يرسل JSON يحتوي على الرابط
+            if "application/json" in response.headers.get("content-type", ""):
                 try:
-                    log.info(f"📥 [Network]: استجابة POST وصلت بكود: {response.status}")
-                    json_data = await response.json()
-                    if json_data.get("url"):
-                        intercepted_url["url"] = json_data["url"]
-                        log.info(f"✅ تم صيد الرابط السري: {intercepted_url['url'][:50]}")
+                    data = await response.json()
+                    # بحث عميق في الـ JSON عن أي حقل يحتوي على رابط
+                    if isinstance(data, dict) and "url" in data:
+                        intercepted_url["url"] = data["url"]
                 except: pass
 
         page.on("request", handle_request)
@@ -161,38 +173,28 @@ async def get_mixdrop_direct_link(embed_url):
                         log.error(f"⚠️ تعذر جلب تفاصيل الزر: {e}")
 
                     # --- 🧍‍♂️ محاكاة بشرية صريحة (بدون تدمير عناصر الموقع) ---
+                   # --- ⚡ نقرة بشرية مدروسة مع انتظار غير منتظم ⚡ ---
+                   # --- ⚡ نقرة بشرية مدروسة مع انتظار غير منتظم ⚡ ---
                     try:
-                        # 1. تحريك الماوس بعشوائية في الشاشة لإقناع الحماية أنه مستخدم حقيقي
-                        await page.mouse.move(random.randint(100, 800), random.randint(100, 600), steps=10)
-                        await page.wait_for_timeout(random.randint(200, 500))
+                        await page.wait_for_timeout(random.randint(1500, 3000)) 
                         
-                        async with context.expect_page(timeout=8000) as new_page_info:
-                            box = await page.locator(btn_selector).bounding_box()
-                            if box:
-                                target_x = box['x'] + (box['width'] / 2) + random.randint(-10, 10)
-                                target_y = box['y'] + (box['height'] / 2) + random.randint(-5, 5)
-                                await page.mouse.move(target_x, target_y, steps=25)
-                                await page.wait_for_timeout(random.randint(100, 300))
-                                await page.mouse.down()
-                                await page.wait_for_timeout(random.randint(50, 150))
-                                await page.mouse.up()
-                            else:
-                                await page.click(btn_selector)
-                                
+                        async with context.expect_page(timeout=10000) as new_page_info:
+                            await page.locator(btn_selector).click(force=True)
+                            
                         ad_page = await new_page_info.value
                         ad_url = ad_page.url
                         log.info(f"📺 نافذة جديدة ظهرت! الرابط الخاص بها: {ad_url}")
                         
-                        # تحليل النافذة: هل هي إعلان أم أن الموقع نقل التحميل إلى نافذة جديدة؟
+                        # تحليل النافذة
                         if "mixdrop" in ad_url or "delivery" in ad_url or ".mp4" in ad_url or "download" in ad_url:
-                            log.warning("⚠️ النافذة الجديدة تبدو وكأنها رابط التحميل المطلوب! لن يتم إغلاقها.")
-                            # فحص محتوى النافذة الجديدة مباشرة
+                            log.warning("⚠️ النافذة الجديدة تبدو وكأنها رابط التحميل!")
                             intercepted_url["url"] = ad_url
                         else:
-                            log.info("🗑️ الرابط لا يخص التحميل (إعلان خارجي)، جاري إغلاقه...")
+                            log.info("🗑️ إعلان خارجي، جاري إغلاقه...")
                             await ad_page.close()
+                            
                     except Exception:
-                        log.info(f"⚠️ النقرة {i} تمت بهدوء ولم تفتح إعلاناً.")
+                        log.info(f"ℹ️ النقرة {i} لم تفتح نافذة جديدة (أو انتهى الوقت).")
                     # ----------------------------------
 
                     await page.bring_to_front()
