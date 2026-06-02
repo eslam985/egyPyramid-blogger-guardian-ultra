@@ -81,6 +81,21 @@ async def get_mixdrop_direct_link(embed_url):
             btn_selector = "a.download-btn"
             ok_btn_selector = '[data-area="area1"]'
 
+            # --- 📊 فحص تشخيصي لمعرفة ماذا يرى المتصفح في Hugging Face ---
+            has_wrapper = await page.locator("div.wrapper").count() > 0
+            has_btn = await page.locator(btn_selector).count() > 0
+            
+            log.info(f"🔍 [تشخيص أولي] هل كلاس div.wrapper موجود؟ {'✅ نعم' if has_wrapper else '❌ لا'}")
+            log.info(f"🔍 [تشخيص أولي] هل زر التحميل الأساسي موجود؟ {'✅ نعم' if has_btn else '❌ لا'}")
+            
+            if not has_wrapper or not has_btn:
+                page_title = await page.title()
+                log.warning(f"⚠️ المتصفح لا يرى عناصر التحميل! عنوان الصفحة الحالي: [{page_title}]")
+                # طباعة أول 300 حرف من البودي لمعرفة هل نحن في صفحة حظر أو كابتشا
+                body_text = await page.locator("body").inner_text()
+                log.warning(f"📄 مقتطف من نص الصفحة: {body_text[:300].strip()}")
+            # -------------------------------------------------------------
+
             for i in range(1, 11):
                 if intercepted_url["url"]:
                     log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {i}")
@@ -124,6 +139,14 @@ async def get_mixdrop_direct_link(embed_url):
                         });
                     """)
                     
+                    # 🕵️ فحص خصائص الزر الحالية قبل النقر لمعرفة ماذا يحدث خلف الكواليس
+                    try:
+                        cf_key = await page.get_attribute(btn_selector, "data-cf-key")
+                        current_href = await page.get_attribute(btn_selector, "href")
+                        log.info(f"📋 [حالة الزر قبل النقرة {i}]: data-cf-key=[{cf_key}], href=[{current_href}]")
+                    except Exception as attr_err:
+                        log.error(f"❌ تعذر قراءة خصائص الزر في المحاولة {i}: {str(attr_err)}")
+
                     try:
                         async with context.expect_page(timeout=8000) as new_page_info:
                             # النقر بمحاكاة فيزيائية حقيقية (Trusted Event) بدلاً من جافاسكريبت
