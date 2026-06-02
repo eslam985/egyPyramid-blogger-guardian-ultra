@@ -272,7 +272,6 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         # --- 17. لووب الحلقات ---
         for idx, vid_path in enumerate(videos, 1):
             apply_media_disguise(vid_path, idx, display_title, LOGO_FILE)
-            file_size_gb = os.path.getsize(vid_path) / (1024**3)
             current_file_name = os.path.basename(vid_path)
             if len(videos) > 1:
                 loop_display_title = f"{display_title} {current_file_name}"

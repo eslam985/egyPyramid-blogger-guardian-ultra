@@ -33,7 +33,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_NAME = "download_tasks"
 
 # تم إلغاء أرقام الصفحات الثابتة لتعمل ديناميكياً بالكامل
-MAX_IDLE_BUFFER = 60  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
+MAX_IDLE_BUFFER = 3  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
@@ -347,17 +347,17 @@ async def get_embed_url(page) -> tuple[Optional[str], str]:
     """
     الدالة الرئيسية التي تتحكم في ترتيب الأولويات.
     """
-    # 1. حاول أولاً مع VidTube
-    src, status = await extract_vidtube(page)
-    if src:
-        log.info(f"✅ تم سحب الرابط بنجاح عبر VidTube: {src}")
-        return src, status
-
-    # 2. إذا فشل VidTube، حاول مع MixDrop
-    log.warning("⚠️ فشل VidTube، جارٍ تجربة MixDrop...")
+    # 1. حاول أولاً مع MixDrop
     src, status = await extract_mixdrop(page)
     if src:
         log.info(f"✅ تم سحب الرابط بنجاح عبر MixDrop: {src}")
+        return src, status
+
+    # 2. إذا فشل MixDrop، حاول مع VidTube
+    log.warning("⚠️ فشل MixDrop، جارٍ تجربة VidTube...")
+    src, status = await extract_vidtube(page)
+    if src:
+        log.info(f"✅ تم سحب الرابط بنجاح عبر VidTube: {src}")
         return src, status
 
     # 3. إذا فشل الجميع
