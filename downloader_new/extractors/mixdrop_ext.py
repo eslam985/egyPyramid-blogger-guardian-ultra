@@ -137,42 +137,43 @@ async def get_mixdrop_direct_link(embed_url):
                         continue
                     # ----------------------------------
 
-                    # --- 🗡️ تدمير الطبقة الشفافة (Z-Index: 300000) وكل الدروع المغطية ---
-                    await page.evaluate("""
-                        document.querySelectorAll('div').forEach(d => {
-                            const z = parseInt(window.getComputedStyle(d).zIndex);
-                            if (z > 10000 || d.style.inset === '0px' || d.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
-                                d.style.display = 'none';
-                                d.remove();
-                            }
-                        });
-                    """)
-                    
-                    # 🕵️ فحص خصائص الزر الحالية قبل النقر لمعرفة ماذا يحدث خلف الكواليس
+                    # 🕵️ فحص خصائص الزر الحالية
                     try:
                         cf_key = await page.get_attribute(btn_selector, "data-cf-key")
                         current_href = await page.get_attribute(btn_selector, "href")
                         log.info(f"📋 [حالة الزر قبل النقرة {i}]: data-cf-key=[{cf_key}], href=[{current_href}]")
-                    except Exception as attr_err:
-                        log.error(f"❌ تعذر قراءة خصائص الزر في المحاولة {i}: {str(attr_err)}")
+                    except Exception: pass
 
+                    # --- 🧍‍♂️ محاكاة بشرية صريحة (بدون تدمير عناصر الموقع) ---
                     try:
-                        # قبل النقر، نتأكد من تنظيف أي عوائق مرة أخرى
-                        await page.evaluate("document.querySelectorAll('div[style*=\"fixed\"], .mask').forEach(el => el.remove())")
+                        # 1. تحريك الماوس بعشوائية في الشاشة لإقناع الحماية أنه مستخدم حقيقي
+                        await page.mouse.move(random.randint(100, 800), random.randint(100, 600), steps=10)
+                        await page.wait_for_timeout(random.randint(200, 500))
                         
                         async with context.expect_page(timeout=8000) as new_page_info:
-                            # تحريك الماوس للزر ثم الضغط (محاكاة أدق)
+                            # 2. تحديد مكان الزر بدقة
                             box = await page.locator(btn_selector).bounding_box()
                             if box:
-                                await page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                                # التوجيه نحو منتصف الزر مع انحراف بسيط (Jitter)
+                                target_x = box['x'] + (box['width'] / 2) + random.randint(-10, 10)
+                                target_y = box['y'] + (box['height'] / 2) + random.randint(-5, 5)
+                                
+                                # 3. تحريك الماوس للزر ببطء كإنسان (steps عالية)
+                                await page.mouse.move(target_x, target_y, steps=25)
+                                await page.wait_for_timeout(random.randint(100, 300))
+                                
+                                # 4. ضغطة بشرية كاملة (نزول الماوس، انتظار، رفع الماوس) بدلاً من Click السريعة
+                                await page.mouse.down()
+                                await page.wait_for_timeout(random.randint(50, 150))
+                                await page.mouse.up()
                             else:
-                                await page.click(btn_selector, force=True)
-                            
+                                await page.click(btn_selector) # ضغطة عادية كبديل
+                                
                         ad_page = await new_page_info.value
                         log.info("📺 إعلان فتح في نافذة جديدة، جاري إغلاقه...")
                         await ad_page.close()
                     except Exception:
-                        log.info(f"⚠️ النقرة {i} لم تفتح نافذة (ربما تم حظر الـ Pop-up أو لم يستجب الموقع).")
+                        log.info(f"⚠️ النقرة {i} تمت بهدوء ولم تفتح إعلاناً.")
                     # ----------------------------------
 
                     await page.bring_to_front()
