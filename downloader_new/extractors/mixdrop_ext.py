@@ -56,12 +56,23 @@ async def get_mixdrop_direct_link(embed_url):
             }
         )
         
-        # --- 🛡️ حقن سكريبت التخفي (Stealth) لمحو بصمة البوت وتجاوز فحص جافاسكريبت الحماية ---
+        # --- 🛡️ حقن سكريبت التخفي والـ GuardianSpy لمراقبة التحميل ---
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             window.navigator.chrome = { runtime: {} };
             Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
             Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+
+            console.log("🚀 [GuardianSpy]: جاري تفعيل مراقبة التحميل...");
+            const originalFetch = window.fetch;
+            window.fetch = async function(...args) {
+                const response = await originalFetch.apply(this, args);
+                const url = args[0].toString();
+                if (url.includes("mixdrop") || url.includes("mxcontent")) {
+                    console.log("✅ [GuardianSpy]: " + url);
+                }
+                return response;
+            };
         """)
         
         page = await context.new_page()
@@ -70,8 +81,16 @@ async def get_mixdrop_direct_link(embed_url):
         # --- 📡 رادار متطور للشبكة والكونسول ---
         intercepted_url = {"url": None}
 
-        # مراقبة أخطاء الجافاسكريبت (لقراءة رسائل الحظر أو الكابتشا)
-        page.on("console", lambda msg: log.debug(f"🌐 [Browser Console]: {msg.text}"))
+        # مراقبة الكونسول والتقاط رابط الـ GuardianSpy فور ظهوره
+        async def on_console(msg):
+            text = msg.text
+            log.debug(f"🌐 [Browser Console]: {text}")
+            if "✅ [GuardianSpy]:" in text:
+                found_url = text.split("✅ [GuardianSpy]: ")[1]
+                intercepted_url["url"] = found_url
+                log.info(f"🎯 [Success]: تم صيد الرابط بواسطة الـ Spy: {found_url}")
+
+        page.on("console", on_console)
 
         async def handle_request(request):
             if request.method == "POST" and "mixdrop" in request.url:
@@ -121,7 +140,7 @@ async def get_mixdrop_direct_link(embed_url):
                 log.warning(f"📄 مقتطف من نص الصفحة: {body_text[:300].strip()}")
             # -------------------------------------------------------------
 
-            for i in range(1, 11):
+            for i in range(1, 30):
                 if intercepted_url["url"]:
                     log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {i}")
                     await browser.close()
