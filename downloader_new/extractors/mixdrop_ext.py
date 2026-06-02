@@ -117,14 +117,14 @@ async def get_mixdrop_direct_link(embed_url):
                     
                     try:
                         async with context.expect_page(timeout=8000) as new_page_info:
-                            # 🎯 النقر عبر جافاسكريبت للوصول للزر مباشرة من الجذور وتخطي أي عائق بلاستيكي
-                            await page.evaluate(f"document.querySelector('{btn_selector}').click()")
+                            # النقر بمحاكاة فيزيائية حقيقية (Trusted Event) بدلاً من جافاسكريبت
+                            await page.click(btn_selector, force=True)
                             
                         ad_page = await new_page_info.value
                         log.info("📺 إعلان ظهر (Pop-up)، جاري إغلاقه...")
                         await ad_page.close()
                     except Exception:
-                        log.info(f"⚠️ النقرة {i} أصابت الزر مباشرة (لم تفتح نافذة منبثقة).")
+                        log.info(f"⚠️ النقرة {i} تمت فيزيائياً ولكن لم تفتح نافذة منبثقة (أو تم حظرها).")
                     # ----------------------------------
 
                     await page.bring_to_front()
