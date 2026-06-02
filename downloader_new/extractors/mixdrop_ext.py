@@ -96,24 +96,35 @@ async def get_mixdrop_direct_link(embed_url):
                 try:
                     log.info(f"🖱️ محاولة فحص زر التحميل رقم {i}...")
                     await page.wait_for_selector(btn_selector, state="visible", timeout=12000)
-                    # --- ⚡ تعديل الـ Reload الذكي ⚡ ---
+                    # --- ⚡ تعديل الـ Reload الذكي في المحاولة 5 ⚡ ---
                     if i == 5:
-                        print(
-                            "🔄 الموقع يبدو متجمداً.. جاري إعادة تحميل الصفحة (Reload) للتنشيط..."
-                        )
+                        log.warning("🔄 المحاولة 5: الموقع معلق أو الكابتشا مخفية.. جاري عمل (Reload) كامل للصفحة...")
                         await page.reload(wait_until="domcontentloaded")
-                        await page.wait_for_timeout(3000)
+                        await page.wait_for_timeout(4000)
                         continue
                     # ----------------------------------
+
+                    # --- 🗡️ تدمير الطبقة الشفافة (Z-Index: 300000) وكل الدروع المغطية ---
+                    await page.evaluate("""
+                        document.querySelectorAll('div').forEach(d => {
+                            const z = parseInt(window.getComputedStyle(d).zIndex);
+                            if (z > 10000 || d.style.inset === '0px' || d.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
+                                d.style.display = 'none';
+                                d.remove();
+                            }
+                        });
+                    """)
+                    
                     try:
                         async with context.expect_page(timeout=8000) as new_page_info:
-                            await page.click(btn_selector)
-                        
+                            # 🎯 النقر عبر جافاسكريبت للوصول للزر مباشرة من الجذور وتخطي أي عائق بلاستيكي
+                            await page.evaluate(f"document.querySelector('{btn_selector}').click()")
+                            
                         ad_page = await new_page_info.value
                         log.info("📺 إعلان ظهر (Pop-up)، جاري إغلاقه...")
                         await ad_page.close()
                     except Exception:
-                        log.info(f"⚠️ النقرة {i} لم تفتح نافذة منبثقة.")
+                        log.info(f"⚠️ النقرة {i} أصابت الزر مباشرة (لم تفتح نافذة منبثقة).")
                     # ----------------------------------
 
                     await page.bring_to_front()
