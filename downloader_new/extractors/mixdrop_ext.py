@@ -57,6 +57,7 @@ async def get_mixdrop_direct_link(embed_url):
         )
         
         # --- 🛡️ حقن سكريبت التخفي والـ GuardianSpy لمراقبة التحميل ---
+        # --- 🛡️ حقن سكريبت التخفي والـ GuardianSpy (صارم جداً) ---
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             window.navigator.chrome = { runtime: {} };
@@ -68,8 +69,9 @@ async def get_mixdrop_direct_link(embed_url):
             window.fetch = async function(...args) {
                 const response = await originalFetch.apply(this, args);
                 const url = args[0].toString();
-                if (url.includes("mixdrop") || url.includes("mxcontent")) {
-                    console.log("✅ [GuardianSpy]: " + url);
+                // شرط حصري: لا نلتقط إلا روابط mxcontent الحقيقية
+                if (url.includes("mxcontent.net/d/")) {
+                    console.log("✅ [GuardianSpy-Verified]: " + url);
                 }
                 return response;
             };
@@ -82,13 +84,18 @@ async def get_mixdrop_direct_link(embed_url):
         intercepted_url = {"url": None}
 
         # مراقبة الكونسول والتقاط رابط الـ GuardianSpy فور ظهوره
+        # مراقبة الكونسول والتقاط رابط الـ GuardianSpy (صارم)
         async def on_console(msg):
             text = msg.text
             log.debug(f"🌐 [Browser Console]: {text}")
-            if "✅ [GuardianSpy]:" in text:
-                found_url = text.split("✅ [GuardianSpy]: ")[1]
-                intercepted_url["url"] = found_url
-                log.info(f"🎯 [Success]: تم صيد الرابط بواسطة الـ Spy: {found_url}")
+            
+            # نتحقق من الوسم الجديد verified فقط
+            if "✅ [GuardianSpy-Verified]:" in text:
+                found_url = text.split("✅ [GuardianSpy-Verified]: ")[1].strip()
+                # فلتر إضافي للتأكد
+                if "mxcontent.net" in found_url:
+                    intercepted_url["url"] = found_url
+                    log.info(f"🎯 [Success]: تم صيد الرابط الحقيقي: {found_url}")
 
         page.on("console", on_console)
 
