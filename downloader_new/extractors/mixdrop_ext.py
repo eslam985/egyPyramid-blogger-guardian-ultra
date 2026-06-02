@@ -95,11 +95,12 @@ def _attach_network_interceptor(page, captured: dict):
 # ===========================================================================
 
 async def _find_overlay_frame(page):
-    """
-    الـ overlay موجود في iframe من نوع srcdoc وليس في الـ main document.
-    بيفحص كل الـ frames ويرجع الـ frame اللي فيه الـ overlay.
-    """
     for frame in page.frames:
+        try:
+            # ✅ استنى الـ frame يكمل تحميله الأول
+            await frame.wait_for_load_state("domcontentloaded", timeout=2000)
+        except Exception:
+            pass
         try:
             count = await frame.locator(OK_SELECTOR).count()
             if count > 0:
@@ -109,16 +110,7 @@ async def _find_overlay_frame(page):
             pass
     return None
 
-
 async def _dismiss_overlay(page) -> bool:
-    """
-    يغلق الـ overlay لو ظهر في أي frame.
-    الـ overlay بيظهر في srcdoc iframe بعد النقرة الأولى.
-
-    Returns:
-        True  → تم إغلاق الـ overlay
-        False → لا يوجد overlay
-    """
     # تعطيل debugger عبر CDP
     try:
         cdp = await page.context.new_cdp_session(page)
@@ -127,8 +119,13 @@ async def _dismiss_overlay(page) -> bool:
     except Exception:
         pass
 
-    frame = await _find_overlay_frame(page)
-    if frame is None:
+    # ✅ الإضافة الجوهرية: انتظر الـ overlay يظهر في أي frame (حتى 4 ثواني)
+    for _ in range(8):
+        frame = await _find_overlay_frame(page)
+        if frame is not None:
+            break
+        await page.wait_for_timeout(500)
+    else:
         return False
 
     log.warning("🛡️ [Overlay] تم رصده! جاري الإغلاق...")
@@ -165,13 +162,6 @@ async def _dismiss_overlay(page) -> bool:
 # ===========================================================================
 
 async def _click_and_capture(page, context, attempt: int, captured: dict) -> str | None:
-    """
-    ينقر على زر التحميل ويصطاد الرابط من:
-    1. href في الـ DOM قبل النقر
-    2. نافذة جديدة فتحت
-    3. overlay ظهر → يغلقه → ينقر تاني
-    4. href في الـ DOM بعد النقر
-    """
     # فحص href قبل النقر
     href = await page.get_attribute(BTN_SELECTOR, "href")
     if href and "mxcontent.net" in href:
@@ -179,6 +169,11 @@ async def _click_and_capture(page, context, attempt: int, captured: dict) -> str
         return href
 
     await page.wait_for_timeout(random.randint(800, 1800))
+
+    # ✅ فحص الـ overlay قبل النقر الأول (بيظهر من أول نقرة)
+    log.info(f"🔍 فحص overlay قبل النقر... (frames: {len(page.frames)})")
+    overlay_closed = await _dismiss_overlay(page)
+    log.info(f"🔍 overlay_closed={overlay_closed}")
 
     # النقر مع مراقبة النوافذ
     try:
@@ -194,9 +189,11 @@ async def _click_and_capture(page, context, attempt: int, captured: dict) -> str
     except Exception:
         log.info(f"ℹ️ النقرة {attempt} بدون نافذة.")
 
-    # فحص الـ overlay بعد النقر وإغلاقه
-    overlay_closed = await _dismiss_overlay(page)
-    if overlay_closed:
+    # ✅ فحص overlay تاني بعد النقر كمان
+    log.info(f"🔍 فحص overlay بعد النقر... (frames: {len(page.frames)})")
+    overlay_closed2 = await _dismiss_overlay(page)
+    log.info(f"🔍 overlay_closed2={overlay_closed2}")
+    if overlay_closed2:
         log.info("🔁 نقرة ثانية بعد إغلاق الـ overlay...")
         await page.wait_for_timeout(random.randint(400, 900))
         try:
