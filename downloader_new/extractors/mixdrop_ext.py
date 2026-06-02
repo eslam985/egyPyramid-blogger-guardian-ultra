@@ -16,10 +16,10 @@ USER_AGENTS = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
 ]
 
-BTN_SELECTOR = "a.download-btn"
-OK_SELECTOR  = 'p[data-onopen="0"][data-area="area1"]'
-MAX_ATTEMPTS = 14
-RELOAD_AT    = 6
+BTN_SELECTOR     = "a.download-btn"
+OK_SELECTOR      = 'p[data-onopen="0"][data-area="area1"]'
+MAX_ATTEMPTS     = 14
+RELOAD_AT        = 6
 
 STEALTH_SCRIPT = """
     Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
@@ -91,37 +91,33 @@ def _attach_network_interceptor(page, captured: dict):
 
 
 # ===========================================================================
-# Overlay Handler — نفس منطق اللوكال بالظبط: فحص مباشر بدون wait_for_load_state
+# Overlay Handler — يفحص كل الـ frames لأن الـ overlay في srcdoc iframe
 # ===========================================================================
 
 async def _find_overlay_frame(page):
     """
-    بيفحص الـ main frame + كل الـ iframes مباشرة بدون انتظار.
-    نفس منطق test_mixdrop.py اللوكال.
+    الـ overlay موجود في iframe من نوع srcdoc وليس في الـ main document.
+    بيفحص كل الـ frames ويرجع الـ frame اللي فيه الـ overlay.
     """
-    all_frames = page.frames
-    log.info(f"🔍 عدد الـ frames: {len(all_frames)}")
-
-    for i, frame in enumerate(all_frames):
+    for frame in page.frames:
         try:
-            url   = frame.url
             count = await frame.locator(OK_SELECTOR).count()
-            log.info(f"   Frame[{i}] url={url[:50]}  overlay_count={count}")
             if count > 0:
-                el      = frame.locator(OK_SELECTOR).first
-                visible = await el.is_visible()
-                log.info(f"   ✅ لقينا الـ overlay في Frame[{i}]! visible={visible}")
+                log.info(f"🔍 [Overlay] لقيناه في frame: {frame.url[:50]}")
                 return frame
-        except Exception as e:
-            log.info(f"   Frame[{i}] error: {e}")
-
+        except Exception:
+            pass
     return None
 
 
 async def _dismiss_overlay(page) -> bool:
     """
     يغلق الـ overlay لو ظهر في أي frame.
-    نفس منطق اللوكال: بدون polling loop — فحص مباشر واحد.
+    الـ overlay بيظهر في srcdoc iframe بعد النقرة الأولى.
+
+    Returns:
+        True  → تم إغلاق الـ overlay
+        False → لا يوجد overlay
     """
     # تعطيل debugger عبر CDP
     try:
@@ -132,21 +128,18 @@ async def _dismiss_overlay(page) -> bool:
         pass
 
     frame = await _find_overlay_frame(page)
-
     if frame is None:
-        log.info("ℹ️ [Overlay] مش موجود في أي frame.")
         return False
 
     log.warning("🛡️ [Overlay] تم رصده! جاري الإغلاق...")
 
     try:
-        # طريقة 1: JS click في الـ frame المحدد
+        # طريقة 1: JS click في الـ frame
         await frame.evaluate("""
             var btn = document.querySelector('p[data-onopen="0"][data-area="area1"]');
             if (btn) btn.click();
         """)
         await page.wait_for_timeout(800)
-        log.info("✅ [Overlay] تم الضغط على OK عبر JS في الـ frame!")
 
         # هل اختفى؟
         if await frame.locator(OK_SELECTOR).count() == 0:
@@ -168,17 +161,16 @@ async def _dismiss_overlay(page) -> bool:
 
 
 # ===========================================================================
-# Click & Capture — نفس ترتيب اللوكال بالظبط
+# Click & Capture
 # ===========================================================================
 
 async def _click_and_capture(page, context, attempt: int, captured: dict) -> str | None:
     """
-    نفس منطق test_mixdrop.py:
-    1. انقر
-    2. لو نافذة → تحقق
-    3. فحص overlay بعد النقر مباشرة
-    4. لو overlay اتغلق → انقر تاني
-    5. فحص href
+    ينقر على زر التحميل ويصطاد الرابط من:
+    1. href في الـ DOM قبل النقر
+    2. نافذة جديدة فتحت
+    3. overlay ظهر → يغلقه → ينقر تاني
+    4. href في الـ DOM بعد النقر
     """
     # فحص href قبل النقر
     href = await page.get_attribute(BTN_SELECTOR, "href")
@@ -188,7 +180,7 @@ async def _click_and_capture(page, context, attempt: int, captured: dict) -> str
 
     await page.wait_for_timeout(random.randint(800, 1800))
 
-    # النقر الأول مع مراقبة النوافذ
+    # النقر مع مراقبة النوافذ
     try:
         async with context.expect_page(timeout=8000) as info:
             await page.locator(BTN_SELECTOR).click(force=True)
@@ -202,7 +194,7 @@ async def _click_and_capture(page, context, attempt: int, captured: dict) -> str
     except Exception:
         log.info(f"ℹ️ النقرة {attempt} بدون نافذة.")
 
-    # فحص الـ overlay بعد النقر مباشرة — نفس اللوكال
+    # فحص الـ overlay بعد النقر وإغلاقه
     overlay_closed = await _dismiss_overlay(page)
     if overlay_closed:
         log.info("🔁 نقرة ثانية بعد إغلاق الـ overlay...")
