@@ -1,13 +1,13 @@
-# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/mixdrop_ext.py
 import random
 from playwright.async_api import async_playwright
-
-# الاستدعاء النظيف والمباشر للوجر
-from downloader_new.shared.logger import get_beast_logger
 from downloader_new.shared.logger import get_beast_logger
 
 log = get_beast_logger("GuardianUltra")
-# قائمة الوكلاء
+
+# ===========================================================================
+# Constants
+# ===========================================================================
+
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
@@ -16,253 +16,261 @@ USER_AGENTS = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
 ]
 
+# زر التحميل الرئيسي
+BTN_SELECTOR = "a.download-btn"
 
-async def get_mixdrop_direct_link(embed_url):
-    # الحقيقة الصارمة: لا نلمس الدومين إلا إذا كان خاطئاً فعلياً
-    # تأكد دائماً أننا نستخدم mixdrop الأصلي
-    clean_url = embed_url.replace("miixdrop", "mixdrop")
-    
-    target_url = clean_url.replace("/e/", "/f/")
+# زر OK في الـ overlay (يظهر بعد النقرة الأولى)
+OVERLAY_OK_SELECTOR = 'p[data-onopen="0"][data-area="area1"]'
+
+# سكريبت التخفي من الـ Bot Detection
+STEALTH_SCRIPT = """
+    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    window.navigator.chrome = { runtime: {} };
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+"""
+
+MAX_ATTEMPTS = 14
+RELOAD_AT_ATTEMPT = 6
+
+
+# ===========================================================================
+# Browser Setup
+# ===========================================================================
+
+async def _create_browser(playwright):
+    return await playwright.chromium.launch(
+        headless=True,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--window-size=1920,1080",
+        ],
+    )
+
+
+async def _create_context(browser):
+    context = await browser.new_context(
+        user_agent=random.choice(USER_AGENTS),
+        viewport={"width": 1920, "height": 1080},
+        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+    )
+    await context.add_init_script(STEALTH_SCRIPT)
+    return context
+
+
+# ===========================================================================
+# Network Interceptor
+# ===========================================================================
+
+def _attach_network_interceptor(page, intercepted: dict):
+    """يراقب JSON responses ويصطاد رابط التحميل منها."""
+
+    async def on_response(response):
+        is_mixdrop = "mixdrop" in response.url or "miixdrop" in response.url
+        is_download = "download" in response.url
+        is_json = "application/json" in response.headers.get("content-type", "")
+
+        if is_mixdrop and is_download and is_json:
+            try:
+                data = await response.json()
+                if data.get("type") == "ok" and "url" in data:
+                    intercepted["url"] = data["url"]
+                    log.info(f"🎯 [Network] تم صيد الرابط من JSON: {data['url'][:60]}...")
+            except Exception:
+                pass
+
+    page.on("response", on_response)
+
+
+# ===========================================================================
+# Overlay Handler
+# ===========================================================================
+
+async def _dismiss_overlay(page) -> bool:
+    """
+    يغلق الـ overlay لو ظهر.
+
+    الـ overlay بيظهر فقط بعد النقرة الأولى على زر التحميل،
+    وبيحتوي على زر OK بالـ selector: p[data-onopen="0"][data-area="area1"]
+
+    Returns:
+        True  → تم إغلاق الـ overlay
+        False → لا يوجد overlay
+    """
+    try:
+        ok_btn = await page.wait_for_selector(
+            OVERLAY_OK_SELECTOR,
+            state="visible",
+            timeout=2000,
+        )
+        log.warning("🛡️ [Overlay] تم رصد الـ overlay! جاري الضغط على OK...")
+        await page.wait_for_timeout(random.randint(300, 700))
+        await ok_btn.click(force=True)
+        await page.wait_for_selector(OVERLAY_OK_SELECTOR, state="hidden", timeout=3000)
+        log.info("✅ [Overlay] تم تجاوز الـ overlay بنجاح!")
+        return True
+    except Exception:
+        return False
+
+
+# ===========================================================================
+# Click & Capture
+# ===========================================================================
+
+async def _click_and_capture(page, context, attempt: int, intercepted: dict) -> str | None:
+    """
+    ينقر على زر التحميل ويحاول يصطاد الرابط من:
+    1. الـ href في الـ DOM مباشرة (قبل النقر)
+    2. نافذة جديدة إذا فتحت
+    3. الـ href في الـ DOM (بعد النقر)
+
+    Returns:
+        الرابط المباشر إذا وُجد، أو None
+    """
+    # --- فحص الـ href قبل النقر (ممكن يكون جاهز من محاولة سابقة) ---
+    href_before = await page.get_attribute(BTN_SELECTOR, "href")
+    if href_before and "mxcontent.net" in href_before:
+        log.info(f"✅ الرابط جاهز في الـ DOM: {href_before[:60]}...")
+        return href_before
+
+    # --- تأخير بشري عشوائي ---
+    await page.wait_for_timeout(random.randint(1000, 2500))
+
+    # --- النقر مع مراقبة النوافذ الجديدة ---
+    try:
+        async with context.expect_page(timeout=8000) as new_page_info:
+            await page.locator(BTN_SELECTOR).click(force=True)
+
+        new_page = await new_page_info.value
+        new_url = new_page.url
+        log.info(f"📺 نافذة جديدة: {new_url[:60]}...")
+
+        if "mxcontent" in new_url or ".mp4" in new_url:
+            log.info("🎯 النافذة الجديدة هي رابط التحميل!")
+            await new_page.close()
+            return new_url
+
+        await new_page.close()
+
+    except Exception:
+        log.info(f"ℹ️ النقرة {attempt} بدون نافذة جديدة.")
+
+    # --- فحص الـ overlay بعد النقر مباشرة ---
+    overlay_closed = await _dismiss_overlay(page)
+    if overlay_closed:
+        log.info("🔁 إعادة النقر بعد إغلاق الـ overlay...")
+        await page.wait_for_timeout(random.randint(500, 1000))
+        try:
+            async with context.expect_page(timeout=8000) as new_page_info2:
+                await page.locator(BTN_SELECTOR).click(force=True)
+            new_page2 = await new_page_info2.value
+            new_url2 = new_page2.url
+            log.info(f"📺 نافذة بعد الـ overlay: {new_url2[:60]}...")
+            if "mxcontent" in new_url2 or ".mp4" in new_url2:
+                await new_page2.close()
+                return new_url2
+            await new_page2.close()
+        except Exception:
+            log.info("ℹ️ النقرة بعد الـ overlay بدون نافذة.")
+
+    # --- فحص الـ href بعد النقر ---
+    await page.bring_to_front()
+    await page.wait_for_timeout(1500)
+    href_after = await page.get_attribute(BTN_SELECTOR, "href")
+    if href_after and "mxcontent.net" in href_after:
+        log.info(f"✅ تم صيد الرابط بعد النقر: {href_after[:60]}...")
+        return href_after
+
+    return None
+
+
+# ===========================================================================
+# Main Entry Point
+# ===========================================================================
+
+async def get_mixdrop_direct_link(embed_url: str) -> str | None:
+    """
+    يستخرج الرابط المباشر لملف MixDrop من رابط الـ embed أو الـ file.
+
+    Args:
+        embed_url: رابط MixDrop (يقبل /e/ أو /f/، ويقبل mixdrop أو miixdrop)
+
+    Returns:
+        الرابط المباشر (mxcontent.net) أو:
+        "404_DELETED" → لو الملف محذوف
+        None          → لو فشل الاستخراج
+    """
+    # --- تجهيز الرابط ---
+    target_url = embed_url.replace("miixdrop", "mixdrop").replace("/e/", "/f/")
     if "?download" not in target_url:
         target_url += "?download"
-    
-    # تأكد أن الرابط لا يزال يحتوي على mixdrop
+
     if "mixdrop" not in target_url:
         log.error(f"❌ رابط غير مدعوم: {target_url}")
         return None
 
     log.info(f"🕵️ محاكاة سلوك بشري على: {target_url}")
 
-    async with async_playwright() as p:
-        # إضافة args للتمويه وتجاوز حماية الـ Bot Detection
-
-        # تشغيل المتصفح لاستخراج الرابط
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--window-size=1920,1080",
-            ],
-        )
-        # داخل context.new_page() تأكد من هذا الترتيب:
-        context = await browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
-            viewport={"width": 1920, "height": 1080},
-            # أضف هيدرز إضافية لتبدو كمتصفح حقيقي
-            extra_http_headers={
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-        )
-        
-        # --- 🛡️ حقن سكريبت التخفي والـ GuardianSpy لمراقبة التحميل ---
-        # --- 🛡️ حقن سكريبت التخفي والـ GuardianSpy (صارم جداً) ---
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            window.navigator.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-
-            console.log("🚀 [GuardianSpy]: جاري تفعيل مراقبة التحميل...");
-            const originalFetch = window.fetch;
-            window.fetch = async function(...args) {
-                const response = await originalFetch.apply(this, args);
-                const url = args[0].toString();
-                // شرط حصري: لا نلتقط إلا روابط mxcontent الحقيقية
-                if (url.includes("mxcontent.net/d/")) {
-                    console.log("✅ [GuardianSpy-Verified]: " + url);
-                }
-                return response;
-            };
-        """)
-        
+    async with async_playwright() as playwright:
+        browser = await _create_browser(playwright)
+        context = await _create_context(browser)
         page = await context.new_page()
-        #زرع مراقب الشبكة (Network Interceptor) لصيد الـ JSON
-        # متغير لتخزين الرابط لو تم إرجاعه عبر POST Request
-        # --- 📡 رادار متطور للشبكة والكونسول ---
-        intercepted_url = {"url": None}
 
-        # مراقبة الكونسول والتقاط رابط الـ GuardianSpy فور ظهوره
-        # مراقبة الكونسول والتقاط رابط الـ GuardianSpy (صارم)
-        async def on_console(msg):
-            text = msg.text
-            log.debug(f"🌐 [Browser Console]: {text}")
-            
-            # نتحقق من الوسم الجديد verified فقط
-            if "✅ [GuardianSpy-Verified]:" in text:
-                found_url = text.split("✅ [GuardianSpy-Verified]: ")[1].strip()
-                # فلتر إضافي للتأكد
-                if "mxcontent.net" in found_url:
-                    intercepted_url["url"] = found_url
-                    log.info(f"🎯 [Success]: تم صيد الرابط الحقيقي: {found_url}")
-
-        page.on("console", on_console)
-
-        async def handle_request(request):
-            if request.method == "POST" and "mixdrop" in request.url:
-                log.info(f"📤 [Network]: محاولة إرسال POST Request إلى: {request.url[:50]}...")
-
-        # --- 📡 رادار شامل لصيد أي رابط يحتوي على "mxcontent" أو "download" ---
-        # --- 🎯 رادار جراحي لاصطياد رابط الـ JSON فقط ---
-        async def handle_response(response):
-            if "mixdrop" in response.url and "download" in response.url:
-                if "application/json" in response.headers.get("content-type", ""):
-                    try:
-                        data = await response.json()
-                        if data.get("type") == "ok" and "url" in data:
-                            intercepted_url["url"] = data["url"]
-                            log.info(f"🎯 [Success]: تم صيد الرابط من الـ JSON: {data['url']}")
-                    except: 
-                        pass
-
-        page.on("request", handle_request)
-        page.on("response", handle_response)
+        intercepted = {"url": None}
+        _attach_network_interceptor(page, intercepted)
 
         try:
             await page.goto(target_url, wait_until="domcontentloaded")
+            await page.wait_for_timeout(1000)
 
-            # --- 🔍 فحص هل الملف محذوف فعلياً من المصدر ---
-            page_content = await page.content()
-            if "can't find the file you are looking for" in page_content:
-                log.error("🚫 الرابط ميت: MixDrop بيقول We can't find the file")
-                await browser.close()
+            # --- فحص 404 ---
+            if "can't find the file you are looking for" in await page.content():
+                log.error("🚫 الرابط ميت: الملف محذوف من MixDrop")
                 return "404_DELETED"
 
-            btn_selector = "a.download-btn"
-            ok_btn_selector = '[data-area="area1"]'
+            # --- الحلقة الرئيسية ---
+            for attempt in range(1, MAX_ATTEMPTS + 1):
 
-            # --- 📊 فحص تشخيصي لمعرفة ماذا يرى المتصفح في Hugging Face ---
-            has_wrapper = await page.locator("div.wrapper").count() > 0
-            has_btn = await page.locator(btn_selector).count() > 0
-            
-            log.info(f"🔍 [تشخيص أولي] هل كلاس div.wrapper موجود؟ {'✅ نعم' if has_wrapper else '❌ لا'}")
-            log.info(f"🔍 [تشخيص أولي] هل زر التحميل الأساسي موجود؟ {'✅ نعم' if has_btn else '❌ لا'}")
-            
-            if not has_wrapper or not has_btn:
-                page_title = await page.title()
-                log.warning(f"⚠️ المتصفح لا يرى عناصر التحميل! عنوان الصفحة الحالي: [{page_title}]")
-                # طباعة أول 300 حرف من البودي لمعرفة هل نحن في صفحة حظر أو كابتشا
-                body_text = await page.locator("body").inner_text()
-                log.warning(f"📄 مقتطف من نص الصفحة: {body_text[:300].strip()}")
-            # -------------------------------------------------------------
+                # لو الـ network interceptor صاد الرابط
+                if intercepted["url"]:
+                    log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {attempt}")
+                    return intercepted["url"]
 
-            for i in range(1, 30):
-                if intercepted_url["url"]:
-                    log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {i}")
-                    await browser.close()
-                    return intercepted_url["url"]
+                log.info(f"🖱️ محاولة {attempt}/{MAX_ATTEMPTS}...")
 
-                # --- 🛡️ فحص ديناميكي متكرر لغلاف الحماية قبل النقر ---
                 try:
-                    # فحص سريع جداً (Timeout: 1500ms) لعدم تعطيل الحلقة إذا لم يكن موجوداً
-                    ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=1500)
-                    if ok_btn:
-                        log.warning(f"🛡️ [حماية ديناميكية] تم رصد غلاف الحماية في المحاولة {i}! جاري تخطيه...")
-                        await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-                        await page.wait_for_timeout(500)
-                        await ok_btn.click(force=True)
-                        log.info("✅ تم ضرب غلاف الحماية بنجاح، ننتظر لتحديث الصفحة...")
-                        await page.wait_for_timeout(3000)
+                    await page.wait_for_selector(BTN_SELECTOR, state="visible", timeout=12000)
                 except Exception:
-                    # إذا لم يظهر، نتابع السكربت بشكل طبيعي دون تضييع وقت
-                    pass
+                    log.warning(f"⚠️ زر التحميل لم يظهر في المحاولة {attempt}")
+                    continue
 
-                try:
-                    log.info(f"🖱️ محاولة فحص زر التحميل رقم {i}...")
-                    await page.wait_for_selector(btn_selector, state="visible", timeout=12000)
-                    # --- ⚡ تعديل الـ Reload الذكي في المحاولة 5 ⚡ ---
-                    if i == 5:
-                        log.warning("🔄 المحاولة 5: الموقع معلق أو الكابتشا مخفية.. جاري عمل (Reload) كامل للصفحة...")
-                        await page.reload(wait_until="domcontentloaded")
-                        await page.wait_for_timeout(4000)
-                        continue
-                    # ----------------------------------
+                # --- Reload ذكي ---
+                if attempt == RELOAD_AT_ATTEMPT:
+                    log.warning("🔄 Reload للتنشيط...")
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(3000)
+                    continue
 
-                    # 🕵️ فحص شامل لحالة الزر والـ DOM المحيط به
-                    try:
-                        cf_key = await page.get_attribute(btn_selector, "data-cf-key")
-                        current_href = await page.get_attribute(btn_selector, "href")
-                        log.info(f"📋 [حالة الزر قبل النقرة {i}]: data-cf-key=[{cf_key}], href=[{current_href}]")
-                        
-                        # 🔬 طباعة الـ HTML الخاص بالزر لاكتشاف أي تغييرات أو سكريبتات مخفية بداخله
-                        btn_html = await page.evaluate(f"document.querySelector('{btn_selector}') ? document.querySelector('{btn_selector}').outerHTML : 'الزر اختفى'")
-                        log.info(f"🧬 [HTML للزر]: {btn_html}")
-                        
-                        # 🔬 طباعة عدد الإطارات (iframes) لمعرفة هل Cloudflare Turnstile يعمل أم لا
-                        log.info(f"🔍 [Iframes]: عدد الإطارات المحملة في الصفحة حالياً: {len(page.frames)}")
-                    except Exception as e:
-                        log.error(f"⚠️ تعذر جلب تفاصيل الزر: {e}")
+                # --- النقر ومحاولة صيد الرابط ---
+                result = await _click_and_capture(page, context, attempt, intercepted)
+                if result:
+                    return result
 
-                    # --- 🧍‍♂️ محاكاة بشرية صريحة (بدون تدمير عناصر الموقع) ---
-                   # --- ⚡ نقرة بشرية مدروسة مع انتظار غير منتظم ⚡ ---
-                   # --- ⚡ نقرة بشرية مدروسة مع انتظار غير منتظم ⚡ ---
-                    try:
-                        await page.wait_for_timeout(random.randint(1500, 3000)) 
-                        
-                        async with context.expect_page(timeout=10000) as new_page_info:
-                            await page.locator(btn_selector).click(force=True)
-                            
-                        ad_page = await new_page_info.value
-                        ad_url = ad_page.url
-                        log.info(f"📺 نافذة جديدة ظهرت! الرابط الخاص بها: {ad_url}")
-                        
-                        # تحليل النافذة
-                        if "mixdrop" in ad_url or "delivery" in ad_url or ".mp4" in ad_url or "download" in ad_url:
-                            log.warning("⚠️ النافذة الجديدة تبدو وكأنها رابط التحميل!")
-                            intercepted_url["url"] = ad_url
-                        else:
-                            log.info("🗑️ إعلان خارجي، جاري إغلاقه...")
-                            await ad_page.close()
-                            
-                    except:
-                        log.info(f"ℹ️ النقرة {i} تمت (لم تفتح نافذة جديدة أو فشلت).")
+                # لو الـ interceptor صاد شيء أثناء النقر
+                if intercepted["url"]:
+                    return intercepted["url"]
 
-                    # --- ⚡ الضربة القاضية: سحب الرابط من الـ DOM مباشرة ⚡ ---
-                    await page.wait_for_timeout(2000)
-                    btn_href = await page.get_attribute("a.download-btn", "href")
-                    if btn_href and "mxcontent.net" in btn_href:
-                        log.info(f"✅ تم سحب الرابط من الـ DOM: {btn_href}")
-                        intercepted_url["url"] = btn_href
-                        await browser.close()
-                        return btn_href
-                    # ----------------------------------
+                log.info(f"⏳ الرابط لم يظهر بعد، ننتظر...")
+                await page.wait_for_timeout(4000)
 
-                    await page.bring_to_front()
-
-                    # التحقق أولاً مما إذا كان الرابط قد وصل كـ JSON في الـ Background
-                    if intercepted_url["url"]:
-                        print("✅ تم استخراج الرابط المباشر من استجابة الخادم بنجاح.")
-                        await browser.close()
-                        return intercepted_url["url"]
-
-                    # فحص الرابط المباشر في الـ href كبديل احتياطي (Fallback)
-                    href = await page.get_attribute(btn_selector, "href")
-
-                    if href and href.startswith("http"):
-                        # فحص ذكي: هل الرابط يحتوي على كلمة mxcontent (بأي شكل) أو ليس له علاقة بـ mixdrop؟
-                        is_valid_direct = "mxcontent" in href or (
-                            not ("?download" in href or "mixdrop" in href)
-                        )
-
-                        if is_valid_direct:
-                            print(f"✅ تم صيد الرابط بنجاح: {href[:60]}...")
-
-                            await browser.close()
-                            return href
-
-                    print("⏳ الرابط لم يظهر بعد، ننتظر ثواني للنقرة التالية...")
-                    await page.wait_for_timeout(
-                        5000
-                    )  # زودنا الانتظار لـ 5 ثواني عشان ندي فرصة للسيرفر
-                except Exception as e:
-                    print(f"⚠️ خطأ في المحاولة {i}: {str(e)}")
-                    continue  # لو محاولة فشلت يكمل للي بعدها ميفصلش السكريبت
-
-            await browser.close()
+            log.error("❌ استُنفدت كل المحاولات بدون نتيجة")
             return None
 
         except Exception as e:
-            print(f"❌ خطأ أثناء المحاكاة البشرية: {str(e)}")
-            await browser.close()
+            log.error(f"❌ خطأ غير متوقع: {e}")
             return None
+
+        finally:
+            await browser.close()
