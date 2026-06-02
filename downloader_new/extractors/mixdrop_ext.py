@@ -78,21 +78,17 @@ async def get_mixdrop_direct_link(embed_url):
                 log.info(f"📤 [Network]: محاولة إرسال POST Request إلى: {request.url[:50]}...")
 
         # --- 📡 رادار شامل لصيد أي رابط يحتوي على "mxcontent" أو "download" ---
+        # --- 🎯 رادار جراحي لاصطياد رابط الـ JSON فقط ---
         async def handle_response(response):
-            url = response.url
-            # الرابط الحقيقي للفيديو غالباً ما يحتوي على mxcontent.net
-            if "mxcontent.net" in url or ("mixdrop" in url and "dl" in url):
-                log.info(f"🎯 [Network Match]: تم العثور على رابط محتمل: {url}")
-                intercepted_url["url"] = url
-            
-            # إذا كان الموقع يرسل JSON يحتوي على الرابط
-            if "application/json" in response.headers.get("content-type", ""):
-                try:
-                    data = await response.json()
-                    # بحث عميق في الـ JSON عن أي حقل يحتوي على رابط
-                    if isinstance(data, dict) and "url" in data:
-                        intercepted_url["url"] = data["url"]
-                except: pass
+            if "mixdrop" in response.url and "download" in response.url:
+                if "application/json" in response.headers.get("content-type", ""):
+                    try:
+                        data = await response.json()
+                        if data.get("type") == "ok" and "url" in data:
+                            intercepted_url["url"] = data["url"]
+                            log.info(f"🎯 [Success]: تم صيد الرابط من الـ JSON: {data['url']}")
+                    except: 
+                        pass
 
         page.on("request", handle_request)
         page.on("response", handle_response)
@@ -193,8 +189,17 @@ async def get_mixdrop_direct_link(embed_url):
                             log.info("🗑️ إعلان خارجي، جاري إغلاقه...")
                             await ad_page.close()
                             
-                    except Exception:
-                        log.info(f"ℹ️ النقرة {i} لم تفتح نافذة جديدة (أو انتهى الوقت).")
+                    except:
+                        log.info(f"ℹ️ النقرة {i} تمت (لم تفتح نافذة جديدة أو فشلت).")
+
+                    # --- ⚡ الضربة القاضية: سحب الرابط من الـ DOM مباشرة ⚡ ---
+                    await page.wait_for_timeout(2000)
+                    btn_href = await page.get_attribute("a.download-btn", "href")
+                    if btn_href and "mxcontent.net" in btn_href:
+                        log.info(f"✅ تم سحب الرابط من الـ DOM: {btn_href}")
+                        intercepted_url["url"] = btn_href
+                        await browser.close()
+                        return btn_href
                     # ----------------------------------
 
                     await page.bring_to_front()
