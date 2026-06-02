@@ -18,13 +18,18 @@ USER_AGENTS = [
 
 
 async def get_mixdrop_direct_link(embed_url):
+    # الحقيقة الصارمة: لا نلمس الدومين إلا إذا كان خاطئاً فعلياً
+    # تأكد دائماً أننا نستخدم mixdrop الأصلي
+    clean_url = embed_url.replace("miixdrop", "mixdrop")
     
-    # 🩹 تصحيح إجباري للخطأ الإملائي القادم من الخارج حتى يعمل المحرك الاحتياطي
-    embed_url = embed_url.replace("mixdrop", "miixdrop")
-    
-    target_url = embed_url.replace("/e/", "/f/")
+    target_url = clean_url.replace("/e/", "/f/")
     if "?download" not in target_url:
         target_url += "?download"
+    
+    # تأكد أن الرابط لا يزال يحتوي على mixdrop
+    if "mixdrop" not in target_url:
+        log.error(f"❌ رابط غير مدعوم: {target_url}")
+        return None
 
     log.info(f"🕵️ محاكاة سلوك بشري على: {target_url}")
 
