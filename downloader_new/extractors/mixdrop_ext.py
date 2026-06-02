@@ -1,6 +1,5 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/mixdrop_ext.py
 import random
-
 from playwright.async_api import async_playwright
 
 # الاستدعاء النظيف والمباشر للوجر
@@ -8,7 +7,6 @@ from downloader_new.shared.logger import get_beast_logger
 from downloader_new.shared.logger import get_beast_logger
 
 log = get_beast_logger("GuardianUltra")
-
 # قائمة الوكلاء
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -36,14 +34,29 @@ async def get_mixdrop_direct_link(embed_url):
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                "--window-size=1920,1080"
-            ]
+                "--window-size=1920,1080",
+            ],
         )
         context = await browser.new_context(
             user_agent=random.choice(USER_AGENTS),
             viewport={"width": 1920, "height": 1080},
         )
         page = await context.new_page()
+        #زرع مراقب الشبكة (Network Interceptor) لصيد الـ JSON
+        # متغير لتخزين الرابط لو تم إرجاعه عبر POST Request
+        intercepted_url = {"url": None}
+
+        async def handle_response(response):
+            if "?download" in response.url and response.request.method == "POST":
+                try:
+                    json_data = await response.json()
+                    if json_data.get("type") == "ok" and json_data.get("url"):
+                        intercepted_url["url"] = json_data["url"]
+                        print(f"📡 تم التقاط الرابط من الـ Network: {intercepted_url['url'][:60]}...")
+                except:
+                    pass
+
+        page.on("response", handle_response)
 
         try:
             await page.goto(target_url, wait_until="domcontentloaded")
@@ -55,10 +68,32 @@ async def get_mixdrop_direct_link(embed_url):
                 await browser.close()
                 return "404_DELETED"
 
+            # --- 🛡️ تجاوز الـ Brave Alert / Interstitial ---
+            ok_btn_selector = 'button[data-area="area1"]'
+            try:
+                # ننتظر 5 ثوانٍ كحد أقصى لظهور الغلاف الوهمي
+                ok_btn = await page.wait_for_selector(ok_btn_selector, state="visible", timeout=5000)
+                if ok_btn:
+                    print("🛡️ تم رصد Brave Alert.. جاري المحاكاة وتخطيه...")
+                    # حركة ماوس عشوائية لإقناع نظام RUM
+                    await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+                    await page.wait_for_timeout(1000)
+                    
+                    await ok_btn.click()
+                    print("✅ تم الضغط على OK، ننتظر لتسجيل التفاعل وبناء الـ Session...")
+                    await page.wait_for_timeout(random.randint(3000, 4500))
+            except Exception:
+                print("⏩ لم يظهر Brave Alert، نستكمل الإجراءات الطبيعية.")
+
             btn_selector = "a.download-btn"
 
             # رفعنا المدى لـ 10 لضمان وجود محاولات كافية بعد الـ Reload
             for i in range(1, 11):
+                # التحقق المبكر: هل تم التقاط الرابط بالفعل أثناء الانتظار؟
+                if intercepted_url["url"]:
+                    await browser.close()
+                    return intercepted_url["url"]
+
                 try:
                     await page.wait_for_selector(
                         btn_selector, state="visible", timeout=10000
@@ -88,7 +123,13 @@ async def get_mixdrop_direct_link(embed_url):
 
                     await page.bring_to_front()
 
-                    # فحص الرابط المباشر - صيد الدومينات الفرعية الجديدة
+                    # التحقق أولاً مما إذا كان الرابط قد وصل كـ JSON في الـ Background
+                    if intercepted_url["url"]:
+                        print("✅ تم استخراج الرابط المباشر من استجابة الخادم بنجاح.")
+                        await browser.close()
+                        return intercepted_url["url"]
+
+                    # فحص الرابط المباشر في الـ href كبديل احتياطي (Fallback)
                     href = await page.get_attribute(btn_selector, "href")
 
                     if href and href.startswith("http"):
