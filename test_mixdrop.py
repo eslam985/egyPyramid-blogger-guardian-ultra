@@ -1,89 +1,51 @@
+import asyncio
 import random
 from playwright.async_api import async_playwright
-from downloader_new.shared.logger import get_beast_logger
-
-log = get_beast_logger("GuardianUltra")
-
-# ===========================================================================
-# Constants
-# ===========================================================================
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
 ]
 
-BTN_SELECTOR     = "a.download-btn"
-OK_SELECTOR      = 'p[data-onopen="0"][data-area="area1"]'
-MAX_ATTEMPTS     = 14
-RELOAD_AT        = 6
-
-STEALTH_SCRIPT = """
-    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-    window.navigator.chrome = { runtime: {} };
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    var _si = window.setInterval;
-    window.setInterval = function(fn, t) {
-        try { if (fn.toString().indexOf('debugger') >= 0) return 0; } catch(e) {}
-        return _si(fn, t);
-    };
-    var _st = window.setTimeout;
-    window.setTimeout = function(fn, t) {
-        try { if (fn.toString().indexOf('debugger') >= 0) return 0; } catch(e) {}
-        return _st(fn, t);
-    };
-"""
+TEST_URL     = "https://miixdrop.net/f/xwl7o913alm4qw1?download"
+BTN_SELECTOR = "a.download-btn"
+OK_SELECTOR  = 'p[data-onopen="0"][data-area="area1"]'
 
 
 # ===========================================================================
-# Browser Setup
+# Network Interceptor — يصطاد الـ token + الـ direct URL
 # ===========================================================================
-
-async def _create_browser(playwright):
-    return await playwright.chromium.launch(
-        headless=True,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--window-size=1920,1080",
-        ],
-    )
-
-
-async def _create_context(browser):
-    context = await browser.new_context(
-        user_agent=random.choice(USER_AGENTS),
-        viewport={"width": 1920, "height": 1080},
-        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
-    )
-    await context.add_init_script(STEALTH_SCRIPT)
-    return context
-
-
-# ===========================================================================
-# Network Interceptor
-# ===========================================================================
-
-def _attach_network_interceptor(page, captured: dict):
-    """يصطاد رابط التحميل من JSON responses."""
-
+def attach_interceptor(page, captured: dict):
     async def on_response(response):
         url = response.url
-        is_mixdrop = "mixdrop" in url or "miixdrop" in url
-        is_download = "download" in url
-        is_json = "application/json" in response.headers.get("content-type", "")
+        ct  = response.headers.get("content-type", "")
 
-        if is_mixdrop and is_download and is_json:
+        # صيد الـ direct URL
+        if ("mixdrop" in url or "miixdrop" in url) and "download" in url and "application/json" in ct:
             try:
                 data = await response.json()
+                print(f"📦 JSON: {data}")
                 if data.get("type") == "ok" and "url" in data:
                     captured["url"] = data["url"]
-                    log.info(f"🎯 [Network] تم صيد الرابط: {data['url'][:60]}...")
+                    print(f"🎯 [Network] {data['url'][:60]}...")
+                elif data.get("type") == "error":
+                    print(f"⚠️ [Captcha Fail] {data.get('msg','')}")
+                    captured["captcha_fail"] = True
+            except Exception:
+                pass
+
+        # صيد الـ Turnstile token من الـ request المبعوت للـ server
+        if "miixdrop.net" in url and "challenges.cloudflare.com" not in url:
+            try:
+                req_headers = response.request.headers
+                post_data   = response.request.post_data or ""
+                if "cf-turnstile-response" in post_data:
+                    import urllib.parse
+                    parsed = urllib.parse.parse_qs(post_data)
+                    token  = parsed.get("cf-turnstile-response", [None])[0]
+                    if token:
+                        captured["cf_token"] = token
+                        print(f"🔑 [Token Intercepted] {token[:40]}...")
             except Exception:
                 pass
 
@@ -91,35 +53,27 @@ def _attach_network_interceptor(page, captured: dict):
 
 
 # ===========================================================================
-# Overlay Handler — يفحص كل الـ frames لأن الـ overlay في srcdoc iframe
+# Overlay Handler
 # ===========================================================================
-
-async def _find_overlay_frame(page):
-    """
-    الـ overlay موجود في iframe من نوع srcdoc وليس في الـ main document.
-    بيفحص كل الـ frames ويرجع الـ frame اللي فيه الـ overlay.
-    """
-    for frame in page.frames:
+async def find_overlay_frame(page):
+    all_frames = page.frames
+    print(f"🔍 عدد الـ frames: {len(all_frames)}")
+    for i, frame in enumerate(all_frames):
         try:
+            url   = frame.url
             count = await frame.locator(OK_SELECTOR).count()
+            print(f"   Frame[{i}] url={url[:50]}  overlay_count={count}")
             if count > 0:
-                log.info(f"🔍 [Overlay] لقيناه في frame: {frame.url[:50]}")
+                el      = frame.locator(OK_SELECTOR).first
+                visible = await el.is_visible()
+                print(f"   ✅ لقينا الـ overlay في Frame[{i}]! visible={visible}")
                 return frame
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"   Frame[{i}] error: {e}")
     return None
 
 
-async def _dismiss_overlay(page) -> bool:
-    """
-    يغلق الـ overlay لو ظهر في أي frame.
-    الـ overlay بيظهر في srcdoc iframe بعد النقرة الأولى.
-
-    Returns:
-        True  → تم إغلاق الـ overlay
-        False → لا يوجد overlay
-    """
-    # تعطيل debugger عبر CDP
+async def dismiss_overlay(page) -> bool:
     try:
         cdp = await page.context.new_cdp_session(page)
         await cdp.send("Debugger.enable")
@@ -127,178 +81,214 @@ async def _dismiss_overlay(page) -> bool:
     except Exception:
         pass
 
-    frame = await _find_overlay_frame(page)
+    frame = await find_overlay_frame(page)
     if frame is None:
+        print("ℹ️ [Overlay] مش موجود في أي frame.")
         return False
 
-    log.warning("🛡️ [Overlay] تم رصده! جاري الإغلاق...")
-
+    print("🛡️ [Overlay] تم رصده! جاري الإغلاق...")
     try:
-        # طريقة 1: JS click في الـ frame
         await frame.evaluate("""
             var btn = document.querySelector('p[data-onopen="0"][data-area="area1"]');
             if (btn) btn.click();
         """)
         await page.wait_for_timeout(800)
+        print("✅ [Overlay] تم الضغط على OK!")
 
-        # هل اختفى؟
         if await frame.locator(OK_SELECTOR).count() == 0:
-            log.info("✅ [Overlay] اختفى بعد الـ click!")
+            print("✅ [Overlay] اختفى!")
             return True
 
-        # طريقة 2: حذف الـ wrapper من الـ DOM
         await frame.evaluate("""
             var w = document.querySelector('div[data-area="area3"]');
             if (w) w.remove();
         """)
-        log.info("✅ [Overlay] تم حذفه من الـ DOM!")
+        print("✅ [Overlay] تم حذفه من الـ DOM!")
         await page.wait_for_timeout(300)
         return True
-
     except Exception as e:
-        log.error(f"⚠️ [Overlay] خطأ أثناء الإغلاق: {e}")
+        print(f"⚠️ dismiss error: {e}")
         return False
 
 
 # ===========================================================================
-# Click & Capture
+# محاولة inject الـ token يدوياً لو اتصاد
 # ===========================================================================
-
-async def _click_and_capture(page, context, attempt: int, captured: dict) -> str | None:
-    """
-    ينقر على زر التحميل ويصطاد الرابط من:
-    1. href في الـ DOM قبل النقر
-    2. نافذة جديدة فتحت
-    3. overlay ظهر → يغلقه → ينقر تاني
-    4. href في الـ DOM بعد النقر
-    """
-    # فحص href قبل النقر
-    href = await page.get_attribute(BTN_SELECTOR, "href")
-    if href and "mxcontent.net" in href:
-        log.info(f"✅ الرابط جاهز في الـ DOM: {href[:60]}...")
-        return href
-
-    await page.wait_for_timeout(random.randint(800, 1800))
-
-    # النقر مع مراقبة النوافذ
+async def try_inject_token(page, file_id: str, token: str) -> str | None:
+    print(f"💉 [Inject] جاري inject الـ token...")
     try:
-        async with context.expect_page(timeout=8000) as info:
-            await page.locator(BTN_SELECTOR).click(force=True)
-        new_page = await info.value
-        new_url  = new_page.url
-        log.info(f"📺 نافذة جديدة: {new_url[:60]}...")
-        if "mxcontent" in new_url or ".mp4" in new_url:
-            await new_page.close()
-            return new_url
-        await new_page.close()
-    except Exception:
-        log.info(f"ℹ️ النقرة {attempt} بدون نافذة.")
-
-    # فحص الـ overlay بعد النقر وإغلاقه
-    overlay_closed = await _dismiss_overlay(page)
-    if overlay_closed:
-        log.info("🔁 نقرة ثانية بعد إغلاق الـ overlay...")
-        await page.wait_for_timeout(random.randint(400, 900))
-        try:
-            async with context.expect_page(timeout=8000) as info2:
-                await page.locator(BTN_SELECTOR).click(force=True)
-            new_page2 = await info2.value
-            new_url2  = new_page2.url
-            log.info(f"📺 نافذة بعد overlay: {new_url2[:60]}...")
-            if "mxcontent" in new_url2 or ".mp4" in new_url2:
-                await new_page2.close()
-                return new_url2
-            await new_page2.close()
-        except Exception:
-            log.info("ℹ️ نقرة بعد overlay بدون نافذة.")
-
-    # فحص href بعد كل النقرات
-    await page.bring_to_front()
-    await page.wait_for_timeout(1500)
-    href = await page.get_attribute(BTN_SELECTOR, "href")
-    if href and "mxcontent.net" in href:
-        log.info(f"✅ صيد بعد النقر: {href[:60]}...")
-        return href
-
+        result = await page.evaluate(f"""
+            async () => {{
+                var fd = new FormData();
+                fd.append('cf-turnstile-response', '{token}');
+                var r = await fetch('/f/{file_id}?download', {{
+                    method: 'POST',
+                    body: fd
+                }});
+                return await r.json();
+            }}
+        """)
+        print(f"📦 [Inject Response] {result}")
+        if result and result.get("type") == "ok":
+            return result.get("url")
+    except Exception as e:
+        print(f"⚠️ [Inject Error] {e}")
     return None
 
 
 # ===========================================================================
-# Main Entry Point
+# Main
 # ===========================================================================
-
-async def get_mixdrop_direct_link(embed_url: str) -> str | None:
-    """
-    يستخرج الرابط المباشر لملف MixDrop.
-
-    Args:
-        embed_url: رابط MixDrop (يقبل /e/ أو /f/، ويقبل mixdrop أو miixdrop)
-
-    Returns:
-        رابط mxcontent.net المباشر، أو "404_DELETED"، أو None
-    """
-    target_url = embed_url.replace("miixdrop", "mixdrop").replace("/e/", "/f/")
+async def get_mixdrop_direct_link(embed_url, headless=False):
+    target_url = embed_url.replace("/e/", "/f/")
     if "?download" not in target_url:
         target_url += "?download"
 
-    if "mixdrop" not in target_url:
-        log.error(f"❌ رابط غير مدعوم: {target_url}")
-        return None
+    file_id = target_url.split("/f/")[1].split("?")[0]
+    print(f"🕵️ على: {target_url}  |  file_id={file_id}")
 
-    log.info(f"🕵️ محاكاة سلوك بشري على: {target_url}")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=headless,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--window-size=1920,1080",
+            ],
+        )
+        context = await browser.new_context(
+            user_agent=random.choice(USER_AGENTS),
+            viewport={"width": 1920, "height": 1080},
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+        )
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.navigator.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            var _si = window.setInterval;
+            window.setInterval = function(fn,t){
+                try{ if(fn.toString().indexOf('debugger')>=0) return 0; }catch(e){}
+                return _si(fn,t);
+            };
+            var _st = window.setTimeout;
+            window.setTimeout = function(fn,t){
+                try{ if(fn.toString().indexOf('debugger')>=0) return 0; }catch(e){}
+                return _st(fn,t);
+            };
+        """)
 
-    async with async_playwright() as playwright:
-        browser = await _create_browser(playwright)
-        context = await _create_context(browser)
-        page    = await context.new_page()
-
-        captured = {"url": None}
-        _attach_network_interceptor(page, captured)
+        page     = await context.new_page()
+        captured = {"url": None, "captcha_fail": False, "cf_token": None}
+        attach_interceptor(page, captured)
 
         try:
             await page.goto(target_url, wait_until="domcontentloaded")
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1500)
 
             if "can't find the file you are looking for" in await page.content():
-                log.error("🚫 الرابط ميت: الملف محذوف من MixDrop")
                 return "404_DELETED"
 
-            for attempt in range(1, MAX_ATTEMPTS + 1):
+            for attempt in range(1, 15):
 
+                # ✅ نجح!
                 if captured["url"]:
-                    log.info(f"🎯 تم صيد الرابط من الشبكة في المحاولة {attempt}")
+                    print(f"🎯 صيد من الشبكة في المحاولة {attempt}")
                     return captured["url"]
 
-                log.info(f"🖱️ محاولة {attempt}/{MAX_ATTEMPTS}...")
+                # لو اتصاد token → inject مباشرة
+                if captured["cf_token"]:
+                    result = await try_inject_token(page, file_id, captured["cf_token"])
+                    if result:
+                        return result
+                    captured["cf_token"] = None  # امسحه وحاول تاني
 
-                try:
-                    await page.wait_for_selector(BTN_SELECTOR, state="visible", timeout=12000)
-                except Exception:
-                    log.warning(f"⚠️ زر التحميل لم يظهر في المحاولة {attempt}")
-                    continue
-
-                if attempt == RELOAD_AT:
-                    log.warning("🔄 Reload للتنشيط...")
+                # Captcha فشلت → Reload
+                if captured["captcha_fail"]:
+                    print("🔄 Captcha فشلت → Reload...")
+                    captured["captcha_fail"] = False
                     await page.reload(wait_until="domcontentloaded")
                     await page.wait_for_timeout(3000)
                     continue
 
-                result = await _click_and_capture(page, context, attempt, captured)
-                if result:
-                    return result
+                print(f"🖱️ محاولة {attempt}/14...")
+
+                try:
+                    await page.wait_for_selector(BTN_SELECTOR, state="visible", timeout=12000)
+                except Exception:
+                    print(f"⚠️ زر التحميل لم يظهر")
+                    continue
+
+                href = await page.get_attribute(BTN_SELECTOR, "href")
+                if href and "mxcontent.net" in href:
+                    print(f"✅ الرابط في الـ DOM: {href[:60]}...")
+                    return href
+
+                if attempt == 6:
+                    print("🔄 Reload للتنشيط...")
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_timeout(3000)
+                    continue
+
+                await page.wait_for_timeout(random.randint(800, 1800))
+
+                # النقر الأول
+                try:
+                    async with context.expect_page(timeout=8000) as info:
+                        await page.locator(BTN_SELECTOR).click(force=True)
+                    new_p = await info.value
+                    new_u = new_p.url
+                    print(f"📺 نافذة: {new_u[:60]}...")
+                    if "mxcontent" in new_u or ".mp4" in new_u:
+                        await new_p.close()
+                        return new_u
+                    await new_p.close()
+                except Exception:
+                    print(f"ℹ️ النقرة {attempt} بدون نافذة.")
+
+                # فحص الـ overlay
+                closed = await dismiss_overlay(page)
+                if closed:
+                    print("🔁 نقرة ثانية بعد إغلاق الـ overlay...")
+                    await page.wait_for_timeout(random.randint(400, 900))
+                    try:
+                        async with context.expect_page(timeout=8000) as info2:
+                            await page.locator(BTN_SELECTOR).click(force=True)
+                        new_p2 = await info2.value
+                        new_u2 = new_p2.url
+                        print(f"📺 نافذة بعد overlay: {new_u2[:60]}...")
+                        if "mxcontent" in new_u2 or ".mp4" in new_u2:
+                            await new_p2.close()
+                            return new_u2
+                        await new_p2.close()
+                    except Exception:
+                        print("ℹ️ نقرة بعد overlay بدون نافذة.")
+
+                await page.bring_to_front()
+                await page.wait_for_timeout(1500)
+
+                href = await page.get_attribute(BTN_SELECTOR, "href")
+                if href and "mxcontent.net" in href:
+                    print(f"✅ صيد بعد النقر: {href[:60]}...")
+                    return href
 
                 if captured["url"]:
                     return captured["url"]
 
-                log.info("⏳ الرابط لم يظهر بعد، ننتظر...")
+                print(f"⏳ لم يظهر بعد...")
                 await page.wait_for_timeout(4000)
 
-            log.error("❌ استُنفدت كل المحاولات بدون نتيجة")
+            print("❌ استُنفدت كل المحاولات")
             return None
 
         except Exception as e:
-            log.error(f"❌ خطأ غير متوقع: {e}")
+            print(f"❌ خطأ: {e}")
             return None
-
         finally:
             await browser.close()
+
+
+if __name__ == "__main__":
+    result = asyncio.run(get_mixdrop_direct_link(TEST_URL, headless=False))
+    print(f"\n{'='*50}\nالنتيجة: {result}")
