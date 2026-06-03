@@ -18,7 +18,6 @@ load_dotenv()
 nest_asyncio.apply()
 log = get_beast_logger("GuardianUltra")
 
-
 async def run_pyramid_tasks(task_list):
     if not task_list:
         log.warning("⚠️ تنبيه: قائمة المهام فارغة!")
