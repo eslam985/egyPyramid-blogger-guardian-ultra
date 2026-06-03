@@ -33,7 +33,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_NAME = "download_tasks"
 
 # تم إلغاء أرقام الصفحات الثابتة لتعمل ديناميكياً بالكامل
-MAX_IDLE_BUFFER = 40  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
+MAX_IDLE_BUFFER = 60  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
@@ -463,7 +463,7 @@ async def run_scraper_async():
         f"🔍 فحص الطابور: يوجد حالياً ({idle_count}) فيلم في حالة idle تنتظر التحميل..."
     )
 
-    if idle_count >= 20:
+    if idle_count >= 60:
         log.warning(
             f"🛑 الطابور ممتلئ! (الحد الأقصى المسموح 19 وأنت عندك {idle_count}). تم إيقاف الإسكربر تلقائياً لحماية الروابط من الموت."
         )

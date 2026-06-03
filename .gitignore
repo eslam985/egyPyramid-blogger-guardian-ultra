@@ -9,3 +9,4 @@ node_modules/
 venv/
 
 AUDIT.md
+sync_env.py

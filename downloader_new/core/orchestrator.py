@@ -30,12 +30,14 @@ from downloader_new.media.file_manager import (
 log = get_beast_logger("GuardianUltra")
 
 
-def get_space_stream_url(file_name, default_space="egystreamer/guardian-ultra"):
-    """
-    تحويل SPACE_ID إلى رابط مباشر للـ Stream
-    """
-    space_id = os.environ.get("SPACE_ID", default_space)
-    # تحويل egystreamer/guardian-ultra إلى egystreamer-guardian-ultra
+def get_space_stream_url(file_name):
+    # نحاول جلب القيمة من النظام، إذا فشل أو لم تكن موجودة، نستخدم قيمة افتراضية
+    space_id = os.environ.get("SPACE_ID")
+    
+    # إذا كان النظام لم يقم بتعريفه أو كان فارغاً، نضع القيمة الافتراضية الخاصة بنا
+    if not space_id:
+        space_id = "egystreamer/guardian-ultra"
+        
     space_domain = space_id.replace("/", "-").strip()
     return f"https://{space_domain}.hf.space/stream/{file_name}"
 
