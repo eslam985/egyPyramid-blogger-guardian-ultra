@@ -383,7 +383,6 @@ def normalize_title(title, for_search=False):
     #     t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
     # else:
     #     t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s\':]", " ", t)
-
     stop_words = [
         "مسلسل",
         "فيلم",
