@@ -30,6 +30,15 @@ from downloader_new.media.file_manager import (
 log = get_beast_logger("GuardianUltra")
 
 
+def get_space_stream_url(file_name, default_space="egystreamer/guardian-ultra"):
+    """
+    تحويل SPACE_ID إلى رابط مباشر للـ Stream
+    """
+    space_id = os.environ.get("SPACE_ID", default_space)
+    # تحويل egystreamer/guardian-ultra إلى egystreamer-guardian-ultra
+    space_domain = space_id.replace("/", "-").strip()
+    return f"https://{space_domain}.hf.space/stream/{file_name}"
+
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # --- 1. تجهيز بيئة العمل ---
     ws = setup_workspace()
@@ -330,13 +339,11 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
             # --- 21. الرفع المتوازي الخماسي ---
             if vid_path and os.path.exists(vid_path):
-                file_name = os.path.basename(
-                    vid_path
-                )  # المفتاح: استخدم اسم الملف الفعلي
-                space_domain = "egystreamer-guardian-ultra.hf.space"
-                # egystreamer/guardian-ultra
-                direct_remote_url = f"https://{space_domain}/stream/{file_name}"
-                remote_source = direct_remote_url
+                file_name = os.path.basename(vid_path)
+                
+                # استبدال السطرين اليدويين بهذا الاستدعاء:
+                remote_source = get_space_stream_url(file_name)
+                
                 log.info(
                     f"✅ المصدر المعتمد للرفع الخماسي: [Direct Stream] - {remote_source}"
                 )
