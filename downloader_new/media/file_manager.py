@@ -8,42 +8,40 @@ from downloader_new.shared.logger import get_beast_logger
 log = get_beast_logger("GuardianUltra")
 
 
+# ابحث عن دالة check_media_duplicate القديمة واستبدلها بالكامل بهذا المنطق الصارم:
+
 def check_media_duplicate(clean_title: str, year: str, category: str, season_no, ep_no) -> dict:
     """
-    التحقق من وجود الميديا/الحلقة مسبقاً في Supabase.
-    تعيد قاموساً بالمفاتيح: exists (bool), media_id (int|None), episode_id (int|None).
+    التحقق الصارم والذكي من وجود الميديا/الحلقة مسبقاً في Supabase مع معالجة اختلافات الترقيم.
     """
     result = {"exists": False, "media_id": None, "episode_id": None}
+    import re
+
     try:
         media_id = None
-        # الخطوة 1: البحث المباشر
+        
+        # 1. بناء نمط البحث المرن (تغيير المسافات وعلامات الترقيم إلى %)
+        smart_pattern = re.sub(r'[^a-zA-Z0-9\u0600-\u06FF]+', '%', clean_title)
+        smart_pattern = f"%{smart_pattern}%"
+
+        # 2. البحث الموحد والذكي في جدول الميديا باستخدام النمط والسنة معاً
         m_query = (
             supabase.table("medias")
-            .select("id, title")
-            .eq("title", clean_title)
+            .select("id")
+            .ilike("title", smart_pattern)
             .eq("year", year)
             .execute()
         )
 
         if m_query.data:
             media_id = m_query.data[0]["id"]
-        else:
-            # الخطوة 2: البحث الذكي بالاسم المنظف
-            search_results = (
-                supabase.table("medias")
-                .select("id, title")
-                .ilike("title", f"%{clean_title}%")
-                .execute()
-            )
-            for row in search_results.data:
-                if normalize_title(row["title"]) == clean_title:
-                    media_id = row["id"]
-                    break
 
         result["media_id"] = media_id
 
+        # 3. تتبع الحلقات والروابط بناءً على الفئة
         if media_id:
             if category == "movie":
+                # فحص ما إذا كان للفيلم حلقة مسجلة بالفعل
                 ep_query = (
                     supabase.table("episodes")
                     .select("id")
@@ -53,7 +51,9 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
                 if ep_query.data:
                     result["exists"] = True
                     result["episode_id"] = ep_query.data[0]["id"]
+            
             elif category == "tv" and season_no is not None and ep_no is not None:
+                # فحص المسلسلات: الانتقال من السلسلة -> الموسم -> الحلقة -> الروابط
                 s_query = (
                     supabase.table("seasons")
                     .select("id")
@@ -84,9 +84,9 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
                             result["episode_id"] = ep_id_found
 
     except Exception as e:
-        log.warning(f"⚠️ فشل فحص التكرار: {e}")
+        log.warning(f"⚠️ فشل فحص التكرار الصارم: {e}")
 
-    log.info(f"فحص التكرار: العنوان='{clean_title}', السنة='{year}', الفئة='{category}', النتيجة: exists={result['exists']}, media_id={result['media_id']}")
+    log.info(f"فحص التكرار: النمط='{smart_pattern}', السنة='{year}', الفئة='{category}', النتيجة: exists={result['exists']}, media_id={result['media_id']}")
     return result
 
 

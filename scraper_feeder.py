@@ -91,45 +91,32 @@ def already_exists(sb: Client, movie_name: str, download_url: str) -> bool:
         incoming_pure_title = movie_name.strip()
         incoming_year = None
 
-    # 2. الفحص في جدول المهام (download_tasks)
-    # نستخدم ilike ليتجاهل الكابتل والاسمول تلقائياً
+    # إنشاء نمط بحث مرن (Smart Wildcard) لتجاوز اختلافات علامات الترقيم والمسافات
+    # يحول "Barron's Cove" أو "Barron s Cove" إلى "Barron%s%Cove"
+    smart_pattern = re.sub(r'[^a-zA-Z0-9\u0600-\u06FF]+', '%', incoming_pure_title)
+    smart_pattern = f"%{smart_pattern}%"
+
+    # 2. الفحص في جدول المهام باستخدام النمط المرن
     in_tasks = (
         sb.table("download_tasks")
         .select("id")
-        .or_(f"source_url.eq.{download_url},task_name.ilike.{movie_name}")
+        .or_(f"source_url.eq.{download_url},task_name.ilike.{smart_pattern}")
         .execute()
     )
 
     if in_tasks.data:
         return True
 
-    # 3. الفحص في جدول الميديا (medias) - الاستراتيجية القاتلة
-    # سنقوم بالبحث عن الاسم الصافي بدون السنة
-    query = sb.table("medias").select("id").ilike("title", incoming_pure_title)
+    # 3. الفحص الشامل في جدول الميديا باستخدام النمط المرن
+    query = sb.table("medias").select("id").ilike("title", smart_pattern)
 
-    # لو عندنا سنة، نضيق البحث بها لزيادة الدقة
     if incoming_year:
         query = query.eq("year", incoming_year)
 
     in_medias = query.execute()
 
     if in_medias.data:
-        log.info(
-            f"  ♻️  تم العثور على الفيلم في الميديا (تكرار): {incoming_pure_title}"
-        )
-        return True
-
-    # 4. فحص احتياطي (لو العنوان في القاعدة فيه سنة محشورة بالخطأ)
-    # نبحث عن الاسم متبوعاً بأي شيء (Wildcard)
-    in_medias_wildcard = (
-        sb.table("medias").select("id").ilike("title", f"%{incoming_pure_title}%")
-    )
-    if incoming_year:
-        in_medias_wildcard = in_medias_wildcard.eq("year", incoming_year)
-
-    res_wildcard = in_medias_wildcard.execute()
-    if res_wildcard.data:
-        log.info(f"  ♻️  تطابق Wildcard (تكرار محتمل): {incoming_pure_title}")
+        log.info(f"  ♻️  تم العثور على العمل مسبقاً (تطابق مرن): {incoming_pure_title}")
         return True
 
     return False
