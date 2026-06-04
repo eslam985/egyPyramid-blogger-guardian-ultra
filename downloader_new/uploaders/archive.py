@@ -116,7 +116,7 @@ def process_archive_upload(video_path: str, media_id: int, episode_id: int, idx:
     final_file_name = f"f_{media_id}_{episode_id}_{idx}.mp4"
 
     # archive_url = Upload_To_Archive(video_path, media_id, episode_id, idx, identifier, final_file_name, ARCHIVE_ACCESS_KEY, ARCHIVE_SECRET_KEY, task_id)
-    archive_url = "Disabled"
+    archive_url = ""
     return archive_url
 
 

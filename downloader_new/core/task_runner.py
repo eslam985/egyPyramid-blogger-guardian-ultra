@@ -79,7 +79,7 @@ async def finalize_episode(
             meta_year,
             meta_rating,
             video_path,
-            archive_url,
+            # archive_url,
             tmdb_id=tmdb_data["tmdb_id"],
             labels=meta_labels,
             runtime=meta_runtime,
