@@ -60,46 +60,57 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     original_task_name, extracted_year = extract_clean_media_info(name)
     display_title = original_task_name
 
-    # --- 3. تحديد query البحث ---
+    # --- 3. تحديد query البحث وتنظيف البيانات ---
     if "http" in original_task_name or original_task_name.startswith(("tt", "tmdb")):
         search_query_clean = original_task_name
     else:
         clean_res = get_clean_media_data(original_task_name)
         log.info(f"DEBUG: calling get_clean_media_data with {original_task_name}")
         if clean_res and len(clean_res) == 4:
-            search_query_clean, _, _, _ = clean_res
-            # إعادة تنظيف النص المخصص للبحث للحفاظ على (: و - و ') من أجل TMDB
-            search_query_clean = normalize_title(search_query_clean, for_search=True)
+            search_query_clean, pre_category, pre_season, pre_ep = clean_res
+            search_query_clean_tmdb = normalize_title(search_query_clean, for_search=True)
         else:
-            search_query_clean = normalize_title(original_task_name, for_search=True)
+            search_query_clean_tmdb = normalize_title(original_task_name, for_search=True)
+            search_query_clean = search_query_clean_tmdb
+            pre_category, pre_season, pre_ep = "movie", None, None
 
-    # --- 4. جلب بيانات TMDB ---
+    # --- 4. فحص التكرار السريع (مقدم لتوفير الموارد) ---
+    # نفحص قاعدة البيانات بالاسم والسنة المستخرجين محلياً قبل استدعاء أي API خارجي
+    try:
+        fast_dup_check = check_media_duplicate(
+            search_query_clean,
+            extracted_year,
+            pre_category,
+            pre_season,
+            pre_ep,
+        )
+        if fast_dup_check["exists"] and pre_category == "movie":
+            log.info(f"✅ [تخطي مبكر]: الفيلم '{original_task_name}' موجود بالفعل! (وفرنا استدعاء TMDB)")
+            return
+    except Exception as e:
+        log.warning(f"⚠️ فشل الفحص السريع للتكرار، سنكمل المسار الطبيعي: {e}")
+
+    # --- 5. جلب بيانات TMDB ---
     tmdb_data = fetch_tmdb_metadata(
-        search_query_clean if search_query_clean else name,
+        search_query_clean_tmdb if search_query_clean_tmdb else name,
         year=extracted_year,
     )
     log.info(
         f"DEBUG: Final media data - Title: {tmdb_data['display_title']}, Year: {tmdb_data['year']}"
     )
 
-    # --- 5. بناء الاسم المعروض النهائي ---
+    # --- 6. بناء الاسم المعروض النهائي وتحديث بيانات التنظيف ---
     display_title = build_display_title(original_task_name, tmdb_data["display_title"])
-
-    # --- 6. جلب بيانات التنظيف للـ DB ---
     clean_res_db = get_clean_media_data(display_title)
+    
     if clean_res_db and len(clean_res_db) == 4:
-        clean_title_search, category_search, current_season_no, current_ep_no = (
-            clean_res_db
-        )
+        clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
     else:
         clean_title_search, category_search, current_season_no, current_ep_no = (
-            display_title,
-            "movie",
-            None,
-            None,
+            display_title, "movie", None, None
         )
 
-    # --- 7. فحص التكرار الأولي ---
+    # --- 7. فحص التكرار الدقيق (احتياطي بعد جلب البيانات الرسمية) ---
     try:
         dup_check = check_media_duplicate(
             clean_title_search,
@@ -109,10 +120,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             current_ep_no,
         )
         if dup_check["exists"] and category_search == "movie":
-            log.info(f"✅ [تخطي]: الفيلم '{display_title}' موجود بالفعل!")
+            log.info(f"✅ [تخطي دقيق]: الفيلم '{display_title}' مسجل مسبقاً بناءً على بيانات TMDB!")
             return
     except Exception as e:
-        log.warning(f"⚠️ فشل فحص التكرار الأولي: {e}")
+        log.warning(f"⚠️ فشل الفحص الدقيق للتكرار: {e}")
 
     # --- 8. الحجز الأولي في Supabase ---
     temp_id = f"loading_{timestamp}"
