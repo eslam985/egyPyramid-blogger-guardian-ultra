@@ -1,3 +1,4 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/services/supabase_db.py
 import os
 from typing import Optional, List, Tuple, Any
 from supabase import create_client, Client
