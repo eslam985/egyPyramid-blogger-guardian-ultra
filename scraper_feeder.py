@@ -425,7 +425,7 @@ async def get_total_pages(page) -> int:
     try:
         pagination_links = await page.query_selector_all("ul.pagination li a")
         if not pagination_links:
-            return 20  # قيمة احتياطية في حال فشل الاستخراج
+            return 62  # قيمة احتياطية في حال فشل الاستخراج
             
         page_numbers = []
         for link in pagination_links:
@@ -433,9 +433,9 @@ async def get_total_pages(page) -> int:
             if text.isdigit():
                 page_numbers.append(int(text))
                 
-        return max(page_numbers) if page_numbers else 20
+        return max(page_numbers) if page_numbers else 62
     except Exception:
-        return 20  # كقيمة أمان لو حدث أي تغيير في تصميم الموقع
+        return 62  # كقيمة أمان لو حدث أي تغيير في تصميم الموقع
 # ──────────────────────────────────────────────
 # 🚀  Main Runner
 # ──────────────────────────────────────────────
