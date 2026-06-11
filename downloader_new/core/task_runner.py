@@ -56,7 +56,7 @@ async def finalize_episode(
                 }
             ).eq("id", e_id).execute()
 
-        mix_url = await upload_to_mixdrop(video_path, mix_user, mix_key)
+        mix_url = await upload_to_mixdrop(video_path, mix_user, mix_key)    
         log.info(f"mix_url: {mix_url}")
         if mix_url:
             supabase.table("links").upsert(
