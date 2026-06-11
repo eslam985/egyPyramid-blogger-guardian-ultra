@@ -33,7 +33,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_NAME = "download_tasks"
 
 # تم إلغاء أرقام الصفحات الثابتة لتعمل ديناميكياً بالكامل
-MAX_IDLE_BUFFER = 60  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
+MAX_IDLE_BUFFER = 1  # الحد الأقصى للمهام الـ idle في الطابور لحماية الروابط من الموت
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
@@ -53,18 +53,24 @@ log = logging.getLogger("TopCrawler")
 # ──────────────────────────────────────────────
 # 🎭  User-Agents عشوائية
 # ──────────────────────────────────────────────
+# 🎭 قائمة الـ User-Agents الاحترافية لعام 2026 المتوافقة تماماً مع محرك Chromium
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 "
-    "(KHTML, like Gecko) Version/17.4 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) "
-    "Gecko/20100101 Firefox/125.0",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+    # 1. متصفح جوجل كروم مستقر على نظام ويندوز 11 (Windows 11)
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    
+    # 2. متصفح إيدج الحديث القائم على الكروميوم على نظام ويندوز (Edge on Windows)
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0",
+    
+    # 3. متصفح جوجل كروم على أحدث أنظمة الماك (macOS Sonoma/Sequoia)
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    
+    # 4. متصفح جوجل كروم على نظام لينكس الشهير (Linux x86_64)
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    
+    # 5. متصفح كروم المخصص لهواتف أندرويد الحديثة (Android 14/15) - متوافق مع Chromium
+    "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36"
 ]
+
 
 
 # ──────────────────────────────────────────────
