@@ -1,4 +1,17 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/worker.py
+import httpx
+
+# إجبار المكتبة عالمياً على إغلاق HTTP/2 وتفعيل HTTP/1.1 المستقر لمنع سقوط اتصال سوبابيس
+def _patch_httpx_client(client_class):
+    orig_init = client_class.__init__
+    def patched_init(self, *args, **kwargs):
+        kwargs["http2"] = False
+        orig_init(self, *args, **kwargs)
+    client_class.__init__ = patched_init
+
+_patch_httpx_client(httpx.Client)
+_patch_httpx_client(httpx.AsyncClient)
+
 import os
 import time
 import random
@@ -13,8 +26,6 @@ log = get_beast_logger("GuardianWorker")
 log.info(f"🚀 تم تشغيل الووركر بنجاح من المسار: {PROJECT_ROOT}")
 
 should_stop_worker = False
-
-
 def ultimate_beast_worker():
     global should_stop_worker
     log.info("⚙️ بدء تشغيل محرك الووركر...")
@@ -181,12 +192,12 @@ def ultimate_beast_worker():
                     client.table("download_tasks").update(
                         {
                             "status": "failed",  # تغيير لـ failed أفضل عشان ميدخلش في Loop لا نهائي لو الرابط ميت
-                            "status_message": f"❌ خطأ فني بالووركر: {str(e)[:100]}",
+                            "status_message": f"❌ خطأ فني بالووركر: {str(e)}",
                         }
                     ).eq("id", job_id).execute()
             except:
                 pass
-            time.sleep(20)
+    time.sleep(120)
 
 
 # أمان التشغيل السحابي المباشر
