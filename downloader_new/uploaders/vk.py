@@ -27,12 +27,18 @@ def upload_to_vk_local(title, file_path):
         res_save = requests.get(api_url, params=params).json()
 
         if "response" not in res_save:
-            import logging
+            error_info = res_save.get("error", {})
+            err_code = error_info.get("error_code")
+            err_msg = error_info.get("error_msg", "")
 
-            logging.error(
-                f"❌ فشل حجز مكان في VK: {res_save.get('error', {}).get('error_msg')}"
-            )
-            logging.error(f"🔍 تفاصيل استجابة VK بالكامل: {res_save}")
+            if err_code == 7 or "has not right" in err_msg:
+                log.error(
+                    f"🚨 [VK CRITICAL] كود 7: تم رفض الصلاحية! الجروب ID: {VK_GROUP_ID} قد يكون محذوفاً، محظوراً، أو التوكن تالف."
+                )
+            else:
+                log.error(f"❌ فشل حجز مكان في VK (كود {err_code}): {err_msg}")
+
+            log.error(f"🔍 تفاصيل استجابة VK بالكامل: {res_save}")
             return None
 
         upload_url = res_save["response"]["upload_url"]
@@ -47,10 +53,9 @@ def upload_to_vk_local(title, file_path):
                 response = requests.post(upload_url, files=files, timeout=600)
 
             if response.status_code != 200:
-                import logging
 
-                logging.error(f"❌ فشل ضخ الملف لـ VK: Status {response.status_code}")
-                logging.error(f"🔍 تفاصيل الرفض من السيرفر: {response.text}")
+                log.error(f"❌ فشل ضخ الملف لـ VK: Status {response.status_code}")
+                log.error(f"🔍 تفاصيل الرفض من السيرفر: {response.text}")
                 return None
             log.info("   ✅ انتهى الضخ بنجاح. يبدأ الآن فحص المعالجة وقنص الرابط...")
         except Exception as e:
@@ -91,8 +96,7 @@ def upload_to_vk_local(title, file_path):
 
     except Exception as e:
         import traceback
-        import logging
 
-        logging.error(f"⚠️ فشل VK المحلي: {e}")
-        logging.error(f"🔍 تفاصيل الخطأ البرمجي:\n{traceback.format_exc()}")
+        log.error(f"⚠️ فشل VK المحلي: {e}")
+        log.error(f"🔍 تفاصيل الخطأ البرمجي:\n{traceback.format_exc()}")
         return None
