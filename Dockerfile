@@ -1,6 +1,8 @@
 # استخدم نسخة بايثون الكاملة لضمان استقرار المكتبات
 FROM python:3.11-slim
 
+# جعل مخرجات بايثون تظهر فوراً في الـ Logs بدون تخزين مؤقت
+ENV PYTHONUNBUFFERED=1
 # 1. تثبيت أدوات النظام (إضافة wget لتحميل ملفات IMDb)
 RUN apt-get update && apt-get install -y \
     fonts-liberation \
