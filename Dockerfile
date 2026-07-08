@@ -23,17 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # 3. تثبيت متصفح Chromium وتعريفاته (مهم جداً للـ Mixdrop و Playwright)
 RUN playwright install chromium
 RUN playwright install-deps chromium
-# --- مرحلة بناء الرادار المحلي (IMDb Index) ---
-# تحميل الملفات وتصفيتها لتقليل الحجم (سنة 2010+)
-RUN wget https://datasets.imdbws.com/title.basics.tsv.gz \
-    && wget https://datasets.imdbws.com/title.ratings.tsv.gz \
-    && mkdir -p downloader_new/metadata
 
-# نسخ سكريبت البناء فقط لتشغيله
-COPY scripts/build_local_db.py ./scripts/build_local_db.py
-RUN python3 scripts/build_local_db.py \
-    && rm title.basics.tsv.gz title.ratings.tsv.gz
-# --------------------------------------------
 # 4. نسخ كل ملفات المشروع
 COPY . .
 

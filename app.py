@@ -62,14 +62,45 @@ async def auto_feeder_loop():
         print("⚠️ [Warning] scraper_feeder.py not found.")
 
 
+def run_imdb_build_sync():
+    """تحميل ملفات IMDb وتشغيل سكريبت البناء في الخلفية لضمان إقلاع السيرفر"""
+    import subprocess
+    import os
+    try:
+        print("⏳ [IMDb Radar] بدء تحميل الملفات الضخمة من سيرفرات IMDb...")
+        # تأمين المجلد
+        os.makedirs("downloader_new/metadata", exist_ok=True)
+        
+        # 1. تحميل الملفات التي حُذفت من الدوكر
+        subprocess.run(["wget", "-q", "https://datasets.imdbws.com/title.basics.tsv.gz"], check=True)
+        subprocess.run(["wget", "-q", "https://datasets.imdbws.com/title.ratings.tsv.gz"], check=True)
+        
+        print("⚙️ [IMDb Radar] جاري معالجة البيانات وبناء الكشاف المحلي...")
+        # 2. تشغيل سكريبت الفلترة والبناء الأصلي الخاص بك
+        subprocess.run(["python3", "scripts/build_local_db.py"], check=True)
+        
+        # 3. تنظيف الملفات المضغوطة فوراً لتوفير مساحة القرص في السبيس
+        for temp_file in ["title.basics.tsv.gz", "title.ratings.tsv.gz"]:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        print("✅ [IMDb Radar] تم بناء الرادار المحلي بنجاح وهو جاهز للاستخدام الفعلي.")
+    except Exception as e:
+        print(f"❌ [IMDb Radar Error] فشل بناء الرادار في الخلفية: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Startup ---
-    # 1. إطلاق الووركر
+    # 1. إطلاق الووركر (الوحش)
     thread = threading.Thread(target=worker.ultimate_beast_worker, daemon=True)
     thread.start()
-    # 2. إطلاق الفيدر
+    
+    # 2. إطلاق الفيدر (صياد الروابط)
     asyncio.create_task(auto_feeder_loop())
+    
+    # 3. إطلاق مهمة بناء رادار IMDb في خيط منفصل تماماً
+    threading.Thread(target=run_imdb_build_sync, daemon=True).start()
+    
     yield
     # --- Shutdown ---
     worker.should_stop_worker = True  # إيقاف الووركر بأمان
@@ -123,6 +154,17 @@ def authenticate(token: str = Depends(oauth2_scheme)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+@app.post("/api/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+
+    if form_data.username != admin_email or form_data.password != admin_password:
+        raise HTTPException(status_code=400, detail="بيانات دخول خاطئة")
+
+    token = jwt.encode({"sub": form_data.username}, SECRET_KEY, algorithm="HS256")
+    return {"access_token": token, "token_type": "bearer"}
+
 
 def convert_vk_to_embed(url):
     if (
@@ -163,17 +205,6 @@ def convert_vk_to_embed(url):
         print(f"⚠️ VK Hash Error: {e}")
         return url
 
-
-@app.post("/api/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    admin_email = os.getenv("ADMIN_EMAIL")
-    admin_password = os.getenv("ADMIN_PASSWORD")
-
-    if form_data.username != admin_email or form_data.password != admin_password:
-        raise HTTPException(status_code=400, detail="بيانات دخول خاطئة")
-
-    token = jwt.encode({"sub": form_data.username}, SECRET_KEY, algorithm="HS256")
-    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/api/search/id/{media_id}")
