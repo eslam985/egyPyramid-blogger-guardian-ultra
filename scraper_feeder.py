@@ -379,7 +379,7 @@ async def get_movie_title(page) -> str:
                 (await page.title()).replace("توب سينما", "").replace("TopCinema", "").strip()
             )
 
-        return normalize_title(raw_title, remove_year=Falsealse)
+        return normalize_title(raw_title, remove_year=False)
 
 
 async def random_delay():
