@@ -18,6 +18,12 @@ def normalize_title(title, for_search=False):
     # --------------------------------
 
     # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
+    # إزالة ترقيم المواسم والحلقات (S01E05 / S1 / E5)
+    t = re.sub(r"\bs\d+\s*e\d+\b", " ", t)
+    t = re.sub(r"\bs\d+\b", " ", t)
+    t = re.sub(r"\be\d+\b", " ", t)
+
+    # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
     if for_search:
         t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
     else:
@@ -56,6 +62,7 @@ def normalize_title(title, for_search=False):
 
 
 def get_clean_media_data(raw_name):
+    raw_name = str(raw_name)
     # 1. أنماط استخراج الموسم والحلقة
     # نمط S01E05 أو S1E5
     s_e_pattern = re.search(r"[sS](\d+)[eE](\d+)", raw_name)
@@ -96,25 +103,13 @@ def get_clean_media_data(raw_name):
         category = "tv"
         season_no = int(season_only_pattern.group(1))
         clean_title = re.split(r"(?:الموسم|موسم)\s*\d+", raw_name)[0]
-    elif any(
-        word in raw_name
-        for word in [
-            "مسلسل",
-            "موسم",
-            "الموسم",
-            "حلقة",
-            "Series",
-            "Season",
-            "Episode",
-            "TV",
-            "tv",
-            "season",
-            "episode",
-        ]
+    elif re.search(
+        r"(?:\bseries\b|\bseason\b|\bepisode\b|\bS\d+E\d+\b|مسلسل|موسم|الموسم|حلقة)",
+        raw_name,
+        re.IGNORECASE,
     ):
         category = "tv"
         clean_title = raw_name
-
     # تنظيف العنوان النهائي باستخدام دالة normalize_title
     clean_title = normalize_title(clean_title)
 

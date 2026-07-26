@@ -12,83 +12,144 @@ log = get_beast_logger("GuardianUltra")
 
 def check_media_duplicate(clean_title: str, year: str, category: str, season_no, ep_no) -> dict:
     """
-    التحقق الصارم والذكي من وجود الميديا/الحلقة مسبقاً في Supabase مع معالجة اختلافات الترقيم.
+    فحص احترافي لمنع التكرار.
+    يعتمد على:
+      - السنة أولاً.
+      - ثم مقارنة normalize_title() بدلاً من ilike.
+      - ثم فحص الحلقة والروابط للمسلسلات.
     """
-    result = {"exists": False, "media_id": None, "episode_id": None}
-    import re
+
+    result = {
+        "exists": False,
+        "media_id": None,
+        "episode_id": None,
+    }
 
     try:
-        media_id = None
-        
-        # 1. بناء نمط البحث المرن (تغيير المسافات وعلامات الترقيم إلى %)
-        smart_pattern = re.sub(r'[^a-zA-Z0-9\u0600-\u06FF]+', '%', clean_title)
-        smart_pattern = f"%{smart_pattern}%"
+        # -----------------------------
+        # 1) السنة إجبارية
+        # -----------------------------
+        if not year or str(year).strip() in ("", "None", "غير محدد"):
+            log.warning(
+                f"⚠️ تم تخطي فحص التكرار لأن السنة غير صالحة: {year}"
+            )
+            return result
 
-        # 2. البحث الموحد والذكي في جدول الميديا باستخدام النمط والسنة معاً
-        m_query = (
+        normalized_search = normalize_title(clean_title)
+
+        # -----------------------------
+        # 2) جلب كل أعمال نفس السنة فقط
+        # -----------------------------
+        medias = (
             supabase.table("medias")
-            .select("id")
-            .ilike("title", smart_pattern)
-            .eq("year", year)
+            .select("id,title,year")
+            .eq("year", str(year))
             .execute()
         )
 
-        if m_query.data:
-            media_id = m_query.data[0]["id"]
+        media_row = None
+
+        if medias.data:
+            for row in medias.data:
+
+                db_title = row.get("title") or ""
+
+                if normalize_title(db_title) == normalized_search:
+                    media_row = row
+                    break
+
+        if not media_row:
+            log.info(
+                f"🔍 غير موجود: '{clean_title}' ({year})"
+            )
+            return result
+
+        media_id = media_row["id"]
 
         result["media_id"] = media_id
 
-        # 3. تتبع الحلقات والروابط بناءً على الفئة
-        if media_id:
-            if category == "movie":
-                # فحص ما إذا كان للفيلم حلقة مسجلة بالفعل
-                ep_query = (
-                    supabase.table("episodes")
-                    .select("id")
-                    .eq("media_id", media_id)
-                    .execute()
-                )
-                if ep_query.data:
-                    result["exists"] = True
-                    result["episode_id"] = ep_query.data[0]["id"]
-            
-            elif category == "tv" and season_no is not None and ep_no is not None:
-                # فحص المسلسلات: الانتقال من السلسلة -> الموسم -> الحلقة -> الروابط
-                s_query = (
-                    supabase.table("seasons")
-                    .select("id")
-                    .eq("media_id", media_id)
-                    .eq("season_number", season_no)
-                    .execute()
-                )
-                if s_query.data:
-                    s_id = s_query.data[0]["id"]
-                    e_query = (
-                        supabase.table("episodes")
-                        .select("id")
-                        .eq("media_id", media_id)
-                        .eq("season_id", s_id)
-                        .eq("episode_number", ep_no)
-                        .execute()
-                    )
-                    if e_query.data:
-                        ep_id_found = e_query.data[0]["id"]
-                        links_query = (
-                            supabase.table("links")
-                            .select("id")
-                            .eq("episode_id", ep_id_found)
-                            .execute()
-                        )
-                        if links_query.data:
-                            result["exists"] = True
-                            result["episode_id"] = ep_id_found
+        # ===========================================
+        # الأفلام
+        # ===========================================
+        if category == "movie":
+
+            episode = (
+                supabase.table("episodes")
+                .select("id")
+                .eq("media_id", media_id)
+                .limit(1)
+                .execute()
+            )
+
+            if episode.data:
+                result["exists"] = True
+                result["episode_id"] = episode.data[0]["id"]
+
+            log.info(
+                f"🎬 Duplicate(Movie): exists={result['exists']} media={media_id}"
+            )
+
+            return result
+
+        # ===========================================
+        # المسلسلات
+        # ===========================================
+        if category == "tv":
+
+            if season_no is None or ep_no is None:
+                return result
+
+            season = (
+                supabase.table("seasons")
+                .select("id")
+                .eq("media_id", media_id)
+                .eq("season_number", season_no)
+                .limit(1)
+                .execute()
+            )
+
+            if not season.data:
+                return result
+
+            season_id = season.data[0]["id"]
+
+            episode = (
+                supabase.table("episodes")
+                .select("id")
+                .eq("media_id", media_id)
+                .eq("season_id", season_id)
+                .eq("episode_number", ep_no)
+                .limit(1)
+                .execute()
+            )
+
+            if not episode.data:
+                return result
+
+            episode_id = episode.data[0]["id"]
+
+            result["episode_id"] = episode_id
+
+            links = (
+                supabase.table("links")
+                .select("id")
+                .eq("episode_id", episode_id)
+                .limit(1)
+                .execute()
+            )
+
+            if links.data:
+                result["exists"] = True
+
+            log.info(
+                f"📺 Duplicate(TV): exists={result['exists']} media={media_id} episode={episode_id}"
+            )
+
+        return result
 
     except Exception as e:
-        log.warning(f"⚠️ فشل فحص التكرار الصارم: {e}")
-
-    log.info(f"فحص التكرار: النمط='{smart_pattern}', السنة='{year}', الفئة='{category}', النتيجة: exists={result['exists']}, media_id={result['media_id']}")
-    return result
-
+        log.warning(f"⚠️ فشل فحص التكرار: {e}")
+        return result
 
 
 

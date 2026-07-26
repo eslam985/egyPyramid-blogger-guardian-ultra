@@ -1,5 +1,6 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/core/orchestrator.py
 import os
+import re
 import time
 import shutil
 import asyncio
@@ -33,13 +34,14 @@ log = get_beast_logger("GuardianUltra")
 def get_space_stream_url(file_name):
     # نحاول جلب القيمة من النظام، إذا فشل أو لم تكن موجودة، نستخدم قيمة افتراضية
     space_id = os.environ.get("SPACE_ID")
-    
+
     # إذا كان النظام لم يقم بتعريفه أو كان فارغاً، نضع القيمة الافتراضية الخاصة بنا
     if not space_id:
         space_id = "egystreamer/guardian-ultra"
-        
+
     space_domain = space_id.replace("/", "-").strip()
     return f"https://{space_domain}.hf.space/stream/{file_name}"
+
 
 async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     # --- 1. تجهيز بيئة العمل ---
@@ -68,9 +70,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         log.info(f"DEBUG: calling get_clean_media_data with {original_task_name}")
         if clean_res and len(clean_res) == 4:
             search_query_clean, pre_category, pre_season, pre_ep = clean_res
-            search_query_clean_tmdb = normalize_title(search_query_clean, for_search=True)
+            search_query_clean_tmdb = normalize_title(
+                search_query_clean, for_search=True
+            )
         else:
-            search_query_clean_tmdb = normalize_title(original_task_name, for_search=True)
+            search_query_clean_tmdb = normalize_title(
+                original_task_name, for_search=True
+            )
             search_query_clean = search_query_clean_tmdb
             pre_category, pre_season, pre_ep = "movie", None, None
 
@@ -85,7 +91,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             pre_ep,
         )
         if fast_dup_check["exists"] and pre_category == "movie":
-            log.info(f"✅ [تخطي مبكر]: الفيلم '{original_task_name}' موجود بالفعل! (وفرنا استدعاء TMDB)")
+            log.info(
+                f"✅ [تخطي مبكر]: الفيلم '{original_task_name}' موجود بالفعل! (وفرنا استدعاء TMDB)"
+            )
             return
     except Exception as e:
         log.warning(f"⚠️ فشل الفحص السريع للتكرار، سنكمل المسار الطبيعي: {e}")
@@ -98,16 +106,25 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
     log.info(
         f"DEBUG: Final media data - Title: {tmdb_data['display_title']}, Year: {tmdb_data['year']}"
     )
-
+    if not tmdb_data.get("year") or tmdb_data["year"] == "غير محدد":
+        year_match = re.search(r"(19|20)\d{2}", original_task_name)
+        if year_match:
+            tmdb_data["year"] = year_match.group(0)
+            log.info(f"📅 Fallback Year = {tmdb_data['year']}")
     # --- 6. بناء الاسم المعروض النهائي وتحديث بيانات التنظيف ---
     display_title = build_display_title(original_task_name, tmdb_data["display_title"])
     clean_res_db = get_clean_media_data(display_title)
-    
+
     if clean_res_db and len(clean_res_db) == 4:
-        clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
+        clean_title_search, category_search, current_season_no, current_ep_no = (
+            clean_res_db
+        )
     else:
         clean_title_search, category_search, current_season_no, current_ep_no = (
-            display_title, "movie", None, None
+            display_title,
+            "movie",
+            None,
+            None,
         )
 
     # --- 7. فحص التكرار الدقيق (احتياطي بعد جلب البيانات الرسمية) ---
@@ -120,7 +137,9 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             current_ep_no,
         )
         if dup_check["exists"] and category_search == "movie":
-            log.info(f"✅ [تخطي دقيق]: الفيلم '{display_title}' مسجل مسبقاً بناءً على بيانات TMDB!")
+            log.info(
+                f"✅ [تخطي دقيق]: الفيلم '{display_title}' مسجل مسبقاً بناءً على بيانات TMDB!"
+            )
             return
     except Exception as e:
         log.warning(f"⚠️ فشل الفحص الدقيق للتكرار: {e}")
@@ -353,10 +372,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
             # --- 21. الرفع المتوازي الخماسي ---
             if vid_path and os.path.exists(vid_path):
                 file_name = os.path.basename(vid_path)
-                
+
                 # استبدال السطرين اليدويين بهذا الاستدعاء:
                 remote_source = get_space_stream_url(file_name)
-                
+
                 log.info(
                     f"✅ المصدر المعتمد للرفع الخماسي: [Direct Stream] - {remote_source}"
                 )

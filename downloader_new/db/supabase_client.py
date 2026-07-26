@@ -6,8 +6,10 @@ from supabase import create_client, Client as SupabaseClient
 
 # الاستدعاء النظيف والمباشر للوجر
 from downloader_new.shared.logger import get_beast_logger
+
 # في أعلى الملف مع باقي الـ imports
 from downloader_new.metadata.formatter import normalize_title
+
 log = get_beast_logger("GuardianUltra")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -17,6 +19,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     log.error("❌ خطأ: لم يتم العثور على مفاتيح Supabase في متغيرات البيئة!")
 
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 def save_to_supabase(
     current_voe,
@@ -29,7 +32,7 @@ def save_to_supabase(
     meta_rating,
     identifier,
     archive_url,
-    meta_data=None, 
+    meta_data=None,
     tmdb_id=None,
     labels=None,
     runtime=None,
@@ -39,13 +42,15 @@ def save_to_supabase(
     c_cat="movie",
     extracted_season_no=None,
     actual_ep_no=None,
-    generated_slug=None
+    generated_slug=None,
 ):
     # لا يوجد أي استيراد داخلي هنا (No Try-Except for imports)
-    
+
     # التحقق من وجود c_title، وإذا لم يمرره الـ Orchestrator نستخدم بيانات افتراضية
     if not c_title:
-        log.warning(f"⚠️ لم يتم تمرير بيانات معالجة لـ {display_title}، سيتم استخدام بيانات افتراضية.")
+        log.warning(
+            f"⚠️ لم يتم تمرير بيانات معالجة لـ {display_title}، سيتم استخدام بيانات افتراضية."
+        )
         c_title = display_title
         c_cat = "movie"
         extracted_season_no = None
@@ -55,7 +60,7 @@ def save_to_supabase(
     if not generated_slug and c_title:
         generated_slug = c_title.lower().strip().replace(" ", "-")
 
-    # ----- هنا يبدأ كود الإدخال لقاعدة البيانات الخاص بك -----
+        # ----- هنا يبدأ كود الإدخال لقاعدة البيانات الخاص بك -----
         # ... كمل باقي الكود بتاعك كلو على نفس مستوى المحاذاة دي ...
         # تنظيف الـ slug من الرموز الغريبة مع الحفاظ على الحروف العربية والإنجليزية والأرقام والشرطة
         generated_slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug)
@@ -75,6 +80,8 @@ def save_to_supabase(
         else:
             final_title = c_title  # الاسم اللي السكربت نظفه أو جابه من TMDB
     try:
+        if not meta_year:
+            log.warning("⚠️ meta_year is missing before saving.")
         media_payload = {
             "tmdb_id": str(tmdb_id) if tmdb_id else None,
             "title": final_title,  # العنوان المحمي
@@ -139,17 +146,35 @@ def save_to_supabase(
                     if not query.data:
                         # نجلب كل الأعمال اللي فيها جزء من الاسم ونفلترها برمجياً
                         # ده حل "ذكي" للأعمال العربية اللي مش في TMDB
+                        smart_pattern = re.sub(
+                            r"[^a-zA-Z0-9\u0600-\u06FF]+",
+                            "%",
+                            normalize_title(c_title)
+                        )
+
                         search_results = (
                             supabase.table("medias")
                             .select("*")
-                            .ilike("title", f"%{c_title}%")
+                            .ilike("title", f"%{smart_pattern}%")
                             .execute()
                         )
+                        target_title = normalize_title(c_title)
+                        target_year = str(meta_year).strip() if meta_year else None
+
                         for row in search_results.data:
-                            if normalize_title(row["title"]) == c_title:
-                                query = search_results
-                                query.data = [row]  # نكتفي بهذا السجل
-                                break
+                            row_title = normalize_title(row["title"])
+                            row_year = str(row.get("year") or "").strip()
+
+                            # لو عندنا سنة لازم تطابق
+                            if target_year:
+                                if row_title == target_title and row_year == target_year:
+                                    query.data = [row]
+                                    break
+                            else:
+                                # آخر حل لو السنة مش موجودة
+                                if row_title == target_title:
+                                    query.data = [row]
+                                    break
 
                 if query and query.data:
                     m_id = query.data[0]["id"]
@@ -328,7 +353,6 @@ def save_to_supabase(
                 link_entries.append(
                     {"episode_id": e_id, "server_name": "archive", "url": archive_url}
                 )
-            
 
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط (تنفيذ الـ upsert لكل رابط في القائمة)
         # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط مع آلية إعادة المحاولة (Retry)
@@ -353,17 +377,17 @@ def save_to_supabase(
     except Exception as e:
         # طباعة الخطأ كامل بالسطر والسبب عشان نعرف المشكلة فين بالظبط
         import traceback
+
         log.error("🚨 Supabase Crash Traceback:")
         log.error(traceback.format_exc())
         log.error(f"❌ خطأ تفصيلي أثناء الحفظ: {str(e)}")
         # نرجع None صريحة عشان سطر الـ 'if save_res' في الكور يحس إن فيه مشكلة ويوقف
         return None
-    
 
 
-
-
-def initialize_supabase_record(display_title: str, original_task_name: str, tmdb_data: dict, temp_id: str) -> tuple:
+def initialize_supabase_record(
+    display_title: str, original_task_name: str, tmdb_data: dict, temp_id: str
+) -> tuple:
     """
     إنشاء سجل أولي في Supabase.
     تعيد (e_id, media_id, meta_story, final_poster).
@@ -383,7 +407,7 @@ def initialize_supabase_record(display_title: str, original_task_name: str, tmdb
         tmdb_id=tmdb_data.get("tmdb_id"),
         labels=tmdb_data.get("labels"),
         runtime=tmdb_data.get("runtime"),
-        duration_iso=tmdb_data.get("duration")
+        duration_iso=tmdb_data.get("duration"),
     )
 
     if save_res and len(save_res) == 4:
@@ -392,6 +416,3 @@ def initialize_supabase_record(display_title: str, original_task_name: str, tmdb
     else:
         log.error("❌ فشل الحفظ الأولي في قاعدة البيانات (save_to_supabase رجعت None)")
         return None, None, "", ""
-    
-    
-
