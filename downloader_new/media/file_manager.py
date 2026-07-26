@@ -1,16 +1,24 @@
-
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/media/file_manager.py
-import os 
+import os
 import shutil
 from downloader_new.metadata.formatter import normalize_title
 from downloader_new.db.supabase_client import supabase
 from downloader_new.shared.logger import get_beast_logger
+
 log = get_beast_logger("GuardianUltra")
 
 
 # ابحث عن دالة check_media_duplicate القديمة واستبدلها بالكامل بهذا المنطق الصارم:
 
-def check_media_duplicate(clean_title: str, year: str, category: str, season_no, ep_no) -> dict:
+
+def check_media_duplicate(
+    clean_title: str,
+    year: str,
+    category: str,
+    season_no,
+    ep_no,
+    tmdb_id=None,
+) -> dict:
     """
     فحص احترافي لمنع التكرار.
     يعتمد على:
@@ -30,9 +38,7 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
         # 1) السنة إجبارية
         # -----------------------------
         if not year or str(year).strip() in ("", "None", "غير محدد"):
-            log.warning(
-                f"⚠️ تم تخطي فحص التكرار لأن السنة غير صالحة: {year}"
-            )
+            log.warning(f"⚠️ تم تخطي فحص التكرار لأن السنة غير صالحة: {year}")
             return result
 
         normalized_search = normalize_title(clean_title)
@@ -42,16 +48,20 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
         # -----------------------------
         medias = (
             supabase.table("medias")
-            .select("id,title,year")
+            .select("id,title,year,tmdb_id")
             .eq("year", str(year))
             .execute()
         )
 
         media_row = None
-
-        if medias.data:
+        if tmdb_id and medias.data:
             for row in medias.data:
+                if str(row.get("tmdb_id")) == str(tmdb_id):
+                    media_row = row
+                    break
 
+        if not media_row and medias.data:
+            for row in medias.data:
                 db_title = row.get("title") or ""
 
                 if normalize_title(db_title) == normalized_search:
@@ -59,9 +69,7 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
                     break
 
         if not media_row:
-            log.info(
-                f"🔍 غير موجود: '{clean_title}' ({year})"
-            )
+            log.info(f"🔍 غير موجود: '{clean_title}' ({year})")
             return result
 
         media_id = media_row["id"]
@@ -85,9 +93,7 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
                 result["exists"] = True
                 result["episode_id"] = episode.data[0]["id"]
 
-            log.info(
-                f"🎬 Duplicate(Movie): exists={result['exists']} media={media_id}"
-            )
+            log.info(f"🎬 Duplicate(Movie): exists={result['exists']} media={media_id}")
 
             return result
 
@@ -152,7 +158,6 @@ def check_media_duplicate(clean_title: str, year: str, category: str, season_no,
         return result
 
 
-
 def rename_and_move_to_stream(file_path, media_id, episode_id, idx):
     """
     إعادة تسمية الملف بالمعرفات الرقمية ونقله لمجلد stream.
@@ -169,9 +174,8 @@ def rename_and_move_to_stream(file_path, media_id, episode_id, idx):
         log.error(f"⚠️ فشل إعادة التسمية، سيتم استخدام الاسم الأصلي: {rename_err}")
         new_file_name = os.path.basename(file_path)
 
-
-    base_root = os.path.dirname(os.getcwd())          # /app
-    stream_dir = os.path.join(base_root, "stream")    # /app/stream
+    base_root = os.path.dirname(os.getcwd())  # /app
+    stream_dir = os.path.join(base_root, "stream")  # /app/stream
 
     final_public_path = os.path.join(stream_dir, new_file_name)
     try:
@@ -214,4 +218,3 @@ def list_videos(directory: str) -> list:
 
     videos.sort()
     return videos
-
