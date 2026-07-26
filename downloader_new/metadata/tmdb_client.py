@@ -1,7 +1,13 @@
-# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/metadata/tmdb_client.py
-import requests
+"""
+tmdb_client.py
+==============
+Client موحد للتعامل مع TMDB و OMDb APIs.
+مبني على مبدأ فصل المسؤوليات: كل دالة مسؤولة عن حاجة واحدة بس.
+"""
+
 import re
 import os
+import requests
 from deep_translator import GoogleTranslator
 
 from downloader_new.shared.logger import get_beast_logger
@@ -10,533 +16,524 @@ from downloader_new.shared.helpers import minutes_to_iso, is_mostly_english
 
 log = get_beast_logger("GuardianUltra")
 translator = GoogleTranslator(source="auto", target="ar")
+
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 
-genre_map = {
-    "Action": "أكشن",
-    "Adventure": "مغامرة",
-    "Animation": "رسوم متحركة",
-    "Comedy": "كوميديا",
-    "Crime": "جريمة",
-    "Documentary": "وثائقي",
-    "Drama": "دراما",
-    "Family": "عائلي",
-    "Fantasy": "فانتازيا",
-    "History": "تاريخ",
-    "Horror": "رعب",
-    "Music": "موسيقى",
-    "Mystery": "غموض",
-    "Romance": "رومانسي",
-    "Science Fiction": "خيال علمي",
-    "TV Movie": "فيلم تلفزيوني",
-    "Thriller": "إثارة",
-    "War": "حرب",
-    "Western": "غرب أمريكي",
-    "Sport": "رياضة",
-    "Short": "قصير",
-    "Sci-Fi": "خيال علمي",
-    "Biography": "سيرة شخصية",
-    "German": "ألماني",
-    "French": "فرنسي",
-    "Japanese": "ياباني",
-    "Whodunnit": "من فعلها",
-    "Superhero": "سوبرهيرو",
-    "Cyberpunk": "سايبربانك",
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original"
+OMDB_BASE_URL = "http://www.omdbapi.com"
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+GENRE_MAP = {
+    "Action": "أكشن", "Adventure": "مغامرة", "Animation": "رسوم متحركة",
+    "Comedy": "كوميديا", "Crime": "جريمة", "Documentary": "وثائقي",
+    "Drama": "دراما", "Family": "عائلي", "Fantasy": "فانتازيا",
+    "History": "تاريخ", "Horror": "رعب", "Music": "موسيقى",
+    "Mystery": "غموض", "Romance": "رومانسي", "Science Fiction": "خيال علمي",
+    "TV Movie": "فيلم تلفزيوني", "Thriller": "إثارة", "War": "حرب",
+    "Western": "غرب أمريكي", "Sport": "رياضة", "Short": "قصير",
+    "Sci-Fi": "خيال علمي", "Biography": "سيرة شخصية", "German": "ألماني",
+    "French": "فرنسي", "Japanese": "ياباني", "Whodunnit": "من فعلها",
+    "Superhero": "سوبرهيرو", "Cyberpunk": "سايبربانك",
+}
+
+TV_KEYWORDS = {"مسلسل", "موسم", "حلقة", "Series", "Season", "Episode", "TV", "tv", "season", "episode"}
+
+DRAMABOX_DOMAIN = "dramaboxdb.com"
+
+DEFAULT_METADATA = {
+    "tmdb_id": None,
+    "display_title": "",
+    "story": "لا يوجد وصف",
+    "poster": "",
+    "labels": "أفلام",
+    "duration": "PT01H30M",
+    "rating": "N/A",
+    "runtime": "غير محدد",
+    "year": "غير محدد",
 }
 
 
-def get_movie_data(name, year=None):  # <--- أضفنا year هنا
-    search_query = str(name).strip()
-    original_input = search_query
+# ===========================================================================
+# Section 1: Input Parsing — استخراج وتحليل المدخل
+# ===========================================================================
 
-    # كشف لو المدخل رابط أو ID
-    is_url_or_id = "http" in search_query or search_query.startswith(("tt", "tmdb"))
+def is_url_or_id(query: str) -> bool:
+    """هل المدخل رابط أو ID مباشر؟"""
+    return "http" in query or query.startswith(("tt", "tmdb"))
 
-    if "dramaboxdb.com" in search_query:
-        print("⚡ DramaBox detected: Skipping browser simulation (Direct Fallback)...")
-        # استخراج الاسم من الرابط مباشرة
-        fallback_title = search_query.split("/")[-1].replace("-", " ").title()
-        return (
-            None,  # ID
-            fallback_title,
-            "وصف تلقائي (DramaBox Archive)",
-            "https://via.placeholder.com/600x900?text=Egy+Pyramid",
-            "DramaBox",
-            "PT01H00M",
-            "8.5",
-            "N/A",
-            "N/A",
-        )
-    movie_id = None
 
-    # استخراج ID من رابط IMDb أو TMDB أو كتابة يدوية
-    if "imdb.com/title/" in search_query:
-        id_match = re.search(r"(tt\d+)", search_query)
-        if id_match:
-            movie_id = id_match.group(1)
-    elif "themoviedb.org/movie/" in search_query:
-        id_match = re.search(r"/movie/(\d+)", search_query)
-        if id_match:
-            movie_id = id_match.group(1)
-            content_kind = "movie"
-    elif "themoviedb.org/tv/" in search_query:
-        id_match = re.search(r"/tv/(\d+)", search_query)
-        if id_match:
-            movie_id = id_match.group(1)
-            content_kind = "tv"
-    elif "omdbapi.com" in search_query:
-        id_match = re.search(r"[iI]=(tt\d+)", search_query)
-        if id_match:
-            movie_id = id_match.group(1)
-    elif search_query.startswith("tt"):
-        movie_id = search_query
-    elif search_query.startswith("tmdb-tv-"):
-        movie_id = search_query.replace("tmdb-tv-", "")
-        content_kind = "tv"
-    elif search_query.startswith("tmdb-"):
-        movie_id = search_query.replace("tmdb-", "")
-        content_kind = "movie"
-    elif search_query.startswith("tmdb"):
-        movie_id = re.sub(r"[^0-9]", "", search_query)
+def extract_year_from_query(query: str) -> str | None:
+    """استخراج سنة الإنتاج من نص البحث."""
+    match = re.search(r"(\d{4})", query)
+    return match.group(1) if match else None
 
-    # القيم الافتراضية
-    title, story, poster, labels, duration = (
-        search_query,
-        "لا يوجد وصف",
-        "",
-        "أفلام",
-        "PT02H00M",
-    )
-    rating, runtime_str, release_year = "N/A", "غير محدد", "غير محدد"
+
+def clean_query_from_year(query: str) -> str:
+    """إزالة السنة وعلامات الترقيم الزائدة من نص البحث."""
+    return re.sub(r"\d{4}", "", query).replace(":", "").replace("_", " ").strip()
+
+
+def detect_content_type(query: str) -> str:
+    """تحديد نوع المحتوى: فيلم أو مسلسل بناءً على الكلمات المفتاحية."""
+    return "tv" if any(kw in query for kw in TV_KEYWORDS) else "movie"
+
+
+def extract_id_from_input(query: str) -> tuple[str | None, str | None]:
+    """
+    استخراج الـ ID ونوع المحتوى من المدخل (رابط أو نص).
+    تُعيد: (media_id, content_type) أو (None, None) لو مفيش ID.
+    """
+    if "imdb.com/title/" in query:
+        match = re.search(r"(tt\d+)", query)
+        return (match.group(1), None) if match else (None, None)
+
+    if "themoviedb.org/movie/" in query:
+        match = re.search(r"/movie/(\d+)", query)
+        return (match.group(1), "movie") if match else (None, None)
+
+    if "themoviedb.org/tv/" in query:
+        match = re.search(r"/tv/(\d+)", query)
+        return (match.group(1), "tv") if match else (None, None)
+
+    if "omdbapi.com" in query:
+        match = re.search(r"[iI]=(tt\d+)", query)
+        return (match.group(1), None) if match else (None, None)
+
+    if query.startswith("tt"):
+        return query, None
+
+    if query.startswith("tmdb-tv-"):
+        return query.replace("tmdb-tv-", ""), "tv"
+
+    if query.startswith("tmdb-"):
+        return query.replace("tmdb-", ""), "movie"
+
+    if query.startswith("tmdb"):
+        return re.sub(r"[^0-9]", "", query), "movie"
+
+    return None, None
+
+
+def build_fallback_title_from_url(url: str) -> str:
+    """استخراج اسم قابل للقراءة من رابط URL في حالة الفشل."""
+    name = url.split("/")[-1].split("?")[0]
+    name = name.replace("-", " ").replace("_", " ").title()
+    return re.sub(r"^\d+-", "", name).strip() or url
+
+
+# ===========================================================================
+# Section 2: TMDB API Calls — طلبات TMDB
+# ===========================================================================
+
+def resolve_tmdb_id_from_imdb(imdb_id: str) -> tuple[str | None, str | None]:
+    """تحويل IMDb ID إلى TMDB ID مع تحديد نوع المحتوى."""
+    url = f"{TMDB_BASE_URL}/find/{imdb_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
+    data = requests.get(url).json()
+
+    if data.get("movie_results"):
+        return data["movie_results"][0]["id"], "movie"
+    if data.get("tv_results"):
+        return data["tv_results"][0]["id"], "tv"
+    return None, None
+
+
+def search_tmdb(query: str, content_type: str, year: str | None) -> str | None:
+    """
+    البحث في TMDB بالاسم والسنة.
+    تُعيد الـ TMDB ID الأدق تطابقاً، أو None لو مفيش.
+    """
+    url = f"{TMDB_BASE_URL}/search/{content_type}?api_key={TMDB_API_KEY}&query={query}&language=ar"
+    if year:
+        url += f"&year={year}"
+
+    results = requests.get(url).json().get("results", [])
+    if not results:
+        return None
+
+    query_lower = query.lower()
+    for result in results:
+        result_title = (result.get("name") or result.get("title") or "").lower()
+        if query_lower in result_title or result_title in query_lower:
+            return result["id"]
+
+    log.warning(f"⚠️ TMDB أعاد نتائج غير مطابقة للاسم: {query}")
+    return None
+
+
+def fetch_tmdb_details(tmdb_id: str, content_type: str, language: str = "en") -> dict:
+    """جلب تفاصيل عمل معين من TMDB بلغة محددة."""
+    url = f"{TMDB_BASE_URL}/{content_type}/{tmdb_id}?api_key={TMDB_API_KEY}&language={language}"
+    return requests.get(url).json()
+
+
+def resolve_tmdb_id(query: str, media_id: str | None, content_type: str | None, year: str | None) -> tuple[str | None, str]:
+    """
+    الخطوة المركزية لتحديد الـ TMDB ID النهائي.
+    تُعيد: (tmdb_id, content_type).
+    """
+    # لو عندنا ID جاهز
+    if media_id:
+        if str(media_id).startswith("tt"):
+            tmdb_id, resolved_type = resolve_tmdb_id_from_imdb(media_id)
+            return tmdb_id, resolved_type or content_type or "movie"
+        return media_id, content_type or "movie"
+
+    # لو محتاجين نبحث
+    detected_type = content_type or detect_content_type(query)
+    clean_q = clean_query_from_year(query)
+    tmdb_id = search_tmdb(clean_q, detected_type, year)
+    return tmdb_id, detected_type
+
+
+# ===========================================================================
+# Section 3: OMDb API Calls — طلبات OMDb
+# ===========================================================================
+
+def fetch_omdb_data(query: str, year: str) -> dict | None:
+    """
+    البحث في OMDb بالاسم والسنة.
+    تُعيد البيانات الخام من OMDb أو None لو مفيش تطابق.
+    """
+    clean_q = clean_query_from_year(query)
+    omdb_query = clean_q.replace(" ", "+")
+    url = f"{OMDB_BASE_URL}/?apikey={OMDB_API_KEY}&t={omdb_query}&y={year}"
 
     try:
-        # 1. استخراج السنة والاسم (فصل السنة للبحث فقط دون حذفها من الأصل)
-        # إذا كان المدخل رابطاً، نتجنب استخراج السنة منه لأنه قد يحتوي على IDs طويلة تخدع الـ Regex
-        # استخراج السنة والاسم
-        if is_url_or_id:
-            extracted_year = None
-            query_for_search = search_query
-        else:
-            # المحاولة الأولى: لو في سنة مبعوتة للدالة من بره نستخدمها
-            if year:
-                extracted_year = str(year)
-            else:
-                # المحاولة الثانية: لو مفيش، نستخرجها من الاسم بالـ Regex
-                year_match = re.search(r"(\d{4})", search_query)
-                extracted_year = year_match.group(1) if year_match else None
-
-            # تنظيف الكويري من أي سنين عشان البحث في TMDB يكون دقيق بالاسم فقط
-            query_for_search = (
-                re.sub(r"\d{4}", "", search_query)
-                .replace(":", "")
-                .replace("_", " ")
-                .strip()
-            )
-
-        # الآن نعتمد السنة النهائية للبحث
-        final_year = extracted_year
-
-        clean_query = search_query
-
-        # --- المرحلة الأولى: TMDB (بحث بالـ ID أو الاسم) ---
-        tmdb_final_id = None
-
-        # إذا كان معنا ID جاهز (رقمي أو tt)
-        if movie_id:
-            if str(movie_id).startswith("tt"):
-                find_url = f"https://api.themoviedb.org/3/find/{movie_id}?api_key={TMDB_API_KEY}&external_source=imdb_id&language=ar"
-                res_f = requests.get(find_url).json()
-                # التحقق من الأفلام أو المسلسلات
-                if res_f.get("movie_results"):
-                    tmdb_final_id = res_f["movie_results"][0]["id"]
-                    content_kind = "movie"  # تأكيد النوع
-                elif res_f.get("tv_results"):
-                    tmdb_final_id = res_f["tv_results"][0]["id"]
-                    content_kind = "tv"  # تأكيد النوع
-            else:
-                tmdb_final_id = movie_id
-
-        # إذا لم يتوفر ID، نبحث بالاسم والسنة كالعادة
-        if not tmdb_final_id:
-            # نستخدم query_for_search هنا عشان محرك البحث ميتلخبطش بالسنة
-            # الجديد: تحديد المسار بناءً على الكلمة المفتاحية في العنوان
-            if any(
-                word in original_input
-                for word in [
-                    "مسلسل",
-                    "موسم",
-                    "حلقة",
-                    "Series",
-                    "Season",
-                    "Episode",
-                    "TV",
-                    "tv",
-                    "season",
-                    "episode",
-                ]
-            ):
-                search_path = "tv"
-                content_kind = "tv"
-            else:
-                search_path = "movie"
-                content_kind = "movie"
-
-            search_url = f"https://api.themoviedb.org/3/search/{search_path}?api_key={TMDB_API_KEY}&query={query_for_search}&language=ar"
-            if final_year:  # <--- تأكد إنها بتستخدم السنة المختارة
-                search_url += f"&year={final_year}"
-            res = requests.get(search_url).json()
-            if res.get("results"):
-                # --- التعديل المنقذ: التأكد من تطابق الاسم لتجنب نتائج الأفلام العشوائية ---
-                best_match = None
-                for r in res["results"]:
-                    res_title = (r.get("name") or r.get("title") or "").lower()
-                    # لو الاسم اللي راجع فيه كلمة من اللي باحثين عنها، نعتبره هو الصح
-                    if (
-                        query_for_search.lower() in res_title
-                        or res_title in query_for_search.lower()
-                    ):
-                        best_match = r
-                        break
-
-                if best_match:
-                    first_res = best_match
-                    tmdb_date = (
-                        first_res.get("release_date")
-                        or first_res.get("first_air_date")
-                        or "0000"
-                    )
-                    tmdb_year = tmdb_date[:4]
-
-                    if not year or tmdb_year == year:
-                        tmdb_final_id = first_res["id"]
-                        # أهم سطر: نجبد نوع المحتوى بناءً على البحث (tv أو movie) وليس ما يقترحه TMDB
-                        content_kind = search_path
-                else:
-                    print(
-                        f"⚠️ TMDB أعاد نتائج غير مطابقة للاسم: {query_for_search}. سيتم الانتقال للمرحلة الثالثة."
-                    )
-
-        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
-        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
-        # --- المرحلة الثانية: OMDb (لو TMDB فشل في السنة) ---
-        if not tmdb_final_id and final_year:
-            print(f"⚠️ TMDB فشل بالسنة.. جاري فحص OMDb بالاسم والسنة: {final_year}")
-
-            # 1. السطر الناقص: تنفيذ طلب البحث في OMDb
-            omdb_query = query_for_search.replace(" ", "+")
-            omdb_url = f"http://www.omdbapi.com/?apikey={OMDB_API_KEY}&t={omdb_query}&y={final_year}"
-
-            try:
-                res_o = requests.get(omdb_url).json()  # هنا تم تعريف res_o
-
-                if res_o.get("Response") == "True":
-                    omdb_title = res_o.get("Title", "").lower()
-                    search_first_word = query_for_search.strip().split(" ")[0].lower()
-
-                    if search_first_word in omdb_title:
-                        # 1. جلب القصة (Story)
-                        raw_story = res_o.get("Plot", "")
-                        try:
-                            story = (
-                                translator.translate(raw_story)
-                                if raw_story != "N/A"
-                                else "لا يوجد وصف"
-                            )
-                        except:
-                            story = raw_story
-
-                        # 2. جلب التصنيفات (Genres) - مترجمة لتجنب مشاكل الـ Duplicate Key
-                        raw_genres = res_o.get("Genre", "أفلام").split(", ")
-                        # نستخدم القاموس للترجمة، وإذا لم يوجد نأخذ الكلمة كما هي
-                        translated_list = [
-                            genre_map.get(g.strip(), g.strip()) for g in raw_genres
-                        ]
-                        labels = ", ".join(translated_list)
-
-                        # 3. جلب مدة العمل (Runtime) - من IMDb
-                        raw_runtime = res_o.get("Runtime", "N/A")
-                        runtime_str = "غير محدد"
-                        duration = "PT01H30M"
-
-                        if raw_runtime != "N/A":
-                            runtime_str = raw_runtime
-                            minutes_match = re.search(r"(\d+)", raw_runtime)
-                            if minutes_match:
-                                m = int(minutes_match.group(1))
-                                duration = f"PT{m//60:02d}H{m%60:02d}M"
-                                hours = m // 60
-                                mins = m % 60
-                                runtime_str = (
-                                    f"{hours} ساعة و {mins} دقيقة"
-                                    if hours > 0
-                                    else f"{m} دقيقة"
-                                )
-
-                        # 4. جلب التقييم وسنة العرض - ضمان تحويل التقييم لنص رقمي
-                        raw_rating = res_o.get("imdbRating", "0")
-                        rating = str(raw_rating) if raw_rating != "N/A" else "0.0"
-                        release_year = res_o.get("Year", final_year or "N/A")
-
-                        # 5. معالجة البوستر
-                        omdb_poster = res_o.get("Poster")
-                        if omdb_poster and omdb_poster != "N/A":
-                            print(f"☁️ جاري رفع بوستر IMDb (عبر OMDb) لكلاود ناري...")
-                            omdb_poster = upload_poster_to_cloudinary(omdb_poster)
-
-                        return (
-                            res_o.get("imdbID"),  # ID
-                            res_o.get("Title"),  # Title
-                            story,  # Story (المترجمة)
-                            omdb_poster,  # Poster المرفوع
-                            labels,  # التصنيفات (المترجمة عربي)
-                            duration,  # ISO Duration
-                            rating,  # التقييم (الذي أصلحناه)
-                            runtime_str,  # الوقت المقروء
-                            release_year,  # السنة
-                        )
-                    else:
-                        print(
-                            f"🛑 رفض النتيجة: OMDb أعاد '{omdb_title}' وهي لا تطابق '{query_for_search}'"
-                        )
-
-            except Exception as e:
-                print(f"⚠️ خطأ أثناء الاتصال بـ OMDb: {e}")
-
-        # --- المرحلة الثالثة: الصرامة المطلقة (بديل البحث المرن والـ AI) ---
-        # --- المرحلة الثالثة: الصرامة المطلقة ---
-        if not tmdb_final_id:
-            print(f"🛑 لم يتم العثور على تطابق رسمي لـ '{search_query}'.")
-
-            # لو المدخل اسم يدوي مش رابط، خده زي ما هو فوراً
-            if not is_url_or_id:
-                display_name = original_input
-            else:
-                # لو رابط، نظفه وطلع منه اسم
-                display_name = str(search_query).split("/")[-1].split("?")[0]
-                display_name = display_name.replace("-", " ").replace("_", " ").title()
-                display_name = re.sub(r"^\d+-", "", display_name).strip()
-
-            # التأمين الأخير
-            if not display_name:
-                display_name = original_input
-
-            return (
-                None,
-                display_name,
-                None,
-                None,
-                "أفلام",
-                "PT01H30M",
-                "N/A",
-                "غير محدد",
-                final_year or "غير محدد",
-            )
-
-        if tmdb_final_id:
-            # استخدام النوع المستخرج (movie أو tv) لطلب البيانات بشكل صحيح
-            media_type = content_kind if "content_kind" in locals() else "movie"
-
-            # 1. جلب البيانات بالإنجليزي (للحصول على الاسم الرسمي الأصلي)
-            en_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}"
-            en_data = requests.get(en_url).json()
-
-            # --- التعديل الجوهري هنا ---
-            # جلب البيانات بالعربي (لأننا نفضل الاسم العربي في تليجرام وسوبابيز)
-            ar_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}&language=ar"
-            ar_data = requests.get(ar_url).json()
-
-            # القاعدة الذكية: لو المدخل إنجليزي أو رابط، نفضل الاسم الإنجليزي من TMDB
-            # لو المدخل عربي صريح، نفضل الاسم العربي
-            if is_mostly_english(original_input) or is_url_or_id:
-                title = (
-                    en_data.get("title")
-                    or en_data.get("name")
-                    or ar_data.get("title")
-                    or ar_data.get("name")
-                )
-            else:
-                title = (
-                    ar_data.get("title")
-                    or ar_data.get("name")
-                    or en_data.get("title")
-                    or en_data.get("name")
-                )
-
-            if not title or "http" in str(title):
-                # إذا فشل كل شيء، نحاول استخراج الاسم من الرابط الأصلي
-                title = (
-                    original_input.split("/")[-1]
-                    .replace("-", " ")
-                    .replace("_", " ")
-                    .title()
-                )
-                # حذف أي أرقام تعريفية في بداية الاسم (مثل 123-movie-name)
-                title = re.sub(r"^\d+-", "", title).strip()
-                # حذف الـ query parameters لو موجودة
-                title = title.split("?")[0]
-
-            print(f"✅ تم العثور على الاسم الرسمي: {title}")
-            # --------------------------
-
-            # استكمال باقي البيانات (تاريخ، تقييم، بوستر)
-            tmdb_date = (
-                en_data.get("release_date") or en_data.get("first_air_date") or "0000"
-            )
-            release_year = tmdb_date[:4]
-            # ... باقي الكود كما هو ...
-
-            raw_rating = en_data.get("vote_average", 0.0)
-            rating = str(round(raw_rating, 1)) if raw_rating > 0 else "N/A"
-            poster = (
-                f"https://image.tmdb.org/t/p/original{en_data.get('poster_path')}"
-                if en_data.get("poster_path")
-                else poster
-            )
-
-            # مدة الحلقة أو الفيلم
-            # مدة الحلقة أو الفيلم
-            runtime = en_data.get("runtime") or (
-                en_data.get("episode_run_time")[0]
-                if en_data.get("episode_run_time")
-                else None
-            )
-            if runtime:
-                # تحديث الـ ISO Format بناءً على الدقائق الحقيقية
-                duration = minutes_to_iso(runtime)
-                runtime_str = (
-                    f"{runtime // 60} ساعة و {runtime % 60} دقيقة"
-                    if runtime >= 60
-                    else f"{runtime} دقيقة"
-                )
-            else:
-                duration = "PT01H30M"  # قيمة افتراضية لو مفيش runtime
-
-            # 2. جلب البيانات بالعربي
-            ar_url = f"https://api.themoviedb.org/3/{media_type}/{tmdb_final_id}?api_key={TMDB_API_KEY}&language=ar"
-            ar_data = requests.get(ar_url).json()
-
-            # منطق القصة الذكي
-            story = ar_data.get("overview")
-            if not story or story.strip() == "":
-                raw_en_story = en_data.get("overview")
-                if raw_en_story:
-                    try:
-                        story = translator.translate(raw_en_story)
-                    except:
-                        story = raw_en_story
-                else:
-                    story = "لا يوجد وصف"
-
-            # جلب التصنيفات بالعربي
-            genres = ar_data.get("genres", [])
-            if genres:
-                labels = ", ".join([g["name"] for g in genres])
-
-        # --- المرحلة النهائية: رفع البوستر لكلاود ناري قبل العودة بالنتائج ---
-        # --- المرحلة النهائية: تخص TMDB فقط (لأن OMDb خرج بـ return خاص به أعلاه) ---
-        print(f"☁️ جاري معالجة بوستر TMDB ورفعه لكلاود ناري...")
-        final_poster = upload_poster_to_cloudinary(poster)
-
-        return (
-            tmdb_final_id,
-            title,
-            story,
-            final_poster,  # الرابط المرفوع (Cloudinary)
-            labels,
-            duration,
-            rating,
-            runtime_str,
-            release_year,
-        )
-
+        data = requests.get(url).json()
     except Exception as e:
-        print(f"⚠️ خطأ في الخوارزمية المزدوجة: {e}")
-        return (
-            tmdb_final_id,
-            title,
-            story,
-            poster,
-            labels,
-            duration,
-            rating,
-            runtime_str,
-            release_year,
-        )
+        log.error(f"⚠️ خطأ أثناء الاتصال بـ OMDb: {e}")
+        return None
+
+    if data.get("Response") != "True":
+        return None
+
+    # تحقق من تطابق الاسم
+    omdb_title = data.get("Title", "").lower()
+    first_word = clean_q.strip().split(" ")[0].lower()
+    if first_word not in omdb_title:
+        log.warning(f"🛑 رفض النتيجة: OMDb أعاد '{omdb_title}' وهي لا تطابق '{clean_q}'")
+        return None
+
+    return data
 
 
-def check_local_radar(query, year):
-    """فحص الفهرس المحلي لجلب الـ ID قبل البحث الخارجي"""
+# ===========================================================================
+# Section 4: Data Processing — معالجة وتحويل البيانات
+# ===========================================================================
+
+def translate_text(text: str) -> str:
+    """ترجمة نص للعربية مع معالجة الأخطاء."""
+    if not text or text == "N/A":
+        return "لا يوجد وصف"
+    try:
+        return translator.translate(text)
+    except Exception:
+        return text
+
+
+def translate_genres(raw_genres: str) -> str:
+    """ترجمة قائمة التصنيفات المفصولة بفواصل."""
+    genres = [g.strip() for g in raw_genres.split(",")]
+    return ", ".join(GENRE_MAP.get(g, g) for g in genres)
+
+
+def parse_runtime(raw_runtime: str) -> tuple[str, str]:
+    """
+    تحويل وقت التشغيل الخام لـ ISO format ونص عربي مقروء.
+    تُعيد: (duration_iso, runtime_str).
+    """
+    if not raw_runtime or raw_runtime == "N/A":
+        return "PT01H30M", "غير محدد"
+
+    match = re.search(r"(\d+)", raw_runtime)
+    if not match:
+        return "PT01H30M", "غير محدد"
+
+    minutes = int(match.group(1))
+    duration = f"PT{minutes // 60:02d}H{minutes % 60:02d}M"
+    hours, mins = minutes // 60, minutes % 60
+
+    if hours > 0:
+        runtime_str = f"{hours} ساعة و {mins} دقيقة"
+    else:
+        runtime_str = f"{minutes} دقيقة"
+
+    return duration, runtime_str
+
+
+def parse_runtime_minutes(minutes: int) -> tuple[str, str]:
+    """نفس parse_runtime لكن المدخل رقم دقائق مش نص."""
+    if not minutes:
+        return "PT01H30M", "غير محدد"
+    duration = minutes_to_iso(minutes)
+    hours, mins = minutes // 60, minutes % 60
+    runtime_str = f"{hours} ساعة و {mins} دقيقة" if hours > 0 else f"{minutes} دقيقة"
+    return duration, runtime_str
+
+
+def resolve_story(ar_data: dict, en_data: dict) -> str:
+    """
+    اختيار القصة الأنسب: عربي أولاً، لو مفيش نترجم الإنجليزي.
+    """
+    ar_story = ar_data.get("overview", "").strip()
+    if ar_story:
+        return ar_story
+
+    en_story = en_data.get("overview", "")
+    return translate_text(en_story) if en_story else "لا يوجد وصف"
+
+
+def resolve_title(original_input: str, en_data: dict, ar_data: dict) -> str:
+    """
+    اختيار العنوان الأنسب بناءً على لغة المدخل الأصلي.
+    """
+    if is_mostly_english(original_input) or is_url_or_id(original_input):
+        title = en_data.get("title") or en_data.get("name")
+        fallback = ar_data.get("title") or ar_data.get("name")
+    else:
+        title = ar_data.get("title") or ar_data.get("name")
+        fallback = en_data.get("title") or en_data.get("name")
+
+    result = title or fallback
+    if not result or "http" in str(result):
+        result = build_fallback_title_from_url(original_input)
+
+    return result
+
+
+def resolve_genres_from_tmdb(ar_data: dict) -> str:
+    """استخراج التصنيفات العربية من بيانات TMDB."""
+    genres = ar_data.get("genres", [])
+    if not genres:
+        return "أفلام"
+    return ", ".join(g["name"] for g in genres)
+
+
+def resolve_poster(poster_path: str | None) -> str:
+    """بناء رابط البوستر الكامل من المسار الجزئي."""
+    if not poster_path:
+        return ""
+    return f"{TMDB_IMAGE_BASE}{poster_path}"
+
+
+# ===========================================================================
+# Section 5: Special Cases — الحالات الخاصة
+# ===========================================================================
+
+def handle_dramabox(url: str) -> dict:
+    """معالجة روابط DramaBox بشكل مباشر بدون API."""
+    log.info("⚡ DramaBox detected: Direct Fallback...")
+    title = url.split("/")[-1].replace("-", " ").title()
+    return {**DEFAULT_METADATA, "tmdb_id": None, "display_title": title,
+            "story": "وصف تلقائي (DramaBox Archive)", "labels": "DramaBox",
+            "duration": "PT01H00M", "rating": "8.5"}
+
+
+def build_fallback_result(original_input: str, year: str | None) -> dict:
+    """بناء نتيجة احتياطية لما يفشل كل شيء."""
+    log.warning(f"🛑 لم يتم العثور على تطابق رسمي لـ '{original_input}'.")
+
+    if is_url_or_id(original_input):
+        title = build_fallback_title_from_url(original_input)
+    else:
+        title = original_input
+
+    return {**DEFAULT_METADATA, "display_title": title or original_input,
+            "year": year or "غير محدد"}
+
+
+# ===========================================================================
+# Section 6: OMDb Result Builder — تجميع نتيجة OMDb
+# ===========================================================================
+
+def build_metadata_from_omdb(omdb_data: dict, year: str | None) -> dict:
+    """تحويل بيانات OMDb الخام لـ metadata dict موحد."""
+    story = translate_text(omdb_data.get("Plot", ""))
+    labels = translate_genres(omdb_data.get("Genre", "أفلام"))
+    duration, runtime_str = parse_runtime(omdb_data.get("Runtime", "N/A"))
+
+    raw_rating = omdb_data.get("imdbRating", "0")
+    rating = str(raw_rating) if raw_rating != "N/A" else "0.0"
+    release_year = omdb_data.get("Year", year or "N/A")
+
+    poster_url = omdb_data.get("Poster")
+    if poster_url and poster_url != "N/A":
+        log.info("☁️ جاري رفع بوستر IMDb (عبر OMDb) لكلاود ناري...")
+        poster_url = upload_poster_to_cloudinary(poster_url)
+    else:
+        poster_url = ""
+
+    return {
+        "tmdb_id": omdb_data.get("imdbID"),
+        "display_title": omdb_data.get("Title", ""),
+        "story": story,
+        "poster": poster_url,
+        "labels": labels,
+        "duration": duration,
+        "rating": rating,
+        "runtime": runtime_str,
+        "year": release_year,
+    }
+
+
+# ===========================================================================
+# Section 7: TMDB Result Builder — تجميع نتيجة TMDB
+# ===========================================================================
+
+def build_metadata_from_tmdb(tmdb_id: str, content_type: str, original_input: str) -> dict:
+    """جلب وتحويل بيانات TMDB الكاملة لـ metadata dict موحد."""
+    en_data = fetch_tmdb_details(tmdb_id, content_type, language="en")
+    ar_data = fetch_tmdb_details(tmdb_id, content_type, language="ar")
+
+    title = resolve_title(original_input, en_data, ar_data)
+    story = resolve_story(ar_data, en_data)
+    labels = resolve_genres_from_tmdb(ar_data)
+
+    raw_rating = en_data.get("vote_average", 0.0)
+    rating = str(round(raw_rating, 1)) if raw_rating > 0 else "N/A"
+
+    release_date = en_data.get("release_date") or en_data.get("first_air_date") or "0000"
+    release_year = release_date[:4]
+
+    runtime_minutes = en_data.get("runtime")
+    if not runtime_minutes:
+        runtime_list = en_data.get("episode_run_time", [])
+        runtime_minutes = runtime_list[0] if runtime_list else None
+
+    duration, runtime_str = parse_runtime_minutes(runtime_minutes)
+
+    poster_path = en_data.get("poster_path")
+    raw_poster_url = resolve_poster(poster_path)
+
+    log.info("☁️ جاري معالجة بوستر TMDB ورفعه لكلاود ناري...")
+    final_poster = upload_poster_to_cloudinary(raw_poster_url) if raw_poster_url else ""
+
+    log.info(f"✅ تم العثور على الاسم الرسمي: {title}")
+
+    return {
+        "tmdb_id": tmdb_id,
+        "display_title": title,
+        "story": story,
+        "poster": final_poster,
+        "labels": labels,
+        "duration": duration,
+        "rating": rating,
+        "runtime": runtime_str,
+        "year": release_year,
+    }
+
+
+# ===========================================================================
+# Section 8: Local Radar — الفهرس المحلي
+# ===========================================================================
+
+def check_local_radar(query: str, year: str | None) -> str | None:
+    """فحص الفهرس المحلي لجلب الـ ID قبل البحث الخارجي."""
     try:
         from downloader_new.metadata.local_lookup import search_local_imdb
-
         return search_local_imdb(query, year)
     except Exception as e:
         log.error(f"❌ خطأ في الرادار المحلي: {e}")
         return None
 
 
-def fetch_tmdb_metadata(search_query: str, year=None) -> dict:
-    """
-    جلب بيانات الميديا من TMDB/IMDB.
-    تعيد قاموساً بالمفاتيح: tmdb_id, display_title, story, poster, labels,
-    duration, rating, runtime, year.
-    في حالة فشل أو نقص البيانات، تعيد قيماً افتراضية.
-    """
-    log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB للتحقق من الأرشيف...")
-    log.info(f"🔎 البحث عن: {search_query} " + (f"({year})" if year else "") + " ...")
-    log.info(f"DEBUG: calling get_movie_data with {search_query}")
+# ===========================================================================
+# Section 9: Main Orchestrator — المنسق الرئيسي
+# ===========================================================================
 
-    # --- التعديل هنا: محاولة جلب الـ ID محلياً أولاً ---
+def get_movie_data(name: str, year: str | None = None) -> tuple:
+    """
+    النقطة الرئيسية للجلب: تنسق بين كل المصادر وتُعيد tuple بالبيانات.
+    الترتيب: Local Radar → TMDB → OMDb → Fallback.
+    """
+    query = str(name).strip()
+
+    # الحالة الخاصة: DramaBox
+    if DRAMABOX_DOMAIN in query:
+        result = handle_dramabox(query)
+        return _dict_to_tuple(result)
+
+    # استخراج الـ ID والسنة من المدخل
+    media_id, content_type = extract_id_from_input(query)
+
+    if is_url_or_id(query):
+        final_year = None
+        search_query = query
+    else:
+        final_year = year or extract_year_from_query(query)
+        search_query = clean_query_from_year(query)
+
+    # المرحلة الأولى: TMDB
+    tmdb_id, resolved_type = resolve_tmdb_id(search_query, media_id, content_type, final_year)
+
+    if tmdb_id:
+        try:
+            result = build_metadata_from_tmdb(str(tmdb_id), resolved_type or "movie", query)
+            return _dict_to_tuple(result)
+        except Exception as e:
+            log.error(f"⚠️ خطأ في بناء بيانات TMDB: {e}")
+
+    # المرحلة الثانية: OMDb (لو TMDB فشل وعندنا سنة)
+    if final_year:
+        log.warning(f"⚠️ TMDB فشل.. جاري فحص OMDb بالسنة: {final_year}")
+        omdb_data = fetch_omdb_data(search_query, final_year)
+        if omdb_data:
+            result = build_metadata_from_omdb(omdb_data, final_year)
+            return _dict_to_tuple(result)
+
+    # المرحلة الثالثة: Fallback
+    result = build_fallback_result(query, final_year)
+    return _dict_to_tuple(result)
+
+
+def _dict_to_tuple(metadata: dict) -> tuple:
+    """تحويل metadata dict للـ tuple القديم للتوافق مع الكود الموجود."""
+    return (
+        metadata["tmdb_id"],
+        metadata["display_title"],
+        metadata["story"],
+        metadata["poster"],
+        metadata["labels"],
+        metadata["duration"],
+        metadata["rating"],
+        metadata["runtime"],
+        metadata["year"],
+    )
+
+
+# ===========================================================================
+# Section 10: Public API — الواجهة العامة للملف
+# ===========================================================================
+
+def fetch_tmdb_metadata(search_query: str, year: str | None = None) -> dict:
+    """
+    الواجهة العامة: جلب بيانات الميديا كـ dict.
+    تعيد قاموساً بالمفاتيح: tmdb_id, display_title, story, poster,
+    labels, duration, rating, runtime, year.
+    """
+    log.info(f"🔍 جلب بيانات العمل من TMDB/IMDB...")
+    log.info(f"🔎 البحث عن: {search_query} " + (f"({year})" if year else "") + " ...")
+
+    # محاولة الفهرس المحلي أولاً
     local_id = check_local_radar(search_query, year)
+    effective_query = local_id if local_id else search_query
+
     if local_id:
         log.info(f"✨ تم العثور على ID محلي: {local_id}. سيتم استخدامه مباشرة.")
-        # نرسل الـ ID بدلاً من اسم البحث لضمان الدقة
-        movie_result = get_movie_data(local_id, year=year)
-    else:
-        # المسار القديم في حال لم يجد شيئاً محلياً
-        movie_result = get_movie_data(search_query, year=year)
-    # --- نهاية التعديل ---
-    log.info(f"DEBUG: get_movie_data returned: {movie_result}")
+
+    log.debug(f"DEBUG: calling get_movie_data with '{effective_query}'")
+    movie_result = get_movie_data(effective_query, year=year)
+    log.debug(f"DEBUG: get_movie_data returned: {movie_result}")
 
     if isinstance(movie_result, (list, tuple)) and len(movie_result) >= 9:
-        (
-            tmdb_id_fetched,
-            display_title_tmdb,
-            meta_story,
-            final_poster,
-            meta_labels,
-            meta_duration,
-            meta_rating,
-            meta_runtime,
-            meta_year,
-        ) = movie_result[:9]
-    else:
-        log.warning(
-            f"⚠️ بيانات TMDB ناقصة أو غير صالحة لـ {search_query}، سيتم استخدام الافتراضي."
-        )
-        tmdb_id_fetched, display_title_tmdb, meta_story, final_poster = (
-            None,
-            search_query,
-            "",
-            "",
-        )
-        meta_labels, meta_duration, meta_rating, meta_runtime, meta_year = (
-            [],
-            "",
-            "0",
-            0,
-            year or "N/A",
-        )
+        keys = ["tmdb_id", "display_title", "story", "poster",
+                "labels", "duration", "rating", "runtime", "year"]
+        return dict(zip(keys, movie_result[:9]))
 
-    return {
-        "tmdb_id": tmdb_id_fetched,
-        "display_title": display_title_tmdb,
-        "story": meta_story,
-        "poster": final_poster,
-        "labels": meta_labels,
-        "duration": meta_duration,
-        "rating": meta_rating,
-        "runtime": meta_runtime,
-        "year": meta_year,
-    }
+    log.warning(f"⚠️ بيانات ناقصة أو غير صالحة لـ '{search_query}'، سيتم استخدام الافتراضي.")
+    return {**DEFAULT_METADATA, "display_title": search_query, "year": year or "N/A"}
