@@ -21,7 +21,7 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 from supabase import create_client, Client
 import nest_asyncio
 import asyncio
-
+from downloader_new.metadata.formatter import normalize_title
 # هذا السطر هو السحر الذي يحل المشكلة في كولاب
 nest_asyncio.apply()
 
@@ -114,12 +114,20 @@ def already_exists(sb: Client, movie_name: str, download_url: str) -> bool:
         return True
 
     # 3. الفحص الشامل في جدول الميديا باستخدام النمط المرن
-    query = sb.table("medias").select("id").ilike("title", smart_pattern)
+    # نجيب الأعمال بنفس السنة أولاً ثم نفلتر محلياً
+    query = sb.table("medias").select("id,title,year")
 
     if incoming_year:
         query = query.eq("year", incoming_year)
 
     in_medias = query.execute()
+
+    normalized_incoming = normalize_title(incoming_pure_title)
+
+    for row in in_medias.data or []:
+        if normalize_title(row["title"]) == normalized_incoming:
+            log.info(f"♻️ موجود بالفعل: {row['title']}")
+            return True
 
     if in_medias.data:
         log.info(f"  ♻️  تم العثور على العمل مسبقاً (تطابق مرن): {incoming_pure_title}")
@@ -359,53 +367,6 @@ async def get_embed_url(page) -> tuple[Optional[str], str]:
     return None, "none"
 
 
-def normalize_title(title, for_search=False):
-    if not title:
-        return ""
-
-    t = str(title)
-
-    # --- الخطوة الناقصة والضرورية ---
-    # حذف أي سنة (19xx أو 20xx) قبل أي عملية تنظيف تانية
-    # t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
-    # --------------------------------
-
-    # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
-    # تنظيف الرموز - تم إضافة ' و : للقائمة المسموح بها
-    # if for_search:
-    #     t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
-    # else:
-    #     t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s\':]", " ", t)
-    stop_words = [
-        "مسلسل",
-        "فيلم",
-        "مترجم",
-        "مدبلج",
-        "كامل",
-        "حصريا",
-        "اونلاين",
-        "مشاهدة",
-        "تحميل",
-        "بجودة",
-        "عالية",
-        "hd",
-        "sd",
-        "4k",
-        "web-dl",
-        "bluray",
-        "season",
-        "episode",
-        "سيزون",
-        "حلقة",
-        "موسم",
-        "اون",
-        "لاين",
-    ]
-    for w in stop_words:
-        t = re.sub(rf"\b{w}\b", " ", t)
-
-    t = " ".join(t.split())
-    return t
 
 
 async def get_movie_title(page) -> str:
@@ -418,7 +379,7 @@ async def get_movie_title(page) -> str:
                 (await page.title()).replace("توب سينما", "").replace("TopCinema", "").strip()
             )
 
-        return normalize_title(raw_title)
+        return normalize_title(raw_title, remove_year=Falsealse)
 
 
 async def random_delay():

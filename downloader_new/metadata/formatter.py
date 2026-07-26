@@ -6,7 +6,7 @@ from downloader_new.shared.logger import get_beast_logger
 log = get_beast_logger("GuardianUltra")
 
 
-def normalize_title(title, for_search=False):
+def normalize_title(title, for_search=False, remove_year=True):
     if not title:
         return ""
 
@@ -14,7 +14,9 @@ def normalize_title(title, for_search=False):
 
     # --- الخطوة الناقصة والضرورية ---
     # حذف أي سنة (19xx أو 20xx) قبل أي عملية تنظيف تانية
-    t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
+    # حذف السنة عند الحاجة فقط
+    if remove_year:
+        t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
     # --------------------------------
 
     # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
