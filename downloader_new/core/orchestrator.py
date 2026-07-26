@@ -107,14 +107,23 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         year=extracted_year,
         trailer_url=trailer_url_from_db
     )
+    
+    # إجبار توحيد السنة: استخدام السنة المستخرجة من اسم السورس كأولوية قصوى لمنع التكرار
+    if extracted_year:
+        if tmdb_data.get("year") != str(extracted_year):
+            log.info(f"🔄 تصحيح السنة من {tmdb_data.get('year')} (TMDB) إلى {extracted_year} (العنوان الأصلي) لضمان تطابق الفحص.")
+        tmdb_data["year"] = str(extracted_year)
+    else:
+        # إذا لم يحتوي العنوان الأصلي على سنة، نحاول استخراجها مجدداً كخطة بديلة
+        if not tmdb_data.get("year") or tmdb_data["year"] == "غير محدد":
+            year_match = re.search(r"(19|20)\d{2}", original_task_name)
+            if year_match:
+                tmdb_data["year"] = year_match.group(0)
+                log.info(f"📅 Fallback Year = {tmdb_data['year']}")
+
     log.info(
         f"DEBUG: Final media data - Title: {tmdb_data['display_title']}, Year: {tmdb_data['year']}"
     )
-    if not tmdb_data.get("year") or tmdb_data["year"] == "غير محدد":
-        year_match = re.search(r"(19|20)\d{2}", original_task_name)
-        if year_match:
-            tmdb_data["year"] = year_match.group(0)
-            log.info(f"📅 Fallback Year = {tmdb_data['year']}")
     # --- 6. بناء الاسم المعروض النهائي وتحديث بيانات التنظيف ---
     display_title = build_display_title(original_task_name, tmdb_data["display_title"])
     clean_res_db = get_clean_media_data(display_title)

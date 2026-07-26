@@ -1,13 +1,18 @@
-# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/db/supabase_client.py
+"""
+supabase_client.py
+==================
+طبقة البيانات الموحدة للتعامل مع Supabase.
+مبني على مبدأ فصل المسؤوليات: كل دالة مسؤولة عن جدول واحد أو عملية واحدة.
+"""
+
 import re
 import os
 import time
+from typing import Optional
+
 from supabase import create_client, Client as SupabaseClient
 
-# الاستدعاء النظيف والمباشر للوجر
 from downloader_new.shared.logger import get_beast_logger
-
-# في أعلى الملف مع باقي الـ imports
 from downloader_new.metadata.formatter import normalize_title
 
 log = get_beast_logger("GuardianUltra")
@@ -20,378 +25,497 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: SupabaseClient = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# قيم لا معنى لها عند الحفظ في DB
+_USELESS_VALUES = [None, "", "لا يوجد وصف", "جاري تحديث القصة...", "N/A", "غير محدد"]
 
-def save_to_supabase(
-    current_voe,
-    current_vk,
-    display_title,
-    original_task_name,
-    meta_story,
-    final_poster,
-    meta_year,
-    meta_rating,
-    identifier,
-    archive_url,
-    meta_data=None,
-    tmdb_id=None,
-    labels=None,
-    runtime=None,
-    duration_iso=None,
-    # المتغيرات الجديدة التي سيتم تمريرها جاهزة من الـ Orchestrator
-    c_title=None,
-    c_cat="movie",
-    extracted_season_no=None,
-    actual_ep_no=None,
-    generated_slug=None,
-):
-    # لا يوجد أي استيراد داخلي هنا (No Try-Except for imports)
+RETRY_COUNT    = 3
+RETRY_DELAY    = 3  # ثواني
 
-    # التحقق من وجود c_title، وإذا لم يمرره الـ Orchestrator نستخدم بيانات افتراضية
-    if not c_title:
-        log.warning(
-            f"⚠️ لم يتم تمرير بيانات معالجة لـ {display_title}، سيتم استخدام بيانات افتراضية."
-        )
-        c_title = display_title
-        c_cat = "movie"
-        extracted_season_no = None
-        actual_ep_no = None
 
-    # توليد slug تلقائي للميديا
-    if not generated_slug and c_title:
-        generated_slug = c_title.lower().strip().replace(" ", "-")
+# ===========================================================================
+# Section 1: Core Utilities — أدوات مساعدة أساسية
+# ===========================================================================
 
-        # ----- هنا يبدأ كود الإدخال لقاعدة البيانات الخاص بك -----
-        # ... كمل باقي الكود بتاعك كلو على نفس مستوى المحاذاة دي ...
-        # تنظيف الـ slug من الرموز الغريبة مع الحفاظ على الحروف العربية والإنجليزية والأرقام والشرطة
-        generated_slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", generated_slug)
-        # إزالة الشرطات المتكررة
-        generated_slug = re.sub(r"-+", "-", generated_slug).strip("-")
+def _retry(fn, label: str = ""):
+    """
+    تنفيذ دالة مع إعادة المحاولة تلقائياً عند فشل Supabase (502/Timeout).
+    يرمي الخطأ بعد استنفاد كل المحاولات.
+    """
+    for attempt in range(RETRY_COUNT):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt < RETRY_COUNT - 1:
+                log.warning(f"⚠️ [{label}] سوبابيز متعثر، محاولة {attempt + 1}... ({e})")
+                time.sleep(RETRY_DELAY)
+            else:
+                raise e
 
-        # --- [تعديل 1]: تحديد الميديا تايب بدقة (movie / series) ---
-        # الـ category بتفضل movie/tv عشان السيستم القديم، بس الـ media_type بيبقى موفي/سيريس
-        m_type = "movie" if c_cat == "movie" else "series"
 
-        # --- [تعديل 2]: حماية التايتل (لو التاسك فيه اسم يدوي نستخدمه) ---
-        # بنشيك هل original_task_name رابط؟ لو مش رابط يبقى هو الأولوية
-        if original_task_name and not original_task_name.startswith(
-            ("http://", "https://")
-        ):
-            final_title = original_task_name
+def _clean_payload(payload: dict) -> dict:
+    """حذف القيم الفارغة أو عديمة الفائدة وروابط الـ Placeholder من الـ payload."""
+    return {
+        k: v
+        for k, v in payload.items()
+        if v not in _USELESS_VALUES and "via.placeholder.com" not in str(v)
+    }
+
+
+def _build_slug(title: str) -> str:
+    """توليد slug نظيف من العنوان."""
+    slug = title.lower().strip().replace(" ", "-")
+    slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    return slug
+
+
+def _resolve_final_title(original_task_name: str, c_title: str) -> str:
+    """
+    اختيار العنوان النهائي للحفظ:
+    لو الـ task_name اسم يدوي (مش رابط) → هو الأولوية.
+    غير كده → نستخدم العنوان المعالج من TMDB.
+    """
+    if original_task_name and not original_task_name.startswith(("http://", "https://")):
+        return original_task_name
+    return c_title
+
+
+# ===========================================================================
+# Section 2: Media Lookup — البحث عن الميديا
+# ===========================================================================
+
+def _find_media_by_tmdb_id(tmdb_id: str) -> Optional[dict]:
+    """البحث عن الميديا بالـ TMDB ID."""
+    res = supabase.table("medias").select("*").eq("tmdb_id", str(tmdb_id)).execute()
+    return res.data[0] if res.data else None
+
+
+def _find_media_by_exact_title(title: str, year: Optional[str]) -> Optional[dict]:
+    """البحث عن الميديا بالعنوان والسنة المطابقين تماماً."""
+    query = supabase.table("medias").select("*").eq("title", title)
+    if year:
+        query = query.eq("year", str(year))
+    res = query.execute()
+    return res.data[0] if res.data else None
+
+
+def _find_media_by_smart_pattern(title: str, year: Optional[str]) -> Optional[dict]:
+    """
+    البحث المرن بـ LIKE pattern للأعمال العربية أو ذات الأسماء غير الدقيقة.
+    يُعيد أول تطابق دقيق بعد مقارنة العناوين المُنقّاة.
+    """
+    smart_pattern = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF]+", "%", normalize_title(title))
+    res = supabase.table("medias").select("*").ilike("title", f"%{smart_pattern}%").execute()
+
+    target_title = normalize_title(title)
+    target_year  = str(year).strip() if year else None
+
+    for row in res.data or []:
+        row_title = normalize_title(row["title"])
+        row_year  = str(row.get("year") or "").strip()
+
+        title_match = row_title == target_title
+        year_match  = (not target_year) or (row_year == target_year)
+
+        if title_match and year_match:
+            return row
+
+    return None
+
+
+def find_existing_media(tmdb_id: Optional[str], title: str, year: Optional[str]) -> Optional[dict]:
+    """
+    البوابة المركزية للبحث عن الميديا بترتيب الأولويات:
+    TMDB ID → عنوان دقيق → بحث مرن.
+    تُعيد الصف الكامل من DB أو None.
+    """
+    if tmdb_id:
+        result = _find_media_by_tmdb_id(tmdb_id)
+        if result:
+            return result
+
+    result = _find_media_by_exact_title(title, year)
+    if result:
+        return result
+
+    return _find_media_by_smart_pattern(title, year)
+
+
+# ===========================================================================
+# Section 3: Media Operations — عمليات جدول medias
+# ===========================================================================
+
+def _create_media(payload: dict) -> Optional[dict]:
+    """إنشاء سجل ميديا جديد باستخدام upsert لمنع التكرار اللحظي."""
+    res = supabase.table("medias").upsert(
+        payload, on_conflict="title, year"
+    ).execute()
+    return res.data[0] if res.data else None
+
+
+def _sync_media_slug(media_id: int, base_slug: str) -> str:
+    """
+    التأكد من أن الـ slug يبدأ بالـ ID للتوافق مع Next.js.
+    يُحدّث DB لو الـ slug القديم مختلف ويُعيد الـ slug النهائي.
+    """
+    target_slug = f"{media_id}-{base_slug}"
+    res = supabase.table("medias").select("slug").eq("id", media_id).execute()
+
+    if not res.data:
+        return target_slug
+
+    current_slug = res.data[0]["slug"]
+    if current_slug != target_slug:
+        log.info(f"🔗 تحديث الـ Slug إلى: {target_slug}")
+        supabase.table("medias").update({"slug": target_slug}).eq("id", media_id).execute()
+
+    return target_slug
+
+
+def upsert_media(
+    tmdb_id: Optional[str],
+    final_title: str,
+    meta_story: str,
+    final_poster: str,
+    c_cat: str,
+    meta_year: Optional[str],
+    meta_rating: Optional[str],
+    labels: Optional[str],
+    runtime: Optional[str],
+    duration_iso: Optional[str],
+    base_slug: str,
+) -> tuple[Optional[int], str, str, str]:
+    """
+    إيجاد أو إنشاء سجل الميديا وإعادة بياناته الأساسية.
+    تُعيد: (media_id, final_slug, meta_story, final_poster).
+    """
+    m_type = "movie" if c_cat == "movie" else "series"
+
+    media_payload = _clean_payload({
+        "tmdb_id":      str(tmdb_id) if tmdb_id else None,
+        "title":        final_title,
+        "story":        meta_story,
+        "poster_url":   final_poster,
+        "category":     c_cat,
+        "media_type":   m_type,
+        "slug":         base_slug,
+        "year":         str(meta_year) if meta_year else None,
+        "rating":       str(meta_rating) if meta_rating else None,
+        "labels":       labels,
+        "runtime":      runtime,
+        "duration_iso": duration_iso,
+    })
+
+    def _do_upsert():
+        existing = find_existing_media(tmdb_id, final_title, meta_year)
+
+        if existing:
+            media_id = existing["id"]
+            # نسحب البيانات الموجودة بدل ما ندهسها
+            resolved_story  = existing.get("story")  or meta_story
+            resolved_poster = existing.get("poster_url") or final_poster
+            log.info(f"🛡️ [حماية]: تم العثور على '{final_title}' (ID: {media_id})، تم سحب البيانات دون تعديل.")
         else:
-            final_title = c_title  # الاسم اللي السكربت نظفه أو جابه من TMDB
+            log.info(f"🆕 [إنشاء]: سجل جديد لـ '{final_title}'...")
+            new_row = _create_media(media_payload)
+            media_id       = new_row["id"] if new_row else None
+            resolved_story  = meta_story
+            resolved_poster = final_poster
+
+        return media_id, resolved_story, resolved_poster
+
+    media_id, resolved_story, resolved_poster = _retry(_do_upsert, label="upsert_media")
+
+    if not media_id:
+        return None, base_slug, resolved_story, resolved_poster
+
+    final_slug = _sync_media_slug(media_id, base_slug)
+    return media_id, final_slug, resolved_story, resolved_poster
+
+
+# ===========================================================================
+# Section 4: Season Operations — عمليات جدول seasons
+# ===========================================================================
+
+def upsert_season(media_id: int, season_number: int, base_slug: str) -> Optional[int]:
+    """
+    إيجاد أو إنشاء موسم وإعادة الـ ID.
+    """
+    season_slug = f"{base_slug}-season-{season_number}"
+    log.info(f"📡 معالجة الموسم رقم {season_number} للميديا {media_id}...")
+
     try:
-        if not meta_year:
-            log.warning("⚠️ meta_year is missing before saving.")
-        media_payload = {
-            "tmdb_id": str(tmdb_id) if tmdb_id else None,
-            "title": final_title,  # العنوان المحمي
-            "story": meta_story,
-            "poster_url": final_poster,
-            "category": c_cat,  # movie or tv (للسيستم)
-            "media_type": m_type,  # movie or series (للموقع)
-            "slug": generated_slug,
-            "year": str(meta_year),
-            "rating": str(meta_rating),
-            "labels": labels,
-            "runtime": runtime,
-            "duration_iso": duration_iso,
-        }
-        # تنظيف ذكي: يحذف القيمة لو كانت None أو نص بيدل على الفشل أو رابط Placeholder
-        useless_values = [
-            None,
-            "",
-            "لا يوجد وصف",
-            "جاري تحديث القصة...",
-            "N/A",
-            "غير محدد",
-        ]
-
-        media_payload = {
-            k: v
-            for k, v in media_payload.items()
-            if v not in useless_values and "via.placeholder.com" not in str(v)
-        }
-        # 1. ابحث عن المسلسل أولاً لمنع دهس البيانات (القصة والبوستر)
-        # --- بداية الجزء المحصن ضد أخطاء 502 ---
-        m_id = None
-        e_id = None
-        for attempt in range(3):
-            try:
-                # --- التعديل النهائي والذكي جداً بعد تفعيل Unique في سوبابيز ---
-                # 1. البحث عن الميديا (بالـ ID أولاً ثم بالاسم المنظف) لضمان عدم التكرار
-                m_id = None
-                query = None
-
-                # محاولة البحث بالـ ID لو متوفر
-                if tmdb_id:
-                    query = (
-                        supabase.table("medias")
-                        .select("*")
-                        .eq("tmdb_id", str(tmdb_id))
-                        .execute()
-                    )
-
-                # لو مفيش ID أو منفعش، نبحث بالاسم الذكي
-                if not query or not query.data:
-                    # الخطوة 1: البحث المطابق المباشر
-                    query = (
-                        supabase.table("medias")
-                        .select("*")
-                        .eq("title", c_title)
-                        .eq("year", str(meta_year))
-                        .execute()
-                    )
-
-                    # الخطوة 2: لو لسه مش موجود، نجرب البحث بـ "like" للكلمات الأساسية
-                    if not query.data:
-                        # نجلب كل الأعمال اللي فيها جزء من الاسم ونفلترها برمجياً
-                        # ده حل "ذكي" للأعمال العربية اللي مش في TMDB
-                        smart_pattern = re.sub(
-                            r"[^a-zA-Z0-9\u0600-\u06FF]+",
-                            "%",
-                            normalize_title(c_title)
-                        )
-
-                        search_results = (
-                            supabase.table("medias")
-                            .select("*")
-                            .ilike("title", f"%{smart_pattern}%")
-                            .execute()
-                        )
-                        target_title = normalize_title(c_title)
-                        target_year = str(meta_year).strip() if meta_year else None
-
-                        for row in search_results.data:
-                            row_title = normalize_title(row["title"])
-                            row_year = str(row.get("year") or "").strip()
-
-                            # لو عندنا سنة لازم تطابق
-                            if target_year:
-                                if row_title == target_title and row_year == target_year:
-                                    query.data = [row]
-                                    break
-                            else:
-                                # آخر حل لو السنة مش موجودة
-                                if row_title == target_title:
-                                    query.data = [row]
-                                    break
-
-                if query and query.data:
-                    m_id = query.data[0]["id"]
-
-                    # --- التعديل: قراءة البيانات "لحساب" المتغيرات وليس للتعديل ---
-                    # بنسحب القصة والبوستر من سوبابيز عشان نستخدمهم في تليجرام صح
-                    existing_data = query.data[0]
-
-                    if existing_data.get("story"):
-                        meta_story = existing_data["story"]
-                    if existing_data.get("poster_url"):
-                        final_poster = existing_data["poster_url"]
-
-                    log.info(
-                        f"🛡️ [حماية]: تم العثور على '{c_title}' (ID: {m_id})، تم سحب البيانات للأرشفة دون تعديل."
-                    )
-                else:
-                    # استخدام upsert لضمان أنه في حالة "السباق اللحظي" لا يحدث خطأ 23505
-                    log.info(f"🆕 [إنشاء]: سجل جديد لـ '{c_title}'...")
-                    new_media = (
-                        supabase.table("medias")
-                        .upsert(media_payload, on_conflict="title, year")
-                        .execute()
-                    )
-                    if new_media.data:
-                        m_id = new_media.data[0]["id"]
-
-                # --- [تعديل جوهري]: تحديث الـ slug ليبدأ بـ ID الميديا لضمان توافق Next.js ---
-                if m_id:
-                    # نستخدم الـ generated_slug الأصلي ونضيف له الـ ID
-                    # نتأكد أولاً أن الـ slug الحالي لا يبدأ بالفعل بالـ ID الصحيح
-                    check_res = (
-                        supabase.table("medias").select("slug").eq("id", m_id).execute()
-                    )
-                    if check_res.data:
-                        current_db_slug = check_res.data[0]["slug"]
-                        target_slug = f"{m_id}-{generated_slug}"
-
-                        if current_db_slug != target_slug:
-                            log.info(f"🔗 تحديث الرابط (Slug) إلى: {target_slug}")
-                            supabase.table("medias").update({"slug": target_slug}).eq(
-                                "id", m_id
-                            ).execute()
-                            generated_slug = target_slug
-                        else:
-                            generated_slug = current_db_slug
-
-                break  # إذا وصلنا هنا بنجاح، نخرج من حلقة المحاولات
-            except Exception as e:
-                if attempt < 2:
-                    log.warning(
-                        f"⚠️ سوبابيز متعثر في مرحلة التعريف (502)، محاولة {attempt+1}..."
-                    )
-                    time.sleep(3)
-                else:
-                    raise e  # لو فشل تماماً بعد 3 مرات يرمي الخطأ للـ Except الكبيرة
-        # --- نهاية الجزء المحصن ---
-
-        # --- [تعديل جوهري]: إنشاء أو تحديث الموسم (Season) أولاً للمسلسلات ---
-        s_id = None
-        if c_cat == "tv":
-            # استخدام رقم الموسم المستخرج بدلاً من الهاردكود
-            season_number = extracted_season_no if extracted_season_no else 1
-            season_slug = f"{generated_slug}-season-{season_number}"
-            log.info(f"📡 جاري معالجة الموسم رقم {season_number} للميديا {m_id}...")
-            try:
-                # البحث عن الموسم أو إنشاؤه
-                existing_season = (
-                    supabase.table("seasons")
-                    .select("id")
-                    .eq("media_id", m_id)
-                    .eq("season_number", season_number)
-                    .execute()
-                )
-                if existing_season.data:
-                    s_id = existing_season.data[0]["id"]
-                    log.info(f"✅ تم العثور على الموسم في القاعدة بـ ID: {s_id}")
-                else:
-                    log.info(f"🆕 الموسم {season_number} غير موجود، جاري إنشاؤه...")
-                    new_season = (
-                        supabase.table("seasons")
-                        .insert(
-                            {
-                                "media_id": m_id,
-                                "season_number": season_number,
-                                "slug": season_slug,
-                            }
-                        )
-                        .execute()
-                    )
-                    if new_season.data:
-                        s_id = new_season.data[0]["id"]
-                        log.info(f"✅ تم إنشاء موسم جديد بـ ID: {s_id}")
-            except Exception as se:
-                log.warning(f"⚠️ خطأ في إنشاء الموسم: {se}")
-
-        # --- [تعديل جوهري]: إنشاء أو تحديث الحلقة (Episode) قبل الروابط ---
-        actual_ep_no = actual_ep_no if actual_ep_no else 1
-        ep_slug = f"{generated_slug}-episode-{actual_ep_no}"
-
-        episode_payload = {
-            "media_id": m_id,
-            "season_id": s_id,  # ربط الحلقة بالموسم
-            "episode_number": actual_ep_no,
-            "slug": ep_slug,  # إضافة slug للحلقة
-            "identifier": identifier,
-            "status_message": "Waiting...",
-            "progress_percent": 0,
-        }
-
-        # البحث عن الحلقة لإنشائها أو تحديث الـ identifier الخاص بها
-        existing_ep = (
-            supabase.table("episodes")
+        existing = (
+            supabase.table("seasons")
             .select("id")
-            .eq("media_id", m_id)
-            .eq("episode_number", actual_ep_no)
+            .eq("media_id", media_id)
+            .eq("season_number", season_number)
             .execute()
         )
 
-        if existing_ep.data:
-            e_id = existing_ep.data[0]["id"]
-            supabase.table("episodes").update(
-                {"identifier": identifier, "season_id": s_id, "slug": ep_slug}
-            ).eq("id", e_id).execute()
-        else:
-            new_ep = supabase.table("episodes").insert(episode_payload).execute()
-            if new_ep.data:
-                e_id = new_ep.data[0]["id"]
+        if existing.data:
+            s_id = existing.data[0]["id"]
+            log.info(f"✅ الموسم موجود بالفعل (ID: {s_id})")
+            return s_id
 
-        # --- [تعديل]: التعامل مع التصنيفات (Genres) تلقائياً ---
-        if labels and m_id:
-            genre_list = [g.strip() for g in labels.split(",") if g.strip()]
-            for g_name in genre_list:
-                try:
-                    g_slug = g_name.lower().replace(" ", "-")
-                    # 1. البحث عن التصنيف أو إنشاؤه
-                    genre_res = (
-                        supabase.table("genres")
-                        .select("id")
-                        .eq("name", g_name)
-                        .execute()
-                    )
-                    g_id = None
-                    if genre_res.data:
-                        g_id = genre_res.data[0]["id"]
-                    else:
-                        new_g = (
-                            supabase.table("genres")
-                            .insert({"name": g_name, "slug": g_slug})
-                            .execute()
-                        )
-                        if new_g.data:
-                            g_id = new_g.data[0]["id"]
+        log.info(f"🆕 إنشاء الموسم {season_number}...")
+        new_season = supabase.table("seasons").insert({
+            "media_id":      media_id,
+            "season_number": season_number,
+            "slug":          season_slug,
+        }).execute()
 
-                    # 2. ربط التصنيف بالميديا في جدول media_genres
-                    if g_id:
-                        supabase.table("media_genres").upsert(
-                            {"media_id": m_id, "genre_id": g_id},
-                            on_conflict="media_id, genre_id",
-                        ).execute()
-                except Exception as ge:
-                    log.warning(f"⚠️ خطأ في معالجة التصنيف {g_name}: {ge}")
+        if new_season.data:
+            s_id = new_season.data[0]["id"]
+            log.info(f"✅ تم إنشاء الموسم (ID: {s_id})")
+            return s_id
 
-        # 1. بناء القائمة الآن بعد التأكد من وجود e_id
-        link_entries = []
-        if e_id:  # تأكد أن الـ ID موجود
-            if current_voe and current_voe not in ["Failed", "Pending"]:
-                link_entries.append(
-                    {"episode_id": e_id, "server_name": "voe", "url": current_voe}
-                )
-            if current_vk and current_vk not in ["Failed", "Pending"]:
-                link_entries.append(
-                    {"episode_id": e_id, "server_name": "vk", "url": current_vk}
-                )
-            if archive_url and "Failed" not in archive_url and archive_url != "Pending":
-                link_entries.append(
-                    {"episode_id": e_id, "server_name": "archive", "url": archive_url}
-                )
-
-        # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط (تنفيذ الـ upsert لكل رابط في القائمة)
-        # 2. الآن نقوم بتحديث السيرفرات الموجودة فقط مع آلية إعادة المحاولة (Retry)
-        for entry in link_entries:
-            for attempt in range(3):  # حاول 3 مرات كحد أقصى
-                try:
-                    supabase.table("links").upsert(
-                        entry, on_conflict="episode_id, server_name"
-                    ).execute()
-                    break  # نجح الأمر، اخرج من حلقة المحاولات لهذا الرابط
-                except Exception as link_err:
-                    if attempt < 2:
-                        log.warning(
-                            f"⚠️ سوبابيز مشغول (502/Timeout)، محاولة رقم {attempt+1} خلال 3 ثوانٍ..."
-                        )
-                        time.sleep(3)
-                    else:
-                        log.error(
-                            f"❌ فشل تسجيل رابط {entry['server_name']} بعد 3 محاولات: {link_err}"
-                        )
-        return e_id, m_id, meta_story, final_poster
     except Exception as e:
-        # طباعة الخطأ كامل بالسطر والسبب عشان نعرف المشكلة فين بالظبط
-        import traceback
+        log.warning(f"⚠️ خطأ في معالجة الموسم: {e}")
 
+    return None
+
+
+# ===========================================================================
+# Section 5: Episode Operations — عمليات جدول episodes
+# ===========================================================================
+
+def upsert_episode(
+    media_id: int,
+    season_id: Optional[int],
+    episode_number: int,
+    identifier: str,
+    base_slug: str,
+) -> Optional[int]:
+    """
+    إيجاد أو إنشاء حلقة، تحديث الـ identifier لو موجودة، وإعادة الـ ID.
+    """
+    ep_slug = f"{base_slug}-episode-{episode_number}"
+
+    existing = (
+        supabase.table("episodes")
+        .select("id")
+        .eq("media_id", media_id)
+        .eq("episode_number", episode_number)
+        .execute()
+    )
+
+    if existing.data:
+        e_id = existing.data[0]["id"]
+        supabase.table("episodes").update({
+            "identifier": identifier,
+            "season_id":  season_id,
+            "slug":       ep_slug,
+        }).eq("id", e_id).execute()
+        return e_id
+
+    new_ep = supabase.table("episodes").insert({
+        "media_id":       media_id,
+        "season_id":      season_id,
+        "episode_number": episode_number,
+        "slug":           ep_slug,
+        "identifier":     identifier,
+        "status_message": "Waiting...",
+        "progress_percent": 0,
+    }).execute()
+
+    return new_ep.data[0]["id"] if new_ep.data else None
+
+
+# ===========================================================================
+# Section 6: Genre Operations — عمليات جدول genres
+# ===========================================================================
+
+def _find_or_create_genre(genre_name: str) -> Optional[int]:
+    """إيجاد أو إنشاء تصنيف وإعادة الـ ID."""
+    genre_slug = genre_name.lower().replace(" ", "-")
+
+    res = supabase.table("genres").select("id").eq("name", genre_name).execute()
+    if res.data:
+        return res.data[0]["id"]
+
+    new_genre = supabase.table("genres").insert({
+        "name": genre_name,
+        "slug": genre_slug,
+    }).execute()
+    return new_genre.data[0]["id"] if new_genre.data else None
+
+
+def _link_genre_to_media(media_id: int, genre_id: int) -> None:
+    """ربط تصنيف بميديا في جدول media_genres."""
+    supabase.table("media_genres").upsert(
+        {"media_id": media_id, "genre_id": genre_id},
+        on_conflict="media_id, genre_id",
+    ).execute()
+
+
+def sync_genres(media_id: int, labels: str) -> None:
+    """
+    مزامنة كل التصنيفات المرتبطة بميديا:
+    تُنشئ أي تصنيف غير موجود وتربطه بالميديا.
+    """
+    genre_list = [g.strip() for g in labels.split(",") if g.strip()]
+    for genre_name in genre_list:
+        try:
+            genre_id = _find_or_create_genre(genre_name)
+            if genre_id:
+                _link_genre_to_media(media_id, genre_id)
+        except Exception as e:
+            log.warning(f"⚠️ خطأ في معالجة التصنيف '{genre_name}': {e}")
+
+
+# ===========================================================================
+# Section 7: Links Operations — عمليات جدول links
+# ===========================================================================
+
+def _build_link_entries(
+    episode_id: int,
+    current_voe: Optional[str],
+    current_vk: Optional[str],
+    archive_url: Optional[str],
+) -> list[dict]:
+    """بناء قائمة الروابط الصالحة للحفظ."""
+    entries = []
+    invalid = {"Failed", "Pending", None, ""}
+
+    if current_voe and current_voe not in invalid:
+        entries.append({"episode_id": episode_id, "server_name": "voe", "url": current_voe})
+
+    if current_vk and current_vk not in invalid:
+        entries.append({"episode_id": episode_id, "server_name": "vk", "url": current_vk})
+
+    if archive_url and archive_url not in invalid and "Failed" not in str(archive_url):
+        entries.append({"episode_id": episode_id, "server_name": "archive", "url": archive_url})
+
+    return entries
+
+
+def save_links(
+    episode_id: int,
+    current_voe: Optional[str],
+    current_vk: Optional[str],
+    archive_url: Optional[str],
+) -> None:
+    """حفظ روابط التشغيل في جدول links مع retry لكل رابط."""
+    entries = _build_link_entries(episode_id, current_voe, current_vk, archive_url)
+
+    for entry in entries:
+        def _do_upsert(e=entry):
+            supabase.table("links").upsert(
+                e, on_conflict="episode_id, server_name"
+            ).execute()
+
+        try:
+            _retry(_do_upsert, label=f"link:{entry['server_name']}")
+        except Exception as e:
+            log.error(f"❌ فشل حفظ رابط {entry['server_name']} بعد {RETRY_COUNT} محاولات: {e}")
+
+
+# ===========================================================================
+# Section 8: Main Orchestrator — المنسق الرئيسي
+# ===========================================================================
+
+def save_to_supabase(
+    current_voe: Optional[str],
+    current_vk: Optional[str],
+    display_title: str,
+    original_task_name: str,
+    meta_story: Optional[str],
+    final_poster: Optional[str],
+    meta_year: Optional[str],
+    meta_rating: Optional[str],
+    identifier: str,
+    archive_url: Optional[str],
+    meta_data: Optional[dict] = None,
+    tmdb_id: Optional[str] = None,
+    labels: Optional[str] = None,
+    runtime: Optional[str] = None,
+    duration_iso: Optional[str] = None,
+    c_title: Optional[str] = None,
+    c_cat: str = "movie",
+    extracted_season_no: Optional[int] = None,
+    actual_ep_no: Optional[int] = None,
+    generated_slug: Optional[str] = None,
+) -> Optional[tuple]:
+    """
+    المنسق الرئيسي لحفظ أي عمل في قاعدة البيانات.
+    يتبع الترتيب: Media → Season → Episode → Genres → Links.
+    يُعيد: (episode_id, media_id, meta_story, final_poster) أو None عند الفشل.
+    """
+    import traceback
+
+    try:
+        # ── 1. التحقق والإعداد ───────────────────────────────────────
+        if not meta_year:
+            log.warning("⚠️ meta_year مفقود قبل الحفظ.")
+
+        if not c_title:
+            log.warning(f"⚠️ c_title غير ممرر لـ '{display_title}'، سيُستخدم display_title.")
+            c_title = display_title
+            c_cat   = "movie"
+            extracted_season_no = None
+            actual_ep_no        = None
+
+        final_title = _resolve_final_title(original_task_name, c_title)
+        base_slug   = generated_slug or _build_slug(c_title)
+
+        # ── 2. الميديا (Media) ───────────────────────────────────────
+        media_id, final_slug, meta_story, final_poster = upsert_media(
+            tmdb_id=tmdb_id, final_title=final_title,
+            meta_story=meta_story, final_poster=final_poster,
+            c_cat=c_cat, meta_year=meta_year, meta_rating=meta_rating,
+            labels=labels, runtime=runtime, duration_iso=duration_iso,
+            base_slug=base_slug,
+        )
+
+        if not media_id:
+            log.error("❌ فشل إنشاء أو إيجاد الميديا. إيقاف الحفظ.")
+            return None
+
+        # ── 3. الموسم (Season) — للمسلسلات فقط ─────────────────────
+        season_id = None
+        if c_cat == "tv":
+            season_number = extracted_season_no or 1
+            season_id = upsert_season(media_id, season_number, final_slug)
+
+        # ── 4. الحلقة (Episode) ──────────────────────────────────────
+        ep_number  = actual_ep_no or 1
+        episode_id = upsert_episode(media_id, season_id, ep_number, identifier, final_slug)
+
+        if not episode_id:
+            log.error("❌ فشل إنشاء الحلقة.")
+            return None
+
+        # ── 5. التصنيفات (Genres) ────────────────────────────────────
+        if labels and media_id:
+            sync_genres(media_id, labels)
+
+        # ── 6. الروابط (Links) ───────────────────────────────────────
+        save_links(episode_id, current_voe, current_vk, archive_url)
+
+        log.info(f"✅ تم الحفظ الكامل: media={media_id}, episode={episode_id}")
+        return episode_id, media_id, meta_story, final_poster
+
+    except Exception as e:
         log.error("🚨 Supabase Crash Traceback:")
         log.error(traceback.format_exc())
         log.error(f"❌ خطأ تفصيلي أثناء الحفظ: {str(e)}")
-        # نرجع None صريحة عشان سطر الـ 'if save_res' في الكور يحس إن فيه مشكلة ويوقف
         return None
 
 
+# ===========================================================================
+# Section 9: Public Helpers — الدوال العامة المساعدة
+# ===========================================================================
+
 def initialize_supabase_record(
-    display_title: str, original_task_name: str, tmdb_data: dict, temp_id: str
+    display_title: str,
+    original_task_name: str,
+    tmdb_data: dict,
+    temp_id: str,
 ) -> tuple:
     """
-    إنشاء سجل أولي في Supabase.
-    تعيد (e_id, media_id, meta_story, final_poster).
-    إذا فشل الحفظ، تسجل خطأ وتعيد (None, None, "", "").
+    إنشاء سجل أولي في Supabase (pending) لعمل لم ينتهِ تحميله بعد.
+    تُعيد: (episode_id, media_id, meta_story, final_poster).
     """
     save_res = save_to_supabase(
         current_voe=None,
@@ -411,8 +535,7 @@ def initialize_supabase_record(
     )
 
     if save_res and len(save_res) == 4:
-        e_id, media_id, meta_story, final_poster = save_res
-        return e_id, media_id, meta_story, final_poster
-    else:
-        log.error("❌ فشل الحفظ الأولي في قاعدة البيانات (save_to_supabase رجعت None)")
-        return None, None, "", ""
+        return save_res
+
+    log.error("❌ فشل الحفظ الأولي في قاعدة البيانات.")
+    return None, None, "", ""
