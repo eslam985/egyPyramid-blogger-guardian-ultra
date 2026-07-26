@@ -4,7 +4,9 @@
 ║          يجلب روابط LuluStream ويحقنها في Supabase               ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
-
+import requests
+import json
+from bs4 import BeautifulSoup
 import os
 import random
 import logging
@@ -67,7 +69,67 @@ def get_supabase() -> Client:
     """إنشاء وإعادة كلاينت Supabase."""
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ===========================================================================
+# IMDb Trailer Resolver
+# ===========================================================================
 
+
+def resolve_imdb_id_from_trailer(trailer_url: str) -> str | None:
+    """
+    Extract IMDb Title ID (ttxxxxxxx) from an IMDb trailer page.
+
+    Example:
+    https://www.imdb.com/videoembed/vi412862233
+
+    returns
+
+    tt9288740
+    """
+
+    if not trailer_url:
+        return None
+
+    try:
+
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 "
+                "AppleWebKit/537.36 "
+                "Chrome/137 Safari/537.36"
+            )
+        }
+
+        r = requests.get(
+            trailer_url,
+            headers=headers,
+            timeout=20,
+        )
+
+        if r.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        script = soup.find("script", id="__NEXT_DATA__")
+
+        if not script:
+            return None
+
+        data = json.loads(script.string)
+
+        return (
+            data["props"]["pageProps"]
+                ["videoEmbedPlaybackData"]
+                ["primaryTitle"]
+                ["id"]
+        )
+
+    except Exception as e:
+
+        log.warning(f"Trailer Resolver Error: {e}")
+
+        return None
+    
 # ===========================================================================
 # Section 4: Duplicate Detection — فحص التكرار
 # ===========================================================================

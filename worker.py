@@ -76,6 +76,7 @@ def ultimate_beast_worker():
                 job_id = job["id"]
                 url = job["source_url"]
                 file_name = job.get("task_name", "Unnamed_File")
+                trailer_url = job.get("trailer_url")
 
                 # محاولة "قفل" المهمة (Lock): لا يحدث التحديث إلا لو كانت الحالة لا تزال idle
                 lock_res = (
@@ -100,15 +101,11 @@ def ultimate_beast_worker():
                     continue
 
                 log.info(f"\n📦 مهمة سحب جديدة ومؤمنة [ID: {job_id}]: {file_name}")
-
-                # --- نهاية التعديل المحصن ---
-
-                # 3. تشغيل الوحش (pyramid_ultimate_beast)
                 # 3. تشغيل الوحش (pyramid_ultimate_beast)
                 log.info(f"⏳ جاري تشغيل المحرك لـ {file_name}...")
                 try:
                     loop.run_until_complete(
-                        pyramid_ultimate_beast(url, file_name, task_id=job_id)
+                        pyramid_ultimate_beast(url, file_name, task_id=job_id, meta_data={"trailer_url": trailer_url})
                     )
                 except Exception as run_err:
                     # مراجعة الخطأ: لو الخطأ بسبب إن الملف مش موجود (لأننا نقلناه)، نتجاهله

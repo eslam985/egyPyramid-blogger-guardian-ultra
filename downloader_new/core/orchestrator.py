@@ -99,9 +99,13 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         log.warning(f"⚠️ فشل الفحص السريع للتكرار، سنكمل المسار الطبيعي: {e}")
 
     # --- 5. جلب بيانات TMDB ---
+    # استخراج رابط التريلر من البيانات القادمة من قاعدة البيانات
+    trailer_url_from_db = meta_data.get("trailer_url") if isinstance(meta_data, dict) else None
+
     tmdb_data = fetch_tmdb_metadata(
         search_query_clean_tmdb if search_query_clean_tmdb else name,
         year=extracted_year,
+        trailer_url=trailer_url_from_db
     )
     log.info(
         f"DEBUG: Final media data - Title: {tmdb_data['display_title']}, Year: {tmdb_data['year']}"

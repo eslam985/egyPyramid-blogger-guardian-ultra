@@ -20,10 +20,15 @@ def search_local_imdb(clean_name, year):
         first_two_words = " ".join(name_parts[:2]) if len(name_parts) >= 2 else clean_name
 
         # --- الطبقة 1: التطابق التام (الدقة المطلقة) ---
-        query1 = "SELECT tconst FROM imdb_lookup WHERE primaryTitle = ? AND startYear = ? LIMIT 1"
+        query1 = "SELECT tconst FROM imdb_lookup WHERE primaryTitle = ? AND startYear = ?"
         cursor.execute(query1, (clean_name, target_year))
-        res = cursor.fetchone()
-        if res: return finalize(conn, res[0])
+        res = cursor.fetchall()
+        
+        if len(res) > 1:
+            # تم اكتشاف أكثر من فيلم متطابق في الاسم والسنة، نُسقط البحث لمنع جلب بيانات خاطئة
+            return finalize(conn, None)
+        elif len(res) == 1:
+            return finalize(conn, res[0][0])
 
         # --- الطبقة 2: مرونة السنة (+/- 1) مع الاسم كامل ---
         query2 = "SELECT tconst FROM imdb_lookup WHERE primaryTitle = ? AND (startYear BETWEEN ? AND ?) LIMIT 1"
