@@ -294,7 +294,7 @@ async def scrape_movie_title(page) -> str:
             .replace("TopCinema", "")
             .strip()
         )
-    return normalize_title(raw_title, for_search=True,remove_year=False)
+    return raw_title
 
 
 async def scrape_watch_url(page) -> Optional[str]:
