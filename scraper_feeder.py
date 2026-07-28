@@ -156,26 +156,42 @@ def _is_duplicate_in_tasks(
 
 
 def _is_duplicate_in_medias(sb: Client, movie_name: str) -> bool:
-    """فحص التكرار في جدول medias بمقارنة العناوين المُنقّاة."""
     import re
-
     match = re.search(r"^(.*)\s(\d{4})$", movie_name)
     pure_title = match.group(1).strip() if match else movie_name.strip()
     incoming_year = match.group(2).strip() if match else None
 
-    query = sb.table(TABLE_MEDIAS).select("id,title,year")
+    normalized = normalize_title(pure_title, for_search=False, remove_year=True)
+
+    q = sb.table(TABLE_MEDIAS).select("id").eq("normalized_title", normalized)
     if incoming_year:
-        query = query.eq("year", incoming_year)
+        q = q.eq("year", incoming_year)
 
-    rows = query.execute().data or []
-    normalized_incoming = normalize_title(pure_title)
+    return len((q.limit(1).execute().data or [])) > 0
 
-    for row in rows:
-        if normalize_title(row["title"]) == normalized_incoming:
-            log.info(f"♻️ موجود في medias: {row['title']}")
+def _is_duplicate_in_tasks(sb: Client, movie_name: str, download_url: Optional[str] = None) -> bool:
+    import re
+    match = re.search(r"^(.*)\s(\d{4})$", movie_name)
+    pure_title = match.group(1).strip() if match else movie_name.strip()
+    incoming_year = match.group(2).strip() if match else None
+
+    normalized = normalize_title(pure_title, for_search=False, remove_year=True)
+
+    # 1. شيك بالنورمالايز (ده المهم)
+    q = sb.table("download_tasks").select("id").eq("normalized_task_name", normalized)
+    if incoming_year:
+        q = q.eq("task_year", incoming_year)
+    if len((q.limit(1).execute().data or [])) > 0:
+        return True
+
+    # 2. شيك برابط الـ embed لو موجود
+    if download_url:
+        q2 = sb.table("download_tasks").select("id").eq("source_url", download_url).limit(1).execute().data or []
+        if len(q2) > 0:
             return True
 
     return False
+
 
 
 def already_exists(sb: Client, movie_name: str, download_url: Optional[str]) -> bool:
@@ -191,7 +207,6 @@ def already_exists(sb: Client, movie_name: str, download_url: Optional[str]) -> 
         return True
 
     return False
-
 
 # ===========================================================================
 # Section 5: Supabase Write Operations — عمليات الكتابة في DB
