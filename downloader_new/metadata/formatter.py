@@ -27,6 +27,7 @@ def normalize_title(title, for_search=False, remove_year=True):
 
     # stop_words بتاعتك زي ما هي...
     stop_words = [
+        "مترجمة",
         "مسلسل",
         "فيلم",
         "مترجم",

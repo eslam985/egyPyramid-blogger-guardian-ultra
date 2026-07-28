@@ -320,6 +320,7 @@ def normalize_title_scraper(title):
     t = re.sub(r"\be\d+\b", " ", t)
 
     stop_words = [
+        "مترجمة",
         "مسلسل",
         "فيلم",
         "مترجم",
