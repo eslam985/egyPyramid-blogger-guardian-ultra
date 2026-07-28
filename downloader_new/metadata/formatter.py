@@ -5,32 +5,27 @@ from downloader_new.shared.logger import get_beast_logger
 
 log = get_beast_logger("GuardianUltra")
 
-
 def normalize_title(title, for_search=False, remove_year=True):
     if not title:
         return ""
-
     t = str(title).lower()
-
-    # --- الخطوة الناقصة والضرورية ---
-    # حذف أي سنة (19xx أو 20xx) قبل أي عملية تنظيف تانية
-    # حذف السنة عند الحاجة فقط
+    # دي كانت ناقصة عندك وهي سبب كل التكرار اللي لقيناه
+    t = t.replace("’", "'").replace("‘", "'").replace("´", "'").replace("`", "'")
+    t = t.replace(":", " ").replace("—", " ").replace("–", " ") # شيل : خالص في الفحص
+    
     if remove_year:
         t = re.sub(r"\b(19|20)\d{2}\b", " ", t)
-    # --------------------------------
+    t = re.sub(r"\bs\d+\s*e\d+\b", " ", t, flags=re.I)
+    t = re.sub(r"\bs\d+\b", " ", t, flags=re.I)
+    t = re.sub(r"\be\d+\b", " ", t, flags=re.I)
 
-    # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
-    # إزالة ترقيم المواسم والحلقات (S01E05 / S1 / E5)
-    t = re.sub(r"\bs\d+\s*e\d+\b", " ", t)
-    t = re.sub(r"\bs\d+\b", " ", t)
-    t = re.sub(r"\be\d+\b", " ", t)
-
-    # تنظيف الرموز - لو للبحث بنسيب النقطتين والشرطة والأبوستروف عشان TMDB/IMDB
     if for_search:
-        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-\']", " ", t)
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s:\-']+", " ", t)
     else:
-        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s\':]", " ", t)
+        # في فحص التكرار شيل كل حاجة وسيب حروف بس
+        t = re.sub(r"[^a-zA-Z0-9\u0600-\u06FF\s]+", " ", t)
 
+    # stop_words بتاعتك زي ما هي...
     stop_words = [
         "مسلسل",
         "فيلم",
@@ -61,6 +56,7 @@ def normalize_title(title, for_search=False, remove_year=True):
 
     t = " ".join(t.split())
     return t
+
 
 
 def get_clean_media_data(raw_name):
