@@ -148,7 +148,7 @@ def find_existing_media(tmdb_id: Optional[str], title: str, year: Optional[str])
 def _create_media(payload: dict) -> Optional[dict]:
     """إنشاء سجل ميديا جديد باستخدام upsert لمنع التكرار اللحظي."""
     res = supabase.table("medias").upsert(
-        payload, on_conflict="title, year"
+        payload, on_conflict="normalized_title,year"
     ).execute()
     return res.data[0] if res.data else None
 
