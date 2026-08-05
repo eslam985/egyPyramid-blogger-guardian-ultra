@@ -4,6 +4,8 @@ import asyncio
 # الاستدعاء النظيف والمباشر للوجر
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.extractors.mixdrop_ext import get_mixdrop_direct_link
+from downloader_new.extractors.extract_streamtape import resolve_streamtape
+
 log = get_beast_logger("GuardianUltra")
 
 async def get_direct_link_via_playwright(embed_url):
@@ -16,7 +18,7 @@ async def get_direct_link_via_playwright(embed_url):
         # إعدادات المتصفح لتبدو كجهاز حقيقي
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
 
@@ -99,4 +101,17 @@ async def resolve_direct_url(raw_url: str) -> str:
             log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة.")
             raise Exception("Timeout: السكربت عالق في صفحة التحميل.")
 
+    # 3. معالجة روابط Streamtape
+    elif "streamtape" in raw_url or "stape" in raw_url or "shstream" in raw_url:
+        log.info("🎯 تم اكتشاف رابط Streamtape.. جاري الصيد...")
+        try:
+            direct_link = await asyncio.wait_for(resolve_streamtape(raw_url), timeout=120)
+            if direct_link:
+                log.info("✅ تم صيد رابط Streamtape المباشر بنجاح.")
+                raw_url = direct_link
+            else:
+                log.warning("⚠️ فشل الصيد من Streamtape، سنحاول بالرابط الأصلي.")
+        except asyncio.TimeoutError:
+            log.error("⏳ تجاوز الوقت: Streamtape توقف عن الاستجابة.")
+            
     return raw_url

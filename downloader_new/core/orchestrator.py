@@ -28,7 +28,7 @@ from downloader_new.media.file_manager import (
     list_videos,
 )
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("orchestrator.py")
 
 
 def get_space_stream_url(file_name):

@@ -422,7 +422,7 @@ async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
-        if "متعدد الجودات" in name:
+        if "متعدد الجودات" in name or "VideoTube" in name or "videotube" in name.lower():
             log.info(f"  🎯 محاولة سحب VidTube: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
@@ -461,6 +461,20 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
+async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
+    """محاولة استخراج رابط Streamtape كبديل."""
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "Streamtape" in name or "streamtape" in name.lower():
+            log.info(f"  🎯 محاولة سحب Streamtape: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page)
+            if src:
+                return src, "streamtape_live"
+    return None, None
+
 async def extract_embed_url(page) -> tuple[Optional[str], str]:
     """
     المنسق الرئيسي لاستخراج رابط التشغيل.
@@ -471,10 +485,10 @@ async def extract_embed_url(page) -> tuple[Optional[str], str]:
         log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
         return src, status
 
-    log.warning("⚠️ فشل VidTube، جارٍ تجربة MixDrop...")
-    src, status = await _extract_mixdrop(page)
+    log.warning("⚠️ فشل VidTube، جارٍ تجربة Streamtape...")
+    src, status = await _extract_streamtape(page)
     if src:
-        log.info(f"✅ تم سحب الرابط عبر MixDrop: {src}")
+        log.info(f"✅ تم سحب الرابط عبر Streamtape: {src}")
         return src, status
 
     log.error("❌ لم يتم العثور على أي سيرفر صالح.")
@@ -629,7 +643,8 @@ def _update_server_stats(stats: dict, server_status: str) -> None:
         stats["mixdrop_live"] += 1
     elif server_status == "vidtube_live":
         stats["vidtube_saved"] += 1
-
+    elif server_status == "streamtape_live":
+        stats["streamtape_saved"] = stats.get("streamtape_saved", 0) + 1
 
 # ===========================================================================
 # Section 11: Main Orchestrator — المنسق الرئيسي
