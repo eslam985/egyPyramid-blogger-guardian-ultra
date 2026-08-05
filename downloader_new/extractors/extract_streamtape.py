@@ -1,7 +1,7 @@
 from typing import Optional
 import random
 from playwright.async_api import async_playwright
-from downloader_new.shared.log import get_beast_logger
+from downloader_new.shared.logger import get_beast_logger
 
 log = get_beast_logger("extract_streamtape.py")
 
