@@ -59,7 +59,7 @@ async def auto_feeder_loop():
             except Exception as fe:
                 print(f"❌ [Feeder Error]: {fe}")
             #   (seconds(60) * minutes(60) * hours (1 || 2 || 3 || 4)) 
-            await asyncio.sleep(7200)# If you want it to be two hours: 2 x 60 x 60 = 7200 seconds.
+            await asyncio.sleep(3600)# If you want it to be two hours: 2 x 60 x 60 = 7200 seconds.
     except ImportError:
         print("⚠️ [Warning] scraper_feeder.py not found.")
 
