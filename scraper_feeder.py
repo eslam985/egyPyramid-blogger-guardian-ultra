@@ -34,13 +34,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_TASKS = "download_tasks"
 TABLE_MEDIAS = "medias"
 
-MAX_IDLE_BUFFER = 70  # الحد الأقصى للمهام الـ idle في الطابور
+MAX_IDLE_BUFFER = 200  # الحد الأقصى للمهام الـ idle في الطابور
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
 HEADLESS = True  # False لو عايز تشوف المتصفح
 
 SITE_BASE_URL = "https://topcinemaa.com"
-SAFE_PAGE_COUNT = 62  # قيمة احتياطية لو فشل استخراج عدد الصفحات ديناميكياً
+SAFE_PAGE_COUNT = 100  # قيمة احتياطية لو فشل استخراج عدد الصفحات ديناميكياً
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",

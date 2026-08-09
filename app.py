@@ -3,10 +3,11 @@ import uvicorn
 from contextlib import asynccontextmanager
 import logging
 import json
+import subprocess
+import os
 import re
 import html
 import requests
-import os
 import jwt
 import threading
 import asyncio
@@ -57,15 +58,15 @@ async def auto_feeder_loop():
                 await run_scraper_async()
             except Exception as fe:
                 print(f"❌ [Feeder Error]: {fe}")
-            await asyncio.sleep(10800)
+            #   (seconds(60) * minutes(60) * hours (1 || 2 || 3 || 4)) 
+            await asyncio.sleep(7200)# If you want it to be two hours: 2 x 60 x 60 = 7200 seconds.
     except ImportError:
         print("⚠️ [Warning] scraper_feeder.py not found.")
 
 
 def run_imdb_build_sync():
     """تحميل ملفات IMDb وتشغيل سكريبت البناء في الخلفية لضمان إقلاع السيرفر"""
-    import subprocess
-    import os
+
     try:
         print("⏳ [IMDb Radar] بدء تحميل الملفات الضخمة من سيرفرات IMDb...")
         # تأمين المجلد
