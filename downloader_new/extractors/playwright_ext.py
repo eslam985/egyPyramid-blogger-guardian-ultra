@@ -24,7 +24,7 @@ async def get_direct_link_via_playwright(embed_url):
             ]
         )
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
             viewport={"width": 1280, "height": 720},
             java_script_enabled=True,
             # إخفاء علامات الأتمتة

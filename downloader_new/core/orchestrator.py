@@ -212,10 +212,10 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
         smart_headers = get_smart_headers(url)
 
         if is_direct_cdn_link(url):
-            log.info("🚀 رابط CDN مباشر — سيتم التحميل بـ curl...")
+            log.info("🚀 رابط CDN مباشر — سيتم التحميل بـ httpx...")
             output_path = os.path.join(extract_dir, f"temp_dl_{timestamp}.mp4")
-            cmd = build_curl_command(url, output_path)
-            actual_downloaded_path = await download_video_curl(cmd, display_title, extract_dir)
+            cmd = build_curl_command(url, output_path)  # لسه محتاجينه للـ output_path
+            actual_downloaded_path = await download_video_curl(cmd, display_title, extract_dir, direct_url=url)
         else:
             cmd = build_ytdlp_command(url, download_path_template, smart_headers)
             actual_downloaded_path = await download_video(cmd, task_id, display_title, extract_dir)

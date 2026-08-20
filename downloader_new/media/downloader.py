@@ -12,54 +12,52 @@ def is_direct_cdn_link(url: str) -> bool:
     """التحقق إذا كان الرابط مباشر من CDN"""
     return "cdn-video.xyz" in url or "serv-stream-cdn" in url
 
-async def download_video_curl(cmd: list, display_title: str, extract_dir: str):
-    """تحميل مباشر بـ curl"""
-    log.info(f"⬇️ curl جاري التحميل: {display_title[:20]}...")
-    log.info(f"🔗 URL كامل: {cmd[-1]}")  # ← أضف السطر ده
-    log.info(f"🔗 CMD كامل: {' '.join(cmd)}")  # ← أضف السطر ده
-    log.info(f"📁 Output: {cmd[cmd.index('--output')+1] if '--output' in cmd else cmd[cmd.index('-o')+1]}")
-
+async def download_video_curl(cmd: list, display_title: str, extract_dir: str, direct_url: str = None):
+    """تحميل مباشر بـ httpx"""
+    import httpx
     
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT
-    )
-    
-    await process.wait()
-    
-    if process.returncode != 0:
-        log.error(f"❌ فشل curl! كود الخطأ: {process.returncode}")
-        return None
-    
-    # نجيب الملف من الـ extract_dir
-    actual_files = [
-        os.path.join(extract_dir, f) for f in os.listdir(extract_dir)
-        if os.path.isfile(os.path.join(extract_dir, f))
-        and not f.endswith((".part", ".ytdl", ".temp"))
-    ]
-    
-    if actual_files:
-        actual_files.sort(key=os.path.getmtime, reverse=True)
-        file_path = actual_files[0]
-        file_size = os.path.getsize(file_path)
+    if direct_url:
+        log.info(f"⬇️ httpx جاري التحميل: {display_title[:20]}...")
+        output_path = cmd[cmd.index('-o') + 1]
         
-        # لو الملف أصغر من 1 MB يبقى مش فيديو حقيقي
-        if file_size < 1_000_000:
-            # اطبع محتوى الملف عشان نشوف الـ error
-            try:
-                with open(file_path, 'r', errors='ignore') as f:
-                    content = f.read()
-                log.error(f"❌ محتوى الـ error: {content[:500]}")
-            except:
-                pass
-            os.remove(file_path)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+            "Referer": "https://down.vidtube.one/",
+            "Origin": "https://down.vidtube.one",
+        }
+        
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=3600) as client:
+                async with client.stream("GET", direct_url, headers=headers) as response:
+                    log.info(f"📡 HTTP Status: {response.status_code}")
+                    if response.status_code != 200:
+                        log.error(f"❌ فشل httpx: {response.status_code}")
+                        return None
+                    
+                    total = int(response.headers.get('content-length', 0))
+                    downloaded = 0
+                    
+                    with open(output_path, 'wb') as f:
+                        async for chunk in response.aiter_bytes(chunk_size=1024*1024):
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total:
+                                pct = downloaded / total * 100
+                                if int(pct) % 10 == 0:
+                                    log.info(f"📥 {display_title[:15]}.. | {pct:.0f}%")
+            
+            file_size = os.path.getsize(output_path)
+            if file_size < 1_000_000:
+                log.error(f"❌ الملف صغير جداً ({file_size} bytes)")
+                os.remove(output_path)
+                return None
+            
+            log.info(f"✅ httpx اكتمل: {output_path} ({file_size/1_000_000:.1f} MB)")
+            return output_path
+            
+        except Exception as e:
+            log.error(f"❌ خطأ httpx: {e}")
             return None
-        
-        log.info(f"✅ curl اكتمل: {file_path} ({file_size / 1_000_000:.1f} MB)")
-        return file_path
-    
-    return None
 
 def build_curl_command(url: str, output_path: str) -> list:
     """تحميل مباشر بـ curl للروابط المباشرة من CDN"""
@@ -95,7 +93,7 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
         "--no-playlist",
         "--geo-bypass",
         "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
         "--add-header",
         "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
         "--add-header",
