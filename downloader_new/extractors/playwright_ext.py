@@ -9,45 +9,57 @@ from downloader_new.extractors.extract_streamtape import resolve_streamtape
 log = get_beast_logger("GuardianUltra")
 
 async def get_direct_link_via_playwright(embed_url):
-    # تحويل الرابط للمسار المطلوب
-    target_url = embed_url.replace("embed-", "d/").replace(".html", "_h")
+    """
+    Flow الجديد للموقع:
+    1. embed-ID.html  →  /d/ID (صفحة اختيار الجودة)
+    2. نختار أعلى جودة (أول رابط)
+    3. في صفحة الجودة نجيب a.btn-gradient.submit-btn
+    """
+    # استخراج الـ ID من الرابط
+    # embed-3lrbobs2yz06.html  →  ID = 3lrbobs2yz06
+    file_id = embed_url.split("embed-")[-1].replace(".html", "")
+    quality_page_url = f"https://down.vidtube.one/d/{file_id}"
 
-    log.info(f"🔍 جاري محاكاة مستخدم حقيقي لصيد الرابط من: {target_url}")
+    log.info(f"🔍 الخطوة 1: صفحة اختيار الجودة: {quality_page_url}")
 
     async with async_playwright() as p:
-        # إعدادات المتصفح لتبدو كجهاز حقيقي
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
 
         try:
-            # 1. الذهاب للصفحة
-            await page.goto(target_url, wait_until="networkidle", timeout=45000)
+            # === الخطوة 1: صفحة اختيار الجودة ===
+            await page.goto(quality_page_url, wait_until="networkidle", timeout=45000)
 
-            # 2. التعامل مع العداد التنازلي (لو موجود)
-            # هننتظر الزرار يظهر حتى لو اتأخر 15 ثانية
+            quality_selector = "a.btn.btn-light"
+            await page.wait_for_selector(quality_selector, state="visible", timeout=15000)
+            quality_links = await page.query_selector_all(quality_selector)
+
+            if not quality_links:
+                log.error("❌ لم يتم العثور على روابط الجودة.")
+                await browser.close()
+                return None
+
+            # نختار أعلى جودة (أول رابط في القائمة)
+            best_quality_href = await quality_links[0].get_attribute("href")
+            log.info(f"🎯 أعلى جودة متاحة: {best_quality_href}")
+
+            if best_quality_href.startswith("/"):
+                download_page_url = f"https://down.vidtube.one{best_quality_href}"
+            else:
+                download_page_url = best_quality_href
+
+            # === الخطوة 2: صفحة التحميل الفعلية ===
+            log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
+            await page.goto(download_page_url, wait_until="networkidle", timeout=45000)
+
             btn_selector = "a.btn-gradient.submit-btn"
-
-            log.info("⏳ ننتظر ظهور زر التحميل (قد يستغرق 10 ثوانٍ بسبب العداد)...")
+            log.info("⏳ ننتظر ظهور زر التحميل المباشر...")
             await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
 
-            # 3. استخراج الرابط
             direct_link = await page.get_attribute(btn_selector, "href")
-
-            # تأكيد إضافي: لو الرابط عبارة عن "javascript:void(0)" أو "#"
-            # ده معناه إنه بيحتاج "نقرة" لتوليده
-            if (
-                not direct_link
-                or direct_link.startswith("#")
-                or "javascript" in direct_link
-            ):
-                log.info("🖱️ الرابط يحتاج لنقرة لتوليده، جاري النقر...")
-                await page.click(btn_selector)
-                # ننتظر ثانية لتحديث الرابط
-                await page.wait_for_timeout(2000)
-                direct_link = await page.get_attribute(btn_selector, "href")
 
             await browser.close()
 
@@ -60,22 +72,6 @@ async def get_direct_link_via_playwright(embed_url):
 
         except Exception as e:
             log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
-            
-            # 🔍 DEBUG: طباعة الـ HTML والعناصر الموجودة
-            try:
-                html = await page.content()
-                log.info(f"📄 HTML snippet:\n{html[:2000]}")
-                
-                buttons = await page.query_selector_all("a, button")
-                for btn in buttons:
-                    cls = await btn.get_attribute("class") or ""
-                    href = await btn.get_attribute("href") or ""
-                    txt = (await btn.inner_text())[:40]
-                    if href or "btn" in cls.lower():
-                        log.info(f"  🔗 class={cls} | href={href[:60]} | text={txt}")
-            except:
-                pass
-            
             await browser.close()
             return None
 
