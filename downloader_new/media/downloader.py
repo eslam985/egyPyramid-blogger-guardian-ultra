@@ -51,10 +51,11 @@ def build_curl_command(url: str, output_path: str) -> list:
     return [
         "curl",
         "-L",
+        "-g",  # ← ده هو الحل! يوقف glob expansion
         "--retry", "5",
         "--retry-delay", "3",
         "--max-time", "3600",
-        "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "-H", "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
         "-H", "Referer: https://down.vidtube.one/",
         "-H", "Origin: https://down.vidtube.one",
         "-H", "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
