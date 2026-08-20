@@ -73,50 +73,29 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
             log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
 
-            # لو محتاج تحميل → نجيب الـ cookies ونحمل بـ httpx
+            # لو محتاج تحميل → نستخدم page.request من نفس الـ browser session
             if output_path:
-                cookies = await context.cookies()
-                await browser.close()
-
-                cookies_dict = {c['name']: c['value'] for c in cookies}
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                log.info(f"⬇️ بدء التحميل بـ page.request...")
+                response = await page.request.get(direct_link, headers={
                     "Referer": "https://down.vidtube.one/",
-                    "Origin": "https://down.vidtube.one",
-                    "Accept": "video/webp,video/apng,video/*,*/*;q=0.8",
-                }
-
-                import httpx
-                log.info(f"⬇️ بدء التحميل بـ httpx مع cookies...")
-                async with httpx.AsyncClient(cookies=cookies_dict, follow_redirects=True, timeout=3600) as client:
-                    async with client.stream("GET", direct_link, headers=headers) as response:
-                        log.info(f"📡 HTTP Status: {response.status_code}")
-                        if response.status_code != 200:
-                            log.error(f"❌ فشل httpx: {response.status_code}")
-                            return None
-
-                        total = int(response.headers.get('content-length', 0))
-                        downloaded = 0
-                        last_log = 0
-
-                        with open(output_path, 'wb') as f:
-                            async for chunk in response.aiter_bytes(1024 * 1024):
-                                f.write(chunk)
-                                downloaded += len(chunk)
-                                if total:
-                                    pct = downloaded / total * 100
-                                    if int(pct) >= last_log + 10:
-                                        last_log = int(pct) // 10 * 10
-                                        log.info(f"📥 {int(pct)}% | {downloaded/1_000_000:.0f}/{total/1_000_000:.0f} MB")
-
-                file_size = os.path.getsize(output_path)
-                if file_size < 1_000_000:
-                    log.error(f"❌ الملف صغير جداً ({file_size} bytes)")
-                    os.remove(output_path)
+                })
+                log.info(f"📡 Status: {response.status}")
+                if response.ok:
+                    body = await response.body()
+                    with open(output_path, 'wb') as f:
+                        f.write(body)
+                    file_size = len(body)
+                    log.info(f"✅ حجم الملف: {file_size/1_000_000:.1f} MB")
+                    await browser.close()
+                    if file_size < 1_000_000:
+                        log.error(f"❌ الملف صغير جداً ({file_size} bytes)")
+                        os.remove(output_path)
+                        return None
+                    return output_path
+                else:
+                    log.error(f"❌ فشل page.request: {response.status}")
+                    await browser.close()
                     return None
-
-                log.info(f"✅ اكتمل التحميل: {file_size/1_000_000:.1f} MB")
-                return output_path
 
             else:
                 await browser.close()
