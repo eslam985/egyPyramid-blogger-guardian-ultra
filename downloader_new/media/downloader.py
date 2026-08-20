@@ -41,8 +41,17 @@ async def download_video_curl(cmd: list, display_title: str, extract_dir: str):
     
     if actual_files:
         actual_files.sort(key=os.path.getmtime, reverse=True)
-        log.info(f"✅ curl اكتمل: {actual_files[0]}")
-        return actual_files[0]
+        file_path = actual_files[0]
+        file_size = os.path.getsize(file_path)
+        
+        # لو الملف أصغر من 1 MB يبقى مش فيديو حقيقي
+        if file_size < 1_000_000:
+            log.error(f"❌ الملف صغير جداً ({file_size} bytes) - على الأرجح error page!")
+            os.remove(file_path)
+            return None
+        
+        log.info(f"✅ curl اكتمل: {file_path} ({file_size / 1_000_000:.1f} MB)")
+        return file_path
     
     return None
 
