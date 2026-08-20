@@ -89,6 +89,12 @@ async def get_direct_link_via_playwright(embed_url):
 
         except Exception as e:
             log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
+            # DEBUG في الـ except
+            try:
+                html = await page.content()
+                log.info(f"📄 HTML في الـ except:\n{html[1000:3000]}")
+            except:
+                pass
             await browser.close()
             return None
 
