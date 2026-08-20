@@ -15,6 +15,9 @@ def is_direct_cdn_link(url: str) -> bool:
 async def download_video_curl(cmd: list, display_title: str, extract_dir: str):
     """تحميل مباشر بـ curl"""
     log.info(f"⬇️ curl جاري التحميل: {display_title[:20]}...")
+    log.info(f"🔗 URL كامل: {cmd[-1]}")  # ← أضف السطر ده
+    log.info(f"📁 Output: {cmd[cmd.index('--output')+1] if '--output' in cmd else cmd[cmd.index('-o')+1]}")
+
     
     process = await asyncio.create_subprocess_exec(
         *cmd,
