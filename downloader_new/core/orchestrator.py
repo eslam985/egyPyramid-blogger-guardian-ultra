@@ -21,7 +21,7 @@ from downloader_new.uploaders.archive import process_archive_upload
 from downloader_new.uploaders.uploader_hub import upload_to_all_servers
 from downloader_new.extractors.playwright_ext import resolve_direct_url
 from downloader_new.media.downloader import build_ytdlp_command, download_video
-from downloader_new.media.downloader import is_direct_cdn_link, build_curl_command
+from downloader_new.media.downloader import is_direct_cdn_link, build_curl_command,download_video_curl
 from downloader_new.media.processor import extract_archive, apply_media_disguise
 
 from downloader_new.media.file_manager import (
@@ -213,14 +213,12 @@ async def pyramid_ultimate_beast(url, name, task_id=None, meta_data=None):
 
         if is_direct_cdn_link(url):
             log.info("🚀 رابط CDN مباشر — سيتم التحميل بـ curl...")
-            # نحدد مسار الـ output بشكل ثابت (مش template)
             output_path = os.path.join(extract_dir, f"temp_dl_{timestamp}.mp4")
             cmd = build_curl_command(url, output_path)
+            actual_downloaded_path = await download_video_curl(cmd, display_title, extract_dir)
         else:
             cmd = build_ytdlp_command(url, download_path_template, smart_headers)
-
-        # --- 12. التحميل ---
-        actual_downloaded_path = await download_video(cmd, task_id, display_title, extract_dir)
+            actual_downloaded_path = await download_video(cmd, task_id, display_title, extract_dir)
 
         if actual_downloaded_path:
             final_public_path, direct_remote_url = rename_and_move_to_stream(

@@ -12,6 +12,35 @@ def is_direct_cdn_link(url: str) -> bool:
     """التحقق إذا كان الرابط مباشر من CDN"""
     return "cdn-video.xyz" in url or "serv-stream-cdn" in url
 
+async def download_video_curl(cmd: list, display_title: str, extract_dir: str):
+    """تحميل مباشر بـ curl"""
+    log.info(f"⬇️ curl جاري التحميل: {display_title[:20]}...")
+    
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT
+    )
+    
+    await process.wait()
+    
+    if process.returncode != 0:
+        log.error(f"❌ فشل curl! كود الخطأ: {process.returncode}")
+        return None
+    
+    # نجيب الملف من الـ extract_dir
+    actual_files = [
+        os.path.join(extract_dir, f) for f in os.listdir(extract_dir)
+        if os.path.isfile(os.path.join(extract_dir, f))
+        and not f.endswith((".part", ".ytdl", ".temp"))
+    ]
+    
+    if actual_files:
+        actual_files.sort(key=os.path.getmtime, reverse=True)
+        log.info(f"✅ curl اكتمل: {actual_files[0]}")
+        return actual_files[0]
+    
+    return None
 
 def build_curl_command(url: str, output_path: str) -> list:
     """تحميل مباشر بـ curl للروابط المباشرة من CDN"""
