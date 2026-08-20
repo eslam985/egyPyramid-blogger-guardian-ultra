@@ -50,6 +50,11 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
     if "vidtube" in url or "cdn-tube" in url:
         cmd.extend(["--extractor-args", "jwplayer:base-url=https://vidtube.one/"])
 
+    # ✅ جديد: الرابط المباشر من CDN بتاع vidtube
+    if "cdn-video.xyz" in url or "serv-stream-cdn" in url:
+        cmd.extend(["--referer", "https://down.vidtube.one/"])
+        cmd.extend(["--add-header", "Origin: https://down.vidtube.one"])
+
     cmd.extend(
         [
             "-f",
