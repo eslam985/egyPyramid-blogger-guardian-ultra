@@ -46,7 +46,13 @@ async def download_video_curl(cmd: list, display_title: str, extract_dir: str):
         
         # لو الملف أصغر من 1 MB يبقى مش فيديو حقيقي
         if file_size < 1_000_000:
-            log.error(f"❌ الملف صغير جداً ({file_size} bytes) - على الأرجح error page!")
+            # اطبع محتوى الملف عشان نشوف الـ error
+            try:
+                with open(file_path, 'r', errors='ignore') as f:
+                    content = f.read()
+                log.error(f"❌ محتوى الـ error: {content[:500]}")
+            except:
+                pass
             os.remove(file_path)
             return None
         
