@@ -64,14 +64,17 @@ async def get_direct_link_via_playwright(embed_url):
                 download_page_url = f"https://down.vidtube.one{best_quality_href}"
             else:
                 download_page_url = best_quality_href
-
+            # DEBUG مؤقت
+            html = await page.content()
+            log.info(f"📄 HTML part1:\n{html[3000:5000]}")
+            log.info(f"📄 HTML part2:\n{html[5000:7000]}")
+            log.info(f"📄 HTML snippet:\n{html[2000:4000]}")
+            
             log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
             await page.goto(download_page_url, wait_until="networkidle", timeout=45000)
             await page.wait_for_timeout(2000)
 
-            # DEBUG مؤقت
-            html = await page.content()
-            log.info(f"📄 HTML snippet:\n{html[2000:4000]}")
+
 
             btn_selector = "a.btn-gradient.submit-btn"
             log.info("⏳ ننتظر ظهور زر التحميل المباشر...")
@@ -92,6 +95,8 @@ async def get_direct_link_via_playwright(embed_url):
             # DEBUG في الـ except
             try:
                 html = await page.content()
+                log.info(f"📄 HTML part1:\n{html[3000:5000]}")
+                log.info(f"📄 HTML part2:\n{html[5000:7000]}")
                 log.info(f"📄 HTML في الـ except:\n{html[1000:3000]}")
             except:
                 pass
