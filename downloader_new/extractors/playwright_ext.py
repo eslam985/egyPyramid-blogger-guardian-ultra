@@ -78,8 +78,12 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
                 log.info(f"⬇️ بدء التحميل بـ page.request...")
                 response = await page.request.get(direct_link, headers={
                     "Referer": "https://down.vidtube.one/",
+                    "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+                    "Accept": "*/*",
+                    "Accept-Encoding": "identity",
+                    "Range": "bytes=0-1048576",  # ← طلب أول MB بس للتجربة
                 })
-                log.info(f"📡 Status: {response.status}")
+                log.info(f"📡 Status: {response.status} | Headers: {dict(response.headers)}")
                 if response.ok:
                     body = await response.body()
                     with open(output_path, 'wb') as f:
@@ -117,7 +121,7 @@ async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
         try:
             async with httpx.AsyncClient(follow_redirects=True) as client:
                 resp = await client.get(test_url, headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
                 })
                 import re
                 match = re.search(r'href="(https://serv-stream[^"]+)"', resp.text)
@@ -127,7 +131,7 @@ async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
                     # جرب تحمله
                     async with client.stream("GET", direct, headers={
                         "Referer": "https://down.vidtube.one/",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
                     }) as r:
                         log.info(f"🧪 TEST status: {r.status_code}")
                 else:
