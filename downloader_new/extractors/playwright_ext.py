@@ -17,34 +17,26 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-            ]
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"]
         )
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
             viewport={"width": 1280, "height": 720},
             java_script_enabled=True,
-            accept_downloads=True,  # ← مهم للتحميل
             extra_http_headers={
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             }
         )
-        
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
             Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
         """)
-        
         page = await context.new_page()
         await page.add_init_script("window.chrome = { runtime: {} };")
 
         try:
-            # الخطوة 1: صفحة اختيار الجودة
             await page.goto(quality_page_url, wait_until="networkidle", timeout=45000)
             await page.wait_for_timeout(3000)
 
@@ -65,23 +57,57 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
             else:
                 download_page_url = best_quality_href
 
-            # الخطوة 2: صفحة التحميل
             log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
             await page.goto(download_page_url, wait_until="networkidle", timeout=45000)
             await page.wait_for_timeout(2000)
 
             btn_selector = "a.btn-gradient.submit-btn"
-            log.info("⏳ ننتظر ظهور زر التحميل المباشر...")
             await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
 
-            # لو output_path موجود → حمّل الملف مباشرة من Playwright
-            if output_path:
-                log.info("⬇️ بدء التحميل المباشر عبر Playwright...")
-                async with page.expect_download(timeout=3600000) as download_info:
-                    await page.click(btn_selector)
-                download = await download_info.value
-                await download.save_as(output_path)
+            direct_link = await page.get_attribute(btn_selector, "href")
+
+            if not direct_link or "http" not in direct_link:
+                log.error("❌ الرابط المستخرج غير صالح.")
                 await browser.close()
+                return None
+
+            log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
+
+            # لو محتاج تحميل → نجيب الـ cookies ونحمل بـ httpx
+            if output_path:
+                cookies = await context.cookies()
+                await browser.close()
+
+                cookies_dict = {c['name']: c['value'] for c in cookies}
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Referer": "https://down.vidtube.one/",
+                    "Origin": "https://down.vidtube.one",
+                    "Accept": "video/webp,video/apng,video/*,*/*;q=0.8",
+                }
+
+                import httpx
+                log.info(f"⬇️ بدء التحميل بـ httpx مع cookies...")
+                async with httpx.AsyncClient(cookies=cookies_dict, follow_redirects=True, timeout=3600) as client:
+                    async with client.stream("GET", direct_link, headers=headers) as response:
+                        log.info(f"📡 HTTP Status: {response.status_code}")
+                        if response.status_code != 200:
+                            log.error(f"❌ فشل httpx: {response.status_code}")
+                            return None
+
+                        total = int(response.headers.get('content-length', 0))
+                        downloaded = 0
+                        last_log = 0
+
+                        with open(output_path, 'wb') as f:
+                            async for chunk in response.aiter_bytes(1024 * 1024):
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total:
+                                    pct = downloaded / total * 100
+                                    if int(pct) >= last_log + 10:
+                                        last_log = int(pct) // 10 * 10
+                                        log.info(f"📥 {int(pct)}% | {downloaded/1_000_000:.0f}/{total/1_000_000:.0f} MB")
 
                 file_size = os.path.getsize(output_path)
                 if file_size < 1_000_000:
@@ -89,22 +115,15 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
                     os.remove(output_path)
                     return None
 
-                log.info(f"✅ تم التحميل بنجاح: {output_path} ({file_size/1_000_000:.1f} MB)")
+                log.info(f"✅ اكتمل التحميل: {file_size/1_000_000:.1f} MB")
                 return output_path
 
-            # لو مفيش output_path → ارجع الرابط فقط (للاستخدامات التانية)
             else:
-                direct_link = await page.get_attribute(btn_selector, "href")
                 await browser.close()
-                if direct_link and "http" in direct_link:
-                    log.info(f"✅ تم صيد الكنز بنجاح: {direct_link[:60]}...")
-                    return direct_link
-                else:
-                    log.error("❌ الرابط المستخرج غير صالح.")
-                    return None
+                return direct_link
 
         except Exception as e:
-            log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
+            log.error(f"❌ خطأ: {str(e)}")
             await browser.close()
             return None
 
