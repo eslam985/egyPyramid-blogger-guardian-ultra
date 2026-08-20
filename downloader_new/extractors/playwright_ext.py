@@ -9,14 +9,6 @@ from downloader_new.extractors.extract_streamtape import resolve_streamtape
 log = get_beast_logger("GuardianUltra")
 
 async def get_direct_link_via_playwright(embed_url):
-    """
-    Flow الجديد للموقع:
-    1. embed-ID.html  →  /d/ID (صفحة اختيار الجودة)
-    2. نختار أعلى جودة (أول رابط)
-    3. في صفحة الجودة نجيب a.btn-gradient.submit-btn
-    """
-    # استخراج الـ ID من الرابط
-    # embed-3lrbobs2yz06.html  →  ID = 3lrbobs2yz06
     file_id = embed_url.split("embed-")[-1].replace(".html", "")
     quality_page_url = f"https://down.vidtube.one/d/{file_id}"
 
@@ -30,48 +22,28 @@ async def get_direct_link_via_playwright(embed_url):
         page = await context.new_page()
 
         try:
-            # === الخطوة 1: صفحة اختيار الجودة ===
             await page.goto(quality_page_url, wait_until="networkidle", timeout=45000)
-
-            quality_selector = "a.btn.btn-light"
-            await page.wait_for_selector(quality_selector, state="visible", timeout=15000)
-            quality_links = await page.query_selector_all(quality_selector)
-
-            if not quality_links:
-                log.error("❌ لم يتم العثور على روابط الجودة.")
-                await browser.close()
-                return None
-
-            # نختار أعلى جودة (أول رابط في القائمة)
-            best_quality_href = await quality_links[0].get_attribute("href")
-            log.info(f"🎯 أعلى جودة متاحة: {best_quality_href}")
-
-            if best_quality_href.startswith("/"):
-                download_page_url = f"https://down.vidtube.one{best_quality_href}"
-            else:
-                download_page_url = best_quality_href
-
-            # === الخطوة 2: صفحة التحميل الفعلية ===
-            log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
-            await page.goto(download_page_url, wait_until="networkidle", timeout=45000)
-
-            btn_selector = "a.btn-gradient.submit-btn"
-            log.info("⏳ ننتظر ظهور زر التحميل المباشر...")
-            await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
-
-            direct_link = await page.get_attribute(btn_selector, "href")
+            
+            # DEBUG: نشوف الـ URL الفعلي بعد أي redirect
+            log.info(f"📍 URL بعد التحميل: {page.url}")
+            
+            # DEBUG: نشوف كل الـ links الموجودة
+            all_links = await page.query_selector_all("a[href]")
+            log.info(f"🔗 عدد الروابط الكلي: {len(all_links)}")
+            for lnk in all_links[:15]:
+                href = await lnk.get_attribute("href") or ""
+                cls = await lnk.get_attribute("class") or ""
+                txt = (await lnk.inner_text())[:30]
+                log.info(f"  → class='{cls}' href='{href[:70]}' text='{txt}'")
 
             await browser.close()
-
-            if direct_link and "http" in direct_link:
-                log.info(f"✅ تم صيد الكنز بنجاح: {direct_link[:60]}...")
-                return direct_link
-            else:
-                log.error("❌ الرابط المستخرج غير صالح.")
-                return None
+            return None
 
         except Exception as e:
-            log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
+            log.error(f"❌ خطأ: {str(e)}")
+            log.info(f"📍 URL وقت الخطأ: {page.url}")
+            html = await page.content()
+            log.info(f"📄 HTML:\n{html[:1500]}")
             await browser.close()
             return None
 

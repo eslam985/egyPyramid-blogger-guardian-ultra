@@ -34,7 +34,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_TASKS = "download_tasks"
 TABLE_MEDIAS = "medias"
 
-MAX_IDLE_BUFFER = 200  # الحد الأقصى للمهام الـ idle في الطابور
+MAX_IDLE_BUFFER = 1  # الحد الأقصى للمهام الـ idle في الطابور
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
 HEADLESS = True  # False لو عايز تشوف المتصفح
