@@ -60,6 +60,22 @@ async def get_direct_link_via_playwright(embed_url):
 
         except Exception as e:
             log.error(f"❌ خطأ أثناء الصيد بالمتصفح: {str(e)}")
+            
+            # 🔍 DEBUG: طباعة الـ HTML والعناصر الموجودة
+            try:
+                html = await page.content()
+                log.info(f"📄 HTML snippet:\n{html[:2000]}")
+                
+                buttons = await page.query_selector_all("a, button")
+                for btn in buttons:
+                    cls = await btn.get_attribute("class") or ""
+                    href = await btn.get_attribute("href") or ""
+                    txt = (await btn.inner_text())[:40]
+                    if href or "btn" in cls.lower():
+                        log.info(f"  🔗 class={cls} | href={href[:60]} | text={txt}")
+            except:
+                pass
+            
             await browser.close()
             return None
 
