@@ -16,6 +16,7 @@ async def download_video_curl(cmd: list, display_title: str, extract_dir: str):
     """تحميل مباشر بـ curl"""
     log.info(f"⬇️ curl جاري التحميل: {display_title[:20]}...")
     log.info(f"🔗 URL كامل: {cmd[-1]}")  # ← أضف السطر ده
+    log.info(f"🔗 CMD كامل: {' '.join(cmd)}")  # ← أضف السطر ده
     log.info(f"📁 Output: {cmd[cmd.index('--output')+1] if '--output' in cmd else cmd[cmd.index('-o')+1]}")
 
     
