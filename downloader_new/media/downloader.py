@@ -6,9 +6,32 @@ import re
 # استيراد كائن supabase الجاهز من مجلد db
 from downloader_new.db.supabase_client import supabase
 from downloader_new.shared.logger import get_beast_logger
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("downloader.py")
+
+def is_direct_cdn_link(url: str) -> bool:
+    """التحقق إذا كان الرابط مباشر من CDN"""
+    return "cdn-video.xyz" in url or "serv-stream-cdn" in url
+
+
+def build_curl_command(url: str, output_path: str) -> list:
+    """تحميل مباشر بـ curl للروابط المباشرة من CDN"""
+    return [
+        "curl",
+        "-L",
+        "--retry", "5",
+        "--retry-delay", "3",
+        "--max-time", "3600",
+        "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+        "-H", "Referer: https://down.vidtube.one/",
+        "-H", "Origin: https://down.vidtube.one",
+        "-H", "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
+        "-o", output_path,
+        url
+    ]
+
 
 def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> list:
+    # ... باقي الكود زي ما هو
     """
     بناء قائمة أوامر yt-dlp الكاملة مع كل الخيارات.
     تعيد القائمة الجاهزة لـ asyncio.create_subprocess_exec.
@@ -16,14 +39,14 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
     if "mixdrop" in url or "miixdrop" in url:
         # تحويل أي دومين ميكس دروب إلى miixdrop.net ودعم روابط /e/ و /f/ معاً
         url = re.sub(r'https?://(www\.)?[a-zA-Z0-9\-]+\.[a-zA-Z]+/(e|f)/', r'https://miixdrop.net/\2/', url)
-
+    
     cmd = [
         "yt-dlp",
         "-v",
         "--no-playlist",
         "--geo-bypass",
         "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
         "--add-header",
         "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
         "--add-header",
@@ -176,3 +199,5 @@ async def download_video(cmd: list, task_id, display_title: str, extract_dir: st
         )
 
     return actual_downloaded_path
+
+
