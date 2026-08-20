@@ -129,6 +129,34 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
 
 async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
+    # === TEST مؤقت ===
+    if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
+        import httpx
+            # استخراج الـ ID من أي شكل للرابط
+        file_id = raw_url.split("/")[-1].replace(".html", "").split("_")[0] 
+        test_url = f"https://down.vidtube.one/d/{file_id}_h"
+        try:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                resp = await client.get(test_url, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                })
+                import re
+                match = re.search(r'href="(https://serv-stream[^"]+)"', resp.text)
+                if match:
+                    direct = match.group(1).replace("&amp;", "&")
+                    log.info(f"🧪 TEST رابط مباشر: {direct[:80]}")
+                    # جرب تحمله
+                    async with client.stream("GET", direct, headers={
+                        "Referer": "https://down.vidtube.one/",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    }) as r:
+                        log.info(f"🧪 TEST status: {r.status_code}")
+                else:
+                    log.info(f"🧪 TEST مش لاقي رابط في الصفحة")
+                    log.info(f"🧪 HTML snippet: {resp.text[2000:3500]}")
+        except Exception as e:
+            log.info(f"🧪 TEST error: {e}")
+    # === نهاية TEST ===
     if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
         log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
         try:
