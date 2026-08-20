@@ -68,12 +68,11 @@ async def get_direct_link_via_playwright(embed_url):
             log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
             await page.goto(download_page_url, wait_until="networkidle", timeout=45000)
             await page.wait_for_timeout(2000)
-            await page.goto(quality_page_url, wait_until="networkidle", timeout=45000)
-            await page.wait_for_timeout(3000)
 
             # DEBUG مؤقت
             html = await page.content()
             log.info(f"📄 HTML snippet:\n{html[2000:4000]}")
+
             btn_selector = "a.btn-gradient.submit-btn"
             log.info("⏳ ننتظر ظهور زر التحميل المباشر...")
             await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
