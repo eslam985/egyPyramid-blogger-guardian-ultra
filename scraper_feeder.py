@@ -34,7 +34,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TABLE_TASKS = "download_tasks"
 TABLE_MEDIAS = "medias"
 
-MAX_IDLE_BUFFER = 1  # الحد الأقصى للمهام الـ idle في الطابور
+MAX_IDLE_BUFFER = 200  # الحد الأقصى للمهام الـ idle في الطابور
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
 HEADLESS = True  # False لو عايز تشوف المتصفح
@@ -416,22 +416,6 @@ async def _get_iframe_src(page) -> Optional[str]:
     iframe = await page.query_selector(".player--iframe iframe")
     return (await iframe.get_attribute("src")) if iframe else None
 
-
-async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
-    """محاولة استخراج رابط VidTube (متعدد الجودات)."""
-    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
-    for srv in servers:
-        name = (await srv.inner_text()).strip()
-        if "متعدد الجودات" in name or "VideoTube" in name or "videotube" in name.lower():
-            log.info(f"  🎯 محاولة سحب VidTube: {name}")
-            await srv.click()
-            await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page)
-            if src:
-                return src, "vidtube_live"
-    return None, None
-
-
 async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
     """محاولة استخراج رابط MixDrop مع فحص صفحات الـ 404."""
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
@@ -460,6 +444,21 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
 
     return None, None
 
+async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
+    """محاولة استخراج رابط VidTube (متعدد الجودات)."""
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "متعدد الجودات" in name or "VideoTube" in name or "videotube" in name.lower():
+            log.info(f"  🎯 محاولة سحب VidTube: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page)
+            if src:
+                return src, "vidtube_live"
+    return None, None
+
+
 
 async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
     """محاولة استخراج رابط Streamtape كبديل."""
@@ -478,21 +477,33 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
 async def extract_embed_url(page) -> tuple[Optional[str], str]:
     """
     المنسق الرئيسي لاستخراج رابط التشغيل.
-    الأولوية: VidTube → MixDrop → فشل.
+    الأولوية الحالية: Streamtape ➔ MixDrop ➔ VidTube ➔ فشل.
     """
-    src, status = await _extract_vidtube(page)
-    if src:
-        log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
-        return src, status
-
-    log.warning("⚠️ فشل VidTube، جارٍ تجربة Streamtape...")
+    # 1. الخيار الأول والأعلى أولوية: Streamtape
     src, status = await _extract_streamtape(page)
     if src:
         log.info(f"✅ تم سحب الرابط عبر Streamtape: {src}")
         return src, status
 
+    # 2. الخيار الثاني: MixDrop (يتضمن فحص الروابط الميتة)
+    log.warning("⚠️ فشل Streamtape، جارٍ تجربة MixDrop...")
+    src, status = await _extract_mixdrop(page)
+    if src and status == "mixdrop_live":
+        log.info(f"✅ تم سحب الرابط عبر MixDrop: {src}")
+        return src, status
+
+    # 3. الخيار الثالث والأخير: VidTube
+    log.warning("⚠️ فشل MixDrop، جارٍ تجربة VidTube...")
+    src, status = await _extract_vidtube(page)
+    if src:
+        log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
+        return src, status
+
+    # 4. في حال فشل جميع السيرفرات
     log.error("❌ لم يتم العثور على أي سيرفر صالح.")
     return None, "none"
+
+
 
 
 # ===========================================================================
