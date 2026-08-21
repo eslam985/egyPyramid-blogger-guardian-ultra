@@ -494,10 +494,10 @@ async def extract_embed_url(page) -> tuple[Optional[str], str]:
 
     # 3. الخيار الثالث والأخير: VidTube
     log.warning("⚠️ فشل MixDrop، جارٍ تجربة VidTube...")
-    src, status = await _extract_vidtube(page)
-    if src:
-        log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
-        return src, status
+    # src, status = await _extract_vidtube(page)
+    # if src:
+    #     log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
+    #     return src, status
 
     # 4. في حال فشل جميع السيرفرات
     log.error("❌ لم يتم العثور على أي سيرفر صالح.")
