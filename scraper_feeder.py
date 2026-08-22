@@ -806,3 +806,529 @@ def _print_summary(stats: dict) -> None:
     log.info(f"   🍏 روابط Mixdrop السليمة:          {stats['mixdrop_live']}")
     log.info(f"   📺 روابط VidTube المُنقذة:         {stats['vidtube_saved']}")
     log.info(f"{'═' * 55}")
+    
+# ===========================================================================
+# Section 13: Series Configuration — إعدادات المسلسلات
+# ===========================================================================
+
+SERIES_CATEGORY_URL = "https://topcinemaa.co/category/مسلسلات-اجنبي"
+TARGET_SERIES = 1          # عدد المسلسلات الكاملة المستهدفة في كل جلسة
+SAFE_SERIES_PAGE_COUNT = 62  # عدد الصفحات الاحتياطي لفئة المسلسلات
+
+
+# ===========================================================================
+# Section 14: Series Scrapers — دوال استخراج بيانات المسلسلات
+# ===========================================================================
+
+
+async def scrape_series_links(page) -> list[str]:
+    """استخراج روابط المسلسلات من صفحة الفئة — روابط /series/ فقط."""
+    anchors = await page.query_selector_all("a.recent--block")
+    links = []
+    for a in anchors:
+        href = await a.get_attribute("href")
+        if href and "/series/" in href:
+            links.append(href)
+    return links
+
+
+async def scrape_series_title_and_year(page) -> tuple[str, Optional[str]]:
+    """
+    استخراج اسم المسلسل والسنة من صفحته الرئيسية.
+    السنة من: div.MediaQueryRight > ul.RightTaxContent > li > a[href*='release-year']
+    """
+    # ── العنوان ──────────────────────────────────────────────────────────
+    title_el = await page.query_selector("h1.post-title")
+    if title_el:
+        raw_title = (await title_el.inner_text()).strip()
+    else:
+        raw_title = (await page.title()).strip()
+
+    clean = normalize_title_scraper(raw_title)
+
+    # ── السنة ────────────────────────────────────────────────────────────
+    year = None
+    try:
+        year_anchor = await page.query_selector(
+            "div.MediaQueryRight ul.RightTaxContent li a[href*='release-year']"
+        )
+        if year_anchor:
+            year_text = (await year_anchor.inner_text()).strip()
+            if year_text.isdigit():
+                year = year_text
+    except Exception:
+        pass
+
+    return clean, year
+
+
+async def scrape_season_links(page) -> list[str]:
+    """
+    استخراج روابط المواسم من صفحة /list/ الخاصة بالمسلسل.
+    كل موسم له رابط /list/ خاص به أيضاً.
+    """
+    anchors = await page.query_selector_all(
+        "ul.Posts--List div.Small--Box.Season a"
+    )
+    links = []
+    for a in anchors:
+        href = await a.get_attribute("href")
+        if href:
+            links.append(href.rstrip("/") + "/list/")
+    return links
+
+
+async def scrape_season_number(page) -> int:
+    """استخراج رقم الموسم الحالي من صفحة الموسم."""
+    try:
+        # نحاول من العنوان
+        title_el = await page.query_selector("h1.post-title")
+        if title_el:
+            text = await title_el.inner_text()
+            m = re.search(r"(?:الموسم|موسم|Season)\s*(\d+)", text, re.IGNORECASE)
+            if m:
+                return int(m.group(1))
+        # fallback: من الـ URL
+        url = page.url
+        m = re.search(r"الموسم[- _]?(\d+)|season[- _]?(\d+)", url, re.IGNORECASE)
+        if m:
+            return int(m.group(1) or m.group(2))
+    except Exception:
+        pass
+    return 1
+
+
+async def scrape_episode_links(page) -> list[str]:
+    """
+    استخراج روابط الحلقات من صفحة /list/ الخاصة بالموسم.
+    الترتيب: تصاعدي (حلقة 1 أولاً).
+    """
+    anchors = await page.query_selector_all(
+        "ul.Posts--List div.Small--Box a.recent--block"
+    )
+    links = []
+    for a in anchors:
+        href = await a.get_attribute("href")
+        if href:
+            links.append(href)
+    return list(reversed(links))
+
+
+async def scrape_episode_number(page) -> int:
+    """استخراج رقم الحلقة من صفحتها."""
+    try:
+        title_el = await page.query_selector("h1.post-title")
+        if title_el:
+            text = await title_el.inner_text()
+            m = re.search(r"(?:الحلقة|حلقة|ح|Episode)\s*(\d+)", text, re.IGNORECASE)
+            if m:
+                return int(m.group(1))
+        url = page.url
+        m = re.search(r"الحلقة[- _]?(\d+)|episode[- _]?(\d+)", url, re.IGNORECASE)
+        if m:
+            return int(m.group(1) or m.group(2))
+    except Exception:
+        pass
+    return 1
+
+
+# ===========================================================================
+# Section 15: Series Duplicate Check — فحص تكرار الحلقات
+# ===========================================================================
+
+
+def already_exists_episode(
+    sb: Client,
+    series_name: str,
+    season_no: int,
+    ep_no: int,
+    embed_url: Optional[str] = None,
+) -> bool:
+
+    # 1. شيك في download_tasks بالـ embed URL
+    if embed_url:
+        q = sb.table("download_tasks").select("id").eq("source_url", embed_url).limit(1).execute()
+        if q.data:
+            return True
+
+    # 2. شيك في download_tasks بالاسم
+    task_name_pattern = f"%{series_name}%الموسم {season_no}%الحلقة {ep_no}%"
+    q = sb.table("download_tasks").select("id").ilike("task_name", task_name_pattern).limit(1).execute()
+    if q.data:
+        return True
+
+    # 3. شيك في medias → هل المسلسل موجود؟
+    normalized = normalize_title(series_name, for_search=False, remove_year=True)
+    media = sb.table("medias").select("id").eq("normalized_title", normalized).eq("category", "tv").limit(1).execute()
+    if not media.data:
+        return False
+    media_id = media.data[0]["id"]
+
+    # 4. شيك في seasons → هل الموسم موجود؟
+    season = sb.table("seasons").select("id").eq("media_id", media_id).eq("season_number", season_no).limit(1).execute()
+    if not season.data:
+        return False
+    season_id = season.data[0]["id"]
+
+    # 5. شيك في episodes → هل الحلقة موجودة؟
+    ep = sb.table("episodes").select("id").eq("season_id", season_id).eq("episode_number", ep_no).limit(1).execute()
+    return bool(ep.data)
+
+
+def insert_episode_task(
+    sb: Client,
+    task_name: str,
+    embed_url: str,
+    trailer_url: Optional[str] = None,
+) -> bool:
+    """إدراج حلقة مسلسل في download_tasks."""
+    try:
+        payload = {
+            "task_name": task_name,
+            "source_url": embed_url,
+            "status": "idle",
+            "progress_percent": 0,
+            "download_speed": "0 MB/s",
+            "status_message": "Waiting for Beast...",
+            "trailer_url": trailer_url,
+        }
+        sb.table(TABLE_TASKS).insert(payload).execute()
+        return True
+    except Exception as e:
+        log.error(f"❌ خطأ في إدراج الحلقة: {e}")
+        return False
+
+
+# ===========================================================================
+# Section 16: Series Processors — معالجة المسلسلات
+# ===========================================================================
+
+
+async def process_single_episode(
+    browser,
+    sb: Client,
+    ep_url: str,
+    series_title: str,
+    year: Optional[str],
+    season_no: int,
+    ep_no: int,
+    stats: dict,
+    trailer_url: Optional[str],
+) -> None:
+    """معالجة حلقة واحدة: سحب embed → فحص تكرار → إدراج."""
+    watch_page = None
+    try:
+        # ── بناء اسم المهمة ───────────────────────────────────────────
+        year_suffix = f" {year}" if year else ""
+        task_name = (
+            f"{series_title} الموسم {season_no} الحلقة {ep_no} مترجم{year_suffix}"
+        )
+
+        # ── فحص تكرار مبكر بدون embed ────────────────────────────────
+        if already_exists_episode(sb, series_title, season_no, ep_no):
+            log.info(f"    ♻️ موجودة مسبقاً: {task_name}")
+            stats["ep_skipped"] += 1
+            return
+
+        # ── سحب رابط المشاهدة (watch URL) من صفحة الحلقة ────────────
+        # الـ ep_url هو رابط /watch/ مباشرةً
+        watch_page = await browser.new_page(user_agent=pick_random_agent())
+        await watch_page.goto(ep_url, wait_until="networkidle", timeout=40_000)
+        embed_url, server_status = await extract_embed_url(watch_page)
+        await watch_page.close()
+        watch_page = None
+
+        _update_server_stats(stats, server_status)
+
+        if not embed_url:
+            log.warning(f"    ⚠️ لا يوجد embed: {task_name}")
+            stats["ep_failed"] += 1
+            return
+
+        # ── فحص تكرار نهائي برابط الـ embed ──────────────────────────
+        if already_exists_episode(sb, series_title, season_no, ep_no, embed_url):
+            log.info(f"    ♻️ الرابط موجود: {task_name}")
+            stats["ep_skipped"] += 1
+            return
+
+        # ── الإدراج ───────────────────────────────────────────────────
+        ok = insert_episode_task(sb, task_name, embed_url, trailer_url)
+        if ok:
+            log.info(f"    ✅ تم الإدراج: {task_name}")
+            stats["ep_inserted"] += 1
+        else:
+            stats["ep_failed"] += 1
+
+    except PlaywrightTimeout:
+        log.error(f"    ⏱️ Timeout: {ep_url}")
+        stats["ep_failed"] += 1
+    except Exception as exc:
+        log.error(f"    ❌ خطأ: {exc}")
+        stats["ep_failed"] += 1
+    finally:
+        if watch_page:
+            try:
+                await watch_page.close()
+            except Exception:
+                pass
+
+
+async def process_single_season(
+    browser,
+    sb: Client,
+    season_list_url: str,
+    series_title: str,
+    year: Optional[str],
+    season_no: int,
+    stats: dict,
+    trailer_url: Optional[str],
+) -> None:
+    """معالجة موسم كامل: جلب الحلقات → لوب على كل حلقة."""
+    log.info(f"  📺 الموسم {season_no}: {season_list_url}")
+
+    list_page = await browser.new_page(user_agent=pick_random_agent())
+    try:
+        await list_page.goto(
+            season_list_url, wait_until="domcontentloaded", timeout=30_000
+        )
+        ep_links = await scrape_episode_links(list_page)
+    except Exception as exc:
+        log.error(f"  ❌ فشل تحميل قائمة حلقات الموسم {season_no}: {exc}")
+        ep_links = []
+    finally:
+        await list_page.close()
+
+    if not ep_links:
+        log.warning(f"  ⚠️ لا توجد حلقات في الموسم {season_no}")
+        return
+
+    log.info(f"  🎞️ الموسم {season_no} يحتوي {len(ep_links)} حلقة")
+
+    for ep_idx, ep_url in enumerate(ep_links, 1):
+        # ── فحص الطابور بعد كل حلقة ──────────────────────────────────
+        idle_count = get_idle_tasks_count(sb)
+        if idle_count >= MAX_IDLE_BUFFER:
+            log.warning(
+                f"  🛑 الطابور امتلأ أثناء الموسم {season_no}، "
+                f"سيتم إكمال بقية الحلقات ثم الإيقاف."
+            )
+            # نكمّل الموسم لآخره — الإيقاف بيحصل في process_single_series
+
+        log.info(f"    [{ep_idx}/{len(ep_links)}] 🎬 {ep_url}")
+        await process_single_episode(
+            browser, sb, ep_url,
+            series_title, year, season_no, ep_idx,
+            stats, trailer_url,
+        )
+        await random_delay()
+
+
+async def process_single_series(
+    browser,
+    sb: Client,
+    series_url: str,
+    stats: dict,
+) -> bool:
+    """
+    معالجة مسلسل كامل من البداية للنهاية.
+    يُعيد True لو اتضاف شيء جديد، False لو كل حاجة كانت مكررة.
+    """
+    series_page = None
+    try:
+        # ── 1. جلب عنوان المسلسل والسنة والتريلر ────────────────────
+        series_page = await browser.new_page(user_agent=pick_random_agent())
+        await series_page.goto(
+            series_url, wait_until="domcontentloaded", timeout=30_000
+        )
+        series_title, year = await scrape_series_title_and_year(series_page)
+        trailer_url = await scrape_trailer_url(series_page)
+        await series_page.close()
+        series_page = None
+
+        log.info(f"\n{'═'*55}")
+        log.info(f"📺 مسلسل: {series_title} ({year or 'سنة غير معروفة'})")
+
+        # ── 2. جلب قائمة المواسم ─────────────────────────────────────
+        series_list_url = series_url.rstrip("/") + "/list/"
+        list_page = await browser.new_page(user_agent=pick_random_agent())
+        try:
+            await list_page.goto(
+                series_list_url, wait_until="domcontentloaded", timeout=30_000
+            )
+            season_links = await scrape_season_links(list_page)
+        except Exception as exc:
+            log.error(f"❌ فشل تحميل قائمة المواسم: {exc}")
+            season_links = []
+        finally:
+            await list_page.close()
+
+        if not season_links:
+            log.warning(f"⚠️ لا توجد مواسم: {series_url}")
+            stats["series_failed"] += 1
+            return False
+
+        log.info(f"📋 عدد المواسم: {len(season_links)}")
+
+        ep_inserted_before = stats["ep_inserted"]
+        buffer_full = False
+
+        # ── 3. لوب على المواسم ───────────────────────────────────────
+        for season_idx, season_list_url in enumerate(season_links, 1):
+            await process_single_season(
+                browser, sb, season_list_url,
+                series_title, year, season_idx,
+                stats, trailer_url,
+            )
+
+            # فحص الطابور بعد كل موسم — لو امتلأ نكمل المسلسل ونوقف بعده
+            idle_count = get_idle_tasks_count(sb)
+            if idle_count >= MAX_IDLE_BUFFER:
+                log.warning(
+                    "🛑 الطابور امتلأ بعد الموسم "
+                    f"{season_idx}، سيتم إنهاء المسلسل الحالي ثم الإيقاف."
+                )
+                buffer_full = True
+                # نكمل باقي المواسم — الإيقاف بعد return
+                continue
+
+        new_eps = stats["ep_inserted"] - ep_inserted_before
+        if new_eps > 0:
+            log.info(f"✅ اكتمل المسلسل: {series_title} | +{new_eps} حلقة جديدة")
+            stats["series_completed"] += 1
+        else:
+            log.info(f"♻️ المسلسل موجود بالكامل: {series_title}")
+
+        # نُعيد buffer_full عشان المنسق الرئيسي يوقف
+        return not buffer_full
+
+    except PlaywrightTimeout:
+        log.error(f"⏱️ Timeout في المسلسل: {series_url}")
+        stats["series_failed"] += 1
+        return True
+    except Exception as exc:
+        log.error(f"❌ خطأ في المسلسل: {exc}")
+        stats["series_failed"] += 1
+        return True
+    finally:
+        if series_page:
+            try:
+                await series_page.close()
+            except Exception:
+                pass
+
+
+# ===========================================================================
+# Section 17: Series Main Orchestrator — المنسق الرئيسي للمسلسلات
+# ===========================================================================
+
+
+async def run_series_scraper_async():
+    """نقطة الدخول الرئيسية لكراولر المسلسلات."""
+    sb = get_supabase()
+    log.info("✅ [Series] تم الاتصال بـ Supabase")
+
+    # ── صمام الأمان ───────────────────────────────────────────────────
+    idle_count = get_idle_tasks_count(sb)
+    log.info(f"🔍 [Series] الطابور الحالي: {idle_count} مهمة idle")
+    if idle_count >= MAX_IDLE_BUFFER:
+        log.warning(f"🛑 [Series] الطابور ممتلئ ({idle_count}/{MAX_IDLE_BUFFER}). إيقاف.")
+        return
+
+    # ── إحصاءات الجلسة ────────────────────────────────────────────────
+    stats = {
+        "series_completed": 0,
+        "series_failed": 0,
+        "ep_inserted": 0,
+        "ep_skipped": 0,
+        "ep_failed": 0,
+        "mixdrop_dead": 0,
+        "mixdrop_live": 0,
+        "vidtube_saved": 0,
+    }
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(
+            headless=HEADLESS,
+            args=["--no-sandbox", "--disable-setuid-sandbox"],
+        )
+
+        # ── اكتشاف عدد صفحات الفئة ────────────────────────────────────
+        probe = await browser.new_page(user_agent=pick_random_agent())
+        try:
+            await probe.goto(
+                SERIES_CATEGORY_URL, wait_until="domcontentloaded", timeout=30_000
+            )
+            total_pages = await scrape_total_pages(probe)
+            log.info(f"📊 [Series] إجمالي صفحات الفئة: {total_pages}")
+        except Exception as e:
+            total_pages = SAFE_SERIES_PAGE_COUNT
+            log.warning(f"⚠️ فشل استخراج عدد الصفحات: {e}")
+        finally:
+            await probe.close()
+
+        should_stop = False
+
+        # ── الحلقة الرئيسية على الصفحات ──────────────────────────────
+        for page_num in range(1, total_pages + 1):
+            if should_stop:
+                break
+            if stats["series_completed"] >= TARGET_SERIES:
+                log.info(f"🎯 [Series] وصلنا للهدف {TARGET_SERIES} مسلسل. إيقاف.")
+                break
+
+            cat_url = (
+                SERIES_CATEGORY_URL
+                if page_num == 1
+                else f"{SERIES_CATEGORY_URL}/page/{page_num}/"
+            )
+            log.info(f"\n{'═'*55}")
+            log.info(f"📄 [Series] صفحة الفئة {page_num}: {cat_url}")
+
+            # جلب روابط المسلسلات
+            cat_page = await browser.new_page(user_agent=pick_random_agent())
+            try:
+                await cat_page.goto(
+                    cat_url, wait_until="domcontentloaded", timeout=30_000
+                )
+                series_links = await scrape_series_links(cat_page)
+            except Exception as exc:
+                log.error(f"❌ فشل تحميل صفحة الفئة: {exc}")
+                series_links = []
+            finally:
+                await cat_page.close()
+
+            log.info(f"📺 وجدت {len(series_links)} مسلسل في الصفحة")
+
+            for s_idx, series_url in enumerate(series_links, 1):
+                if stats["series_completed"] >= TARGET_SERIES:
+                    should_stop = True
+                    break
+
+                log.info(f"\n  [{s_idx}/{len(series_links)}] 🎬 {series_url}")
+                can_continue = await process_single_series(browser, sb, series_url, stats)
+
+                if not can_continue:
+                    log.warning("🛑 [Series] الطابور امتلأ بعد اكتمال المسلسل. إيقاف.")
+                    should_stop = True
+                    break
+
+                await random_delay()
+
+        await browser.close()
+
+    _print_series_summary(stats)
+
+
+def _print_series_summary(stats: dict) -> None:
+    """طباعة ملخص جلسة المسلسلات."""
+    log.info(f"\n{'═'*55}")
+    log.info("📊 ملخص جلسة المسلسلات:")
+    log.info(f"   ✅ مسلسلات اكتملت:              {stats['series_completed']}")
+    log.info(f"   ❌ مسلسلات فشلت:                {stats['series_failed']}")
+    log.info(f"   🎬 حلقات أُدرجت:                {stats['ep_inserted']}")
+    log.info(f"   ♻️  حلقات مكررة تُخطيت:         {stats['ep_skipped']}")
+    log.info(f"   ⚠️  حلقات فشلت:                 {stats['ep_failed']}")
+    log.info(f"{'─'*55}")
+    log.info(f"   💀 روابط Mixdrop البايظة:       {stats['mixdrop_dead']}")
+    log.info(f"   🍏 روابط Mixdrop السليمة:       {stats['mixdrop_live']}")
+    log.info(f"{'═'*55}")

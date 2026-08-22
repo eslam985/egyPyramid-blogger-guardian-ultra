@@ -50,12 +50,15 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # دالة التغذية التلقائية (تم نقلها للخارج لتكون متاحة للـ lifespan)
 async def auto_feeder_loop():
     try:
-        from scraper_feeder import run_scraper_async
+        from scraper_feeder import run_scraper_async, run_series_scraper_async
 
         print("⏳ [Feeder] Auto-loop initialised.")
         while True:
             try:
-                await run_scraper_async()
+                await asyncio.gather(
+                    run_scraper_async(),
+                    run_series_scraper_async(),
+                )
             except Exception as fe:
                 print(f"❌ [Feeder Error]: {fe}")
             #   (seconds(60) * minutes(60) * hours (1 || 2 || 3 || 4)) 
