@@ -35,6 +35,8 @@ TABLE_TASKS = "download_tasks"
 TABLE_MEDIAS = "medias"
 
 MAX_IDLE_BUFFER = 200  # الحد الأقصى للمهام الـ idle في الطابور
+TARGET_INSERT = 20  # عدد الاعمال المضافة مع كل تشغيله للاسكربت بشرط عدم تخطي MAX_IDLE_BUFFER 
+
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
 HEADLESS = True  # False لو عايز تشوف المتصفح
@@ -530,25 +532,13 @@ def decide_crawl_mode(total_pages: int) -> tuple[str, int]:
 
 
 def should_stop_after_page(crawl_mode: str, found_new: bool, idle_count: int) -> bool:
-    """
-    منطق إيقاف الزحف بعد نهاية كل صفحة:
-    - لو الطابور امتلأ: وقف دائماً.
-    - نمط الحصريات + مفيش جديد: وقف (ما بعدها مكرر بالتأكيد).
-    - نمط الأرشيف + مفيش جديد: لا تقف، كمّل للصفحة التالية.
-    """
     if idle_count >= MAX_IDLE_BUFFER:
         log.info("🛑 تم إنهاء الجولة: الطابور وصل للحد الأقصى.")
         return True
 
-    if crawl_mode == "FRESH_NEW" and not found_new:
-        log.warning(
-            "⚠️ [Stop Strategy] الصفحة مكررة بالكامل في نمط الحصريات. إنهاء الجولة."
-        )
-        return True
-
-    if crawl_mode == "ARCHIVE_WASH" and not found_new:
-        log.warning("🔄 [Archive Wash] صفحة مغسولة، الانتقال للتالية...")
-        return False
+    if not found_new:
+        log.warning("🔄 صفحة مكررة، الانتقال للتالية...")
+        return False  # ← دايماً كمّل، الإيقاف بالهدف بس
 
     return False
 
@@ -712,7 +702,6 @@ async def run_scraper_async():
 
         # ── تحديد استراتيجية الزحف ───────────────────────────────────
         crawl_mode, start_page = decide_crawl_mode(total_pages)
-
         # ── الحلقة الرئيسية: تمر على الصفحات ────────────────────────
         for page_num in range(start_page, total_pages + 1):
 
@@ -757,9 +746,13 @@ async def run_scraper_async():
 
             # منطق الإيقاف بعد الصفحة
             idle_count = get_idle_tasks_count(sb)
-            if should_stop_after_page(
-                crawl_mode, stats["found_new_in_page"], idle_count
-            ):
+            if stats["inserted"] >= TARGET_INSERT:
+                log.info(f"🎯 وصلنا للهدف {TARGET_INSERT} إدراج. إيقاف.")
+                break
+            if should_stop_after_page(crawl_mode, stats["found_new_in_page"], idle_count):
+                # في FRESH_NEW مكمّلش، في ARCHIVE_WASH كمّل
+                if crawl_mode == "ARCHIVE_WASH":
+                    continue  # تخطي صفحة وروح للتالية
                 break
 
             await random_delay()
