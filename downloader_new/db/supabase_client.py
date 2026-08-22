@@ -524,6 +524,7 @@ def initialize_supabase_record(
     init_cat    = clean[1] if clean and len(clean) == 4 else "movie"
     init_season = clean[2] if clean and len(clean) == 4 else None
     init_ep     = clean[3] if clean and len(clean) == 4 else None
+    log.info(f"DEBUG init: original_task_name={original_task_name} | cat={init_cat} | season={init_season} | ep={init_ep}")
 
     save_res = save_to_supabase(
         current_voe=None,
