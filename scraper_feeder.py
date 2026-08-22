@@ -1020,9 +1020,8 @@ async def process_single_episode(
         # ── بناء اسم المهمة ───────────────────────────────────────────
         year_suffix = f" {year}" if year else ""
         task_name = (
-            f"{series_title} الموسم {season_no} الحلقة {ep_no} مترجم{year_suffix}"
+            f"مسلسل {series_title} الموسم {season_no} الحلقة {ep_no} مترجم{year_suffix}"
         )
-
         # ── فحص تكرار مبكر بدون embed ────────────────────────────────
         if already_exists_episode(sb, series_title, season_no, ep_no):
             log.info(f"    ♻️ موجودة مسبقاً: {task_name}")
