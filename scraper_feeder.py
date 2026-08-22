@@ -902,18 +902,14 @@ async def scrape_season_number(page) -> int:
 
 
 async def scrape_episode_links(page) -> list[str]:
-    """
-    استخراج روابط الحلقات من صفحة /list/ الخاصة بالموسم.
-    الترتيب: تصاعدي (حلقة 1 أولاً).
-    """
     anchors = await page.query_selector_all(
-        "ul.Posts--List div.Small--Box a.recent--block"
+        "ul.Posts--List div.Small--Box:not(.Season) a.recent--block"
     )
     links = []
     for a in anchors:
         href = await a.get_attribute("href")
         if href:
-            links.append(href)
+            links.append(href.rstrip("/") + "/watch/")
     return list(reversed(links))
 
 
@@ -1037,7 +1033,7 @@ async def process_single_episode(
         # الـ ep_url هو رابط /watch/ مباشرةً
         watch_page = await browser.new_page(user_agent=pick_random_agent())
         await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
-        await watch_page.wait_for_selector(".watch--servers--list ul li.server--item span", timeout=10000)
+        await watch_page.wait_for_selector(".watch--servers--list ul li.server--item", timeout=15_000)
         embed_url, server_status = await extract_embed_url(watch_page)
         await watch_page.close()
         watch_page = None
