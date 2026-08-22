@@ -35,7 +35,9 @@ TABLE_TASKS = "download_tasks"
 TABLE_MEDIAS = "medias"
 
 MAX_IDLE_BUFFER = 200  # الحد الأقصى للمهام الـ idle في الطابور
-TARGET_INSERT = 20  # عدد الاعمال المضافة مع كل تشغيله للاسكربت بشرط عدم تخطي MAX_IDLE_BUFFER 
+TARGET_INSERT = (
+    20  # عدد الاعمال المضافة مع كل تشغيله للاسكربت بشرط عدم تخطي MAX_IDLE_BUFFER
+)
 
 DELAY_MIN = 3.0  # أقل تأخير (ثانية) بين الأفلام
 DELAY_MAX = 7.0  # أعلى تأخير
@@ -159,6 +161,7 @@ def _is_duplicate_in_tasks(
 
 def _is_duplicate_in_medias(sb: Client, movie_name: str) -> bool:
     import re
+
     match = re.search(r"^(.*)\s(\d{4})$", movie_name)
     pure_title = match.group(1).strip() if match else movie_name.strip()
     incoming_year = match.group(2).strip() if match else None
@@ -171,8 +174,12 @@ def _is_duplicate_in_medias(sb: Client, movie_name: str) -> bool:
 
     return len((q.limit(1).execute().data or [])) > 0
 
-def _is_duplicate_in_tasks(sb: Client, movie_name: str, download_url: Optional[str] = None) -> bool:
+
+def _is_duplicate_in_tasks(
+    sb: Client, movie_name: str, download_url: Optional[str] = None
+) -> bool:
     import re
+
     match = re.search(r"^(.*)\s(\d{4})$", movie_name)
     pure_title = match.group(1).strip() if match else movie_name.strip()
     incoming_year = match.group(2).strip() if match else None
@@ -188,12 +195,19 @@ def _is_duplicate_in_tasks(sb: Client, movie_name: str, download_url: Optional[s
 
     # 2. شيك برابط الـ embed لو موجود
     if download_url:
-        q2 = sb.table("download_tasks").select("id").eq("source_url", download_url).limit(1).execute().data or []
+        q2 = (
+            sb.table("download_tasks")
+            .select("id")
+            .eq("source_url", download_url)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
         if len(q2) > 0:
             return True
 
     return False
-
 
 
 def already_exists(sb: Client, movie_name: str, download_url: Optional[str]) -> bool:
@@ -209,6 +223,7 @@ def already_exists(sb: Client, movie_name: str, download_url: Optional[str]) -> 
         return True
 
     return False
+
 
 # ===========================================================================
 # Section 5: Supabase Write Operations — عمليات الكتابة في DB
@@ -418,6 +433,7 @@ async def _get_iframe_src(page) -> Optional[str]:
     iframe = await page.query_selector(".player--iframe iframe")
     return (await iframe.get_attribute("src")) if iframe else None
 
+
 async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
     """محاولة استخراج رابط MixDrop مع فحص صفحات الـ 404."""
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
@@ -446,12 +462,17 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
 
     return None, None
 
+
 async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
     """محاولة استخراج رابط VidTube (متعدد الجودات)."""
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
-        if "متعدد الجودات" in name or "VideoTube" in name or "videotube" in name.lower():
+        if (
+            "متعدد الجودات" in name
+            or "VideoTube" in name
+            or "videotube" in name.lower()
+        ):
             log.info(f"  🎯 محاولة سحب VidTube: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
@@ -459,7 +480,6 @@ async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
             if src:
                 return src, "vidtube_live"
     return None, None
-
 
 
 async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
@@ -476,36 +496,40 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "streamtape_live"
     return None, None
 
+
 async def extract_embed_url(page) -> tuple[Optional[str], str]:
     """
     المنسق الرئيسي لاستخراج رابط التشغيل.
     الأولوية الحالية: Streamtape ➔ MixDrop ➔ VidTube ➔ فشل.
     """
-    # 1. الخيار الأول والأعلى أولوية: Streamtape
-    src, status = await _extract_streamtape(page)
-    if src:
-        log.info(f"✅ تم سحب الرابط عبر Streamtape: {src}")
-        return src, status
 
-    # 2. الخيار الثاني: MixDrop (يتضمن فحص الروابط الميتة)
-    log.warning("⚠️ فشل Streamtape، جارٍ تجربة MixDrop...")
+    # 1. الخيار الثاني: MixDrop (يتضمن فحص الروابط الميتة)
+    log.info("جار البحث عن سرفر MixDrop")
     src, status = await _extract_mixdrop(page)
     if src and status == "mixdrop_live":
         log.info(f"✅ تم سحب الرابط عبر MixDrop: {src}")
         return src, status
+    log.warning("لم يتم العثور ع سرفر MixDrop")
+
+    # 1. الخيار الثاني Streamtape
+    log.info("جار البحث عن سرفر Streamtape")
+    src, status = await _extract_streamtape(page)
+    if src:
+        log.info(f"✅ تم سحب الرابط عبر Streamtape: {src}")
+        return src, status
+    log.warning("لم يتم العثور ع سرفر Streamtape")
 
     # 3. الخيار الثالث والأخير: VidTube
-    log.warning("⚠️ فشل MixDrop، جارٍ تجربة VidTube...")
+    log.info("جار البحث عن سرفر VidTube")
     # src, status = await _extract_vidtube(page)
     # if src:
     #     log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
     #     return src, status
+    log.warning("لم يتم العثور ع سرفر VidTube")
 
     # 4. في حال فشل جميع السيرفرات
     log.error("❌ لم يتم العثور على أي سيرفر صالح.")
     return None, "none"
-
-
 
 
 # ===========================================================================
@@ -647,6 +671,7 @@ def _update_server_stats(stats: dict, server_status: str) -> None:
     elif server_status == "streamtape_live":
         stats["streamtape_saved"] = stats.get("streamtape_saved", 0) + 1
 
+
 # ===========================================================================
 # Section 11: Main Orchestrator — المنسق الرئيسي
 # ===========================================================================
@@ -749,7 +774,9 @@ async def run_scraper_async():
             if stats["inserted"] >= TARGET_INSERT:
                 log.info(f"🎯 وصلنا للهدف {TARGET_INSERT} إدراج. إيقاف.")
                 break
-            if should_stop_after_page(crawl_mode, stats["found_new_in_page"], idle_count):
+            if should_stop_after_page(
+                crawl_mode, stats["found_new_in_page"], idle_count
+            ):
                 # في FRESH_NEW مكمّلش، في ARCHIVE_WASH كمّل
                 if crawl_mode == "ARCHIVE_WASH":
                     continue  # تخطي صفحة وروح للتالية
