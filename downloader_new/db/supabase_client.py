@@ -452,7 +452,9 @@ def save_to_supabase(
         if not c_title:
             log.warning(f"⚠️ c_title غير ممرر لـ '{display_title}'، سيُستخدم display_title.")
             c_title = display_title
-            c_cat   = "movie"
+                # مش نعدل الـ c_cat لو كان tv
+            if c_cat != "tv":
+                c_cat = "movie"
             extracted_season_no = None
             actual_ep_no        = None
 
@@ -517,11 +519,20 @@ def initialize_supabase_record(
     إنشاء سجل أولي في Supabase (pending) لعمل لم ينتهِ تحميله بعد.
     تُعيد: (episode_id, media_id, meta_story, final_poster).
     """
+    from downloader_new.metadata.formatter import get_clean_media_data
+    clean = get_clean_media_data(original_task_name)
+    init_cat    = clean[1] if clean and len(clean) == 4 else "movie"
+    init_season = clean[2] if clean and len(clean) == 4 else None
+    init_ep     = clean[3] if clean and len(clean) == 4 else None
+
     save_res = save_to_supabase(
         current_voe=None,
         current_vk="Pending",
         display_title=display_title,
         original_task_name=original_task_name,
+        c_cat=init_cat,
+        extracted_season_no=init_season,
+        actual_ep_no=init_ep,
         meta_story=tmdb_data.get("story"),
         final_poster=tmdb_data.get("poster"),
         meta_year=tmdb_data.get("year"),
