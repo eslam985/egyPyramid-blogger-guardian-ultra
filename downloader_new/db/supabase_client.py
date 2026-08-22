@@ -71,11 +71,15 @@ def _build_slug(title: str) -> str:
 
 def _resolve_final_title(original_task_name: str, c_title: str) -> str:
     """
-    اختيار العنوان النهائي للحفظ:
-    لو الـ task_name اسم يدوي (مش رابط) → هو الأولوية.
-    غير كده → نستخدم العنوان المعالج من TMDB.
+    اختيار العنوان النهائي للحفظ.
+    المهم: نرجع عنوان الـ SERIES فقط، مش عنوان الحلقة.
     """
     if original_task_name and not original_task_name.startswith(("http://", "https://")):
+        # نستخرج عنوان المسلسل فقط بدون رقم الموسم/الحلقة
+        from downloader_new.metadata.formatter import get_clean_media_data
+        clean = get_clean_media_data(original_task_name)
+        if clean and len(clean) == 4:
+            return clean[0]  # c_title النظيف بدون أرقام
         return original_task_name
     return c_title
 

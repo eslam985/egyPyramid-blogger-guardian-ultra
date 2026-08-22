@@ -193,18 +193,19 @@ class DuplicateGuard:
 # Step 4 — Supabase Record Initializer
 # ──────────────────────────────────────────────
 
-class RecordInitializer:
-    """يحجز السجل الأولي في Supabase ويُرجع المعرّفات."""
+# في RecordInitializer.initialize — بعد الحجز الأولي
+# احفظ الـ identifier الحقيقي فور ما يتحدد
 
-    def initialize(self, display_title: str, original_task_name: str,
-                   tmdb_data: dict, timestamp: int) -> tuple:
+class RecordInitializer:
+    def initialize(self, display_title, original_task_name, tmdb_data, timestamp) -> tuple:
         temp_id = f"loading_{timestamp}"
         e_id, media_id, meta_story, final_poster = initialize_supabase_record(
             display_title, original_task_name, tmdb_data, temp_id
         )
         if not e_id:
-            log.warning("⚠️ فشل الحصول على episode ID من Supabase — لن يظهر تقدم حي.")
-        return e_id, media_id, meta_story, final_poster
+            log.warning("⚠️ فشل الحصول على episode ID")
+        # ✅ ارجع الـ temp_id كمان عشان finalize يعرف يلاقي الحلقة
+        return e_id, media_id, meta_story, final_poster, temp_id
 
 
 # ──────────────────────────────────────────────
@@ -397,7 +398,7 @@ class EpisodeProcessor:
             f"{display_title} {os.path.basename(vid_path)}"
             if len(videos) > 1 else display_title
         )
-
+        
         # فحص تكرار الحلقة لو مسلسل
         if category_search == "tv":
             should_skip, _ = self._dup.episode_check(loop_display_title, meta_year)
@@ -585,7 +586,7 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
         return
 
     # 7. الحجز الأولي في Supabase — بعد التأكد من الرابط والتكرار
-    e_id, media_id, meta_story, final_poster = RecordInitializer().initialize(
+    e_id, media_id, meta_story, final_poster, temp_id = RecordInitializer().initialize(
         display_title, original_task_name, tmdb_data, timestamp
     )
     if e_id is None and media_id is None:
