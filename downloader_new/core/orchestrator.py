@@ -564,11 +564,20 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
     clean_res_db  = get_clean_media_data(display_title)
     if clean_res_db and len(clean_res_db) == 4:
         clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
+        # تأكيد: لو الاسم الأصلي يقول tv، نثق فيه على tmdb
+        if category_search == "movie" and any(kw in original_task_name for kw in ["الموسم", "الحلقة", "مسلسل"]):
+            category_search = "tv"
+            current_season_no = pre_season
+            current_ep_no = pre_ep
     else:
         clean_title_search  = display_title
-        category_search     = "movie"
-        current_season_no   = None
-        current_ep_no       = None
+        # لو الاسم الأصلي فيه مؤشرات مسلسل، نحكم بـ tv مش movie
+        if any(kw in original_task_name for kw in ["الموسم", "الحلقة", "مسلسل", "Season", "Episode"]):
+            category_search = "tv"
+        else:
+            category_search = "movie"
+        current_season_no   = pre_season
+        current_ep_no       = pre_ep
 
     if dup_guard.precise_check(clean_title_search, tmdb_data["year"],
                                 category_search, current_season_no, current_ep_no):
