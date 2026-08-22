@@ -810,6 +810,9 @@ def _print_summary(stats: dict) -> None:
     log.info(f"   📺 روابط VidTube المُنقذة:         {stats['vidtube_saved']}")
     log.info(f"{'═' * 55}")
     
+    
+
+
 # ===========================================================================
 # Section 13: Series Configuration — إعدادات المسلسلات
 # ===========================================================================
@@ -951,7 +954,7 @@ def already_exists_episode(
             return True
 
     # 2. شيك في download_tasks بالاسم
-    task_name_pattern = f"%{series_name}%الموسم {season_no}%الحلقة {ep_no}%"
+    task_name_pattern = f"%{series_name}%الموسم {season_no}%الحلقة {ep_no} %"
     q = sb.table("download_tasks").select("id").ilike("task_name", task_name_pattern).limit(1).execute()
     if q.data:
         return True
