@@ -1,4 +1,3 @@
-# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/worker.py
 import httpx
 
 # إجبار المكتبة عالمياً على إغلاق HTTP/2 وتفعيل HTTP/1.1 المستقر لمنع سقوط اتصال سوبابيس
@@ -19,28 +18,208 @@ import nest_asyncio
 import asyncio
 from downloader_new.shared.logger import get_beast_logger
 
-# في Hugging Face المشروع في الجذر دائماً
 PROJECT_ROOT = os.getcwd()
 log = get_beast_logger("GuardianWorker")
-
 log.info(f"🚀 تم تشغيل الووركر بنجاح من المسار: {PROJECT_ROOT}")
 
 should_stop_worker = False
+
+# ──────────────────────────────────────────────
+# طبقة الوصول إلى البيانات (Repository Layer)
+# ──────────────────────────────────────────────
+
+class TaskRepository:
+    """مسؤول حصراً عن العمليات المباشرة على جدول download_tasks."""
+
+    def __init__(self, client):
+        self._db = client
+
+    def fetch_idle_tasks(self, limit: int = 5):
+        res = (
+            self._db.table("download_tasks")
+            .select("*")
+            .eq("status", "idle")
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return res.data or []
+
+    def try_lock_task(self, job_id: str) -> bool:
+        """يحاول قفل المهمة؛ يُرجع True إذا نجح، False إذا سبقه ووركر آخر."""
+        res = (
+            self._db.table("download_tasks")
+            .update({
+                "status": "processing",
+                "status_message": "🚀 الوحش بدأ السحب والتحليل...",
+                "progress_percent": 5,
+            })
+            .eq("id", job_id)
+            .eq("status", "idle")
+            .execute()
+        )
+        return bool(res.data)
+
+    def mark_failed(self, job_id: str, reason: str):
+        self._db.table("download_tasks").update({
+            "status": "failed",
+            "status_message": f"❌ فشل: {reason[:100]}",
+        }).eq("id", job_id).execute()
+
+    def get_status(self, job_id: str) -> str | None:
+        res = (
+            self._db.table("download_tasks")
+            .select("status")
+            .eq("id", job_id)
+            .execute()
+        )
+        return res.data[0]["status"] if res.data else None
+    
+    def delete_if_completed(self, job_id: str):
+        status = self.get_status(job_id)
+        if status == "completed":
+            self._db.table("download_tasks").delete().eq("id", job_id).execute()
+            log.info(f"🗑️ تم حذف المهمة المكتملة {job_id}")
+
+class MediaRepository:
+    """مسؤول حصراً عن تنظيف سجلات medias/episodes عند الفشل."""
+
+    def __init__(self, client):
+        self._db = client
+
+    def cleanup_by_title(self, title: str):
+        res = (
+            self._db.table("medias")
+            .select("id")
+            .ilike("title", f"%{title}%")
+            .limit(1)
+            .execute()
+        )
+        if not res.data:
+            return
+        media_id = res.data[0]["id"]
+        self._db.table("episodes").delete().eq("media_id", media_id).execute()
+        self._db.table("medias").delete().eq("id", media_id).execute()
+        log.info(f"🧹 تم تنظيف سجل الميديا لـ: {title}")
+
+
+# ──────────────────────────────────────────────
+# طبقة الخدمات (Service Layer)
+# ──────────────────────────────────────────────
+
+class JobProcessor:
+    """مسؤول عن تنفيذ مهمة واحدة من البداية للنهاية."""
+
+    def __init__(self, task_repo: TaskRepository, media_repo: MediaRepository, loop):
+        self._tasks = task_repo
+        self._media = media_repo
+        self._loop = loop
+
+    def run(self, job: dict, pyramid_ultimate_beast):
+        job_id   = job["id"]
+        url      = job["source_url"]
+        name     = job.get("task_name", "Unnamed_File")
+        trailer  = job.get("trailer_url")
+
+        log.info(f"\n📦 مهمة سحب جديدة ومؤمنة [ID: {job_id}]: {name}")
+        log.info(f"⏳ جاري تشغيل المحرك لـ {name}...")
+
+        try:
+            self._loop.run_until_complete(
+                pyramid_ultimate_beast(url, name, task_id=job_id, meta_data={"trailer_url": trailer})
+            )
+        except Exception as err:
+            self._handle_engine_error(job_id, name, err)
+
+        log.info(f"📡 [Worker]: تم الانتهاء من المعالجة. الاعتماد النهائي تم داخل المحرك.")
+        log.info(f"✅ المهمة {job_id} انتهت بالكامل.")
+        self._tasks.delete_if_completed(job_id)  # ← هنا
+        
+    def _handle_engine_error(self, job_id: str, name: str, err: Exception):
+        error_msg = str(err)
+
+        # خطأ وهمي بسبب نقل الملف — نتجاهله
+        if "No such file or directory" in error_msg and "extracted_" in error_msg:
+            log.info("⚠️ تنبيه: المحرك نقل الملف بنجاح ولكن الووركر فقد المسار القديم. سيتم اعتبار المهمة ناجحة.")
+            return
+
+        log.error(f"❌ خطأ حقيقي أثناء تشغيل المحرك: {err}")
+        try:
+            self._media.cleanup_by_title(name)
+            self._tasks.mark_failed(job_id, error_msg)
+        except Exception as clean_err:
+            log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
+
+
+# ──────────────────────────────────────────────
+# طبقة الجدولة (Scheduler / Poll Loop)
+# ──────────────────────────────────────────────
+
+class WorkerScheduler:
+    """
+    مسؤول عن دورة الـ Polling:
+    سحب المهام، القفل، التفويض للـ Processor، إدارة وقت الانتظار.
+    """
+
+    INITIAL_SLEEP   = 15
+    MAX_SLEEP       = 7200  # ساعتان
+
+    def __init__(self, task_repo: TaskRepository, processor: JobProcessor, pyramid_fn):
+        self._tasks     = task_repo
+        self._processor = processor
+        self._pyramid   = pyramid_fn
+
+    def run_forever(self):
+        global should_stop_worker
+        sleep_time = self.INITIAL_SLEEP
+
+        while not should_stop_worker:
+            try:
+                jobs = self._tasks.fetch_idle_tasks()
+
+                if jobs:
+                    sleep_time = self.INITIAL_SLEEP  # إعادة ضبط وقت الانتظار
+                    job = random.choice(jobs)
+
+                    if not self._tasks.try_lock_task(job["id"]):
+                        log.info(f"⏭️ المهمة {job['id']} سحبها ووركر تاني حالاً، جاري البحث عن غيرها...")
+                        continue
+
+                    self._processor.run(job, self._pyramid)
+
+                else:
+                    log.info(f"😴 لا توجد مهام حالياً | النوم: {sleep_time} ثانية")
+                    time.sleep(sleep_time)
+                    sleep_time = min(sleep_time * 2, self.MAX_SLEEP)
+
+            except Exception as err:
+                log.error(f"⚠️ خطأ عام في الـ Worker: {err}")
+                self._safe_fail_current_job(err)
+
+        time.sleep(120)
+
+    def _safe_fail_current_job(self, err: Exception):
+        """محاولة تعليم المهمة بالفشل إذا كانت متاحة في السياق الحالي."""
+        # job_id غير متاح هنا مباشرةً؛ الـ Processor يتعامل معها داخلياً.
+        # هذا الـ handler للأخطاء الكارثية خارج دورة المهمة.
+        log.warning(f"⚠️ خطأ خارج دورة المهمة: {err}")
+
+
+# ──────────────────────────────────────────────
+# نقطة الدخول (Entry Point)
+# ──────────────────────────────────────────────
+
 def ultimate_beast_worker():
     global should_stop_worker
     log.info("⚙️ بدء تشغيل محرك الووركر...")
-
-    # تأكد من تصفير الحالة عند كل تشغيل جديد
     should_stop_worker = False
 
-    # 1. إنشاء وتثبيت Event Loop خاص بهذا الـ Thread فوراً
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
         from downloader_new.db.supabase_client import supabase as client
         from downloader_new.main_downloader import pyramid_ultimate_beast
-
         log.info("✅ تم تحميل المكتبات بنجاح من محرك الكور")
     except Exception as e:
         log.error(f"❌ فشل تحميل المكتبات: {e}")
@@ -49,155 +228,14 @@ def ultimate_beast_worker():
     nest_asyncio.apply()
     log.info(f"🚀 الوحش مستعد في {os.getcwd()} وينتظر الأوامر...")
 
-    current_sleep = 15
-    while not should_stop_worker:
-        # فحص إضافي للتأكد
-        if should_stop_worker:
-            break
+    task_repo  = TaskRepository(client)
+    media_repo = MediaRepository(client)
+    processor  = JobProcessor(task_repo, media_repo, loop)
+    scheduler  = WorkerScheduler(task_repo, processor, pyramid_ultimate_beast)
 
-        # كود سحب المهام (fetch tasks)...
-        try:
-
-            # 1. سحب المهمة (الأقدم أولاً)
-            # جلب أول 5 مهام متاحة بدل واحدة فقط
-            pending_res = (
-                client.table("download_tasks")
-                .select("*")
-                .eq("status", "idle")
-                .order("created_at", desc=False)
-                .limit(5)
-                .execute()
-            )
-
-            if pending_res.data:
-                current_sleep = 15
-                # اختيار مهمة عشوائية من الـ 5 لضمان عدم تصادم الـ 3 تبويبات
-                job = random.choice(pending_res.data)
-                job_id = job["id"]
-                url = job["source_url"]
-                file_name = job.get("task_name", "Unnamed_File")
-                trailer_url = job.get("trailer_url")
-
-                # محاولة "قفل" المهمة (Lock): لا يحدث التحديث إلا لو كانت الحالة لا تزال idle
-                lock_res = (
-                    client.table("download_tasks")
-                    .update(
-                        {
-                            "status": "processing",
-                            "status_message": "🚀 الوحش بدأ السحب والتحليل...",
-                            "progress_percent": 5,
-                        }
-                    )
-                    .eq("id", job_id)
-                    .eq("status", "idle")
-                    .execute()
-                )
-
-                # لو التحديث مرجعش بيانات، ده معناه إن ووركر تاني سبقك وقفلها في نفس الثانية
-                if not lock_res.data:
-                    log.info(
-                        f"⏭️ المهمة {job_id} سحبها ووركر تاني حالا، جاري البحث عن غيرها..."
-                    )
-                    continue
-
-                log.info(f"\n📦 مهمة سحب جديدة ومؤمنة [ID: {job_id}]: {file_name}")
-                # 3. تشغيل الوحش (pyramid_ultimate_beast)
-                log.info(f"⏳ جاري تشغيل المحرك لـ {file_name}...")
-                try:
-                    loop.run_until_complete(
-                        pyramid_ultimate_beast(url, file_name, task_id=job_id, meta_data={"trailer_url": trailer_url})
-                    )
-                except Exception as run_err:
-                    # مراجعة الخطأ: لو الخطأ بسبب إن الملف مش موجود (لأننا نقلناه)، نتجاهله
-                    error_msg = str(run_err)
-                    if (
-                        "No such file or directory" in error_msg
-                        and "extracted_" in error_msg
-                    ):
-                        log.info(
-                            "⚠️ تنبيه: المحرك نقل الملف بنجاح ولكن الووركر فقد المسار القديم. سيتم اعتبار المهمة ناجحة."
-                        )
-                    else:
-                        log.error(f"❌ خطأ حقيقي أثناء تشغيل المحرك: {run_err}")
-                        # --- 🧹 تنظيف الأشباح فقط في حالة الخطأ الحقيقي ---
-                        try:
-                            media_res = (
-                                client.table("medias")
-                                .select("id")
-                                .ilike("title", f"%{file_name}%")
-                                .limit(1)
-                                .execute()
-                            )
-                            if media_res.data:
-                                m_id = media_res.data[0]["id"]
-                                client.table("episodes").delete().eq(
-                                    "media_id", m_id
-                                ).execute()
-                                client.table("medias").delete().eq("id", m_id).execute()
-                                log.info(f"🧹 تم تنظيف سجل الميديا لـ: {file_name}")
-
-                            client.table("download_tasks").update(
-                                {
-                                    "status": "failed",
-                                    "status_message": f"❌ فشل: {error_msg[:50]}",
-                                }
-                            ).eq("id", job_id).execute()
-                        except Exception as clean_err:
-                            log.warning(f"⚠️ فشل تنظيف الميديا: {clean_err}")
-
-                # --- [هام جداً]: لا تضع أي أكواد تحديث "Success" هنا إلا لو كنت متأكد إن الدالة رجعت بنجاح ---
-
-                # --- ⚡ [سطر الأمان النهائي]: تم نقل الاعتماد لمحرك المعالجة ⚡ ---
-                log.info(
-                    f"📡 [Worker]: تم الانتهاء من المعالجة. الاعتماد النهائي تم داخل المحرك."
-                )
-                # --- 🗑️ [منطق حذف المهمة المكتملة] ---
-                # --- 🗑️ تنظيف المهمة بعد الانتهاء ---
-                try:
-                    task_check = (
-                        client.table("download_tasks")
-                        .select("status")
-                        .eq("id", job_id)
-                        .execute()
-                    )
-                    if task_check.data and task_check.data[0]["status"] in [
-                        "completed",
-                        "failed",
-                    ]:
-                        client.table("download_tasks").delete().eq(
-                            "id", job_id
-                        ).execute()
-                        log.info(f"🗑️ تم تنظيف وحذف المهمة {job_id} من الجدول.")
-                except Exception as del_err:
-                    log.error(f"⚠️ خطأ أثناء حذف المهمة: {del_err}")
-                # --- ⚡ [سطر الأمان النهائي]: تأكيد الجاهزية من الـ Worker ⚡ ---
-                log.info(f"✅ المهمة {job_id} انتهت بالكامل.")
-
-            else:
-                log.info(
-                    f"😴 الوحش يبحث في الداتابيز.. لا توجد مهام حالياً (status: idle) | النوم الحالي: {current_sleep} ثانية"
-                )
-                time.sleep(current_sleep)
-                # مضاعفة الوقت للمرة القادمة بشرط ألا يتخطى ساعتين (7200 ثانية)
-                current_sleep = min(current_sleep * 2, 7200)
-
-        except Exception as e:
-            log.error(f"⚠️ خطأ في الـ Worker: {e}")
-            # في حالة الخطأ العام، نعيد المهمة لـ idle لتجربتها لاحقاً أو تعليمها بالفشل
-            try:
-                if "job_id" in locals():
-                    client.table("download_tasks").update(
-                        {
-                            "status": "failed",  # تغيير لـ failed أفضل عشان ميدخلش في Loop لا نهائي لو الرابط ميت
-                            "status_message": f"❌ خطأ فني بالووركر: {str(e)}",
-                        }
-                    ).eq("id", job_id).execute()
-            except:
-                pass
-    time.sleep(120)
+    scheduler.run_forever()
 
 
-# أمان التشغيل السحابي المباشر
 if __name__ == "__main__":
     log.info("📌 تم استدعاء الووركر يدوياً.. جاري الإطلاق التجريبي.")
     ultimate_beast_worker()
