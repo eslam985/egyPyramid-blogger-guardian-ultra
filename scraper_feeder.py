@@ -431,7 +431,7 @@ async def scrape_trailer_url(page) -> Optional[str]:
 
 async def _get_iframe_src(page) -> Optional[str]:
     """انتظار واستخراج src من الـ iframe الرئيسي للمشغل."""
-    await page.wait_for_selector(".player--iframe iframe", timeout=15_000)
+    await page.wait_for_selector(".player--iframe iframe[src]", timeout=15_000)
     iframe = await page.query_selector(".player--iframe iframe")
     return (await iframe.get_attribute("src")) if iframe else None
 
@@ -614,7 +614,8 @@ async def process_single_movie(
 
         # ── 3. سحب رابط التشغيل (embed) ────────────────────────────
         watch_page = await browser.new_page(user_agent=pick_random_agent())
-        await watch_page.goto(watch_url, wait_until="networkidle", timeout=40_000)
+        await watch_page.goto(watch_url, wait_until="domcontentloaded", timeout=40_000)
+        await watch_page.wait_for_selector(".watch--servers--list ul li.server--item span", timeout=10000)
         embed_url, server_status = await extract_embed_url(watch_page)
         await watch_page.close()
         watch_page = None
@@ -1036,7 +1037,7 @@ async def process_single_episode(
         # الـ ep_url هو رابط /watch/ مباشرةً
         watch_page = await browser.new_page(user_agent=pick_random_agent())
         await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
-        await watch_page.wait_for_timeout(3000)
+        await watch_page.wait_for_selector(".watch--servers--list ul li.server--item span", timeout=10000)
         embed_url, server_status = await extract_embed_url(watch_page)
         await watch_page.close()
         watch_page = None
