@@ -297,7 +297,9 @@ async def random_delay():
 
 async def scrape_movie_links(page) -> list[str]:
     """استخراج روابط الأفلام من صفحة القائمة."""
-    anchors = await page.query_selector_all("a.recent--block")
+    anchors = await page.query_selector_all(
+    "ul.Posts--List div.Small--Box:not(.Season) a.recent--block"
+    )
     links = []
     for a in anchors:
         href = await a.get_attribute("href")
@@ -1033,7 +1035,8 @@ async def process_single_episode(
         # ── سحب رابط المشاهدة (watch URL) من صفحة الحلقة ────────────
         # الـ ep_url هو رابط /watch/ مباشرةً
         watch_page = await browser.new_page(user_agent=pick_random_agent())
-        await watch_page.goto(ep_url, wait_until="networkidle", timeout=40_000)
+        await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
+        await watch_page.wait_for_timeout(3000)
         embed_url, server_status = await extract_embed_url(watch_page)
         await watch_page.close()
         watch_page = None
