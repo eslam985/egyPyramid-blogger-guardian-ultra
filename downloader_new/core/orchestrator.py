@@ -204,8 +204,7 @@ class RecordInitializer:
         )
         if not e_id:
             log.warning("⚠️ فشل الحصول على episode ID")
-        # ✅ ارجع الـ temp_id كمان عشان finalize يعرف يلاقي الحلقة
-        return e_id, media_id, meta_story, final_poster, temp_id
+        return e_id, media_id, meta_story, final_poster  # ← 4 قيم فقط
 
 
 # ──────────────────────────────────────────────
@@ -589,8 +588,8 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
 
     # 7. الحجز الأولي في Supabase — بعد التأكد من الرابط والتكرار
     e_id, media_id, meta_story, final_poster = RecordInitializer().initialize(
-        display_title, original_task_name, tmdb_data, timestamp
-    )
+    display_title, original_task_name, tmdb_data, timestamp
+)
     if e_id is None and media_id is None:
         shutil.rmtree(extract_dir, ignore_errors=True)
         return
