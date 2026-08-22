@@ -1,6 +1,6 @@
 import os
 from downloader_new.shared.logger import get_beast_logger
-from downloader_new.db.supabase_client import supabase, save_to_supabase
+from downloader_new.db.supabase_client import supabase, save_links, _clean_payload
 from downloader_new.uploaders.telegram import send_to_telegram
 from downloader_new.uploaders.others import upload_to_mixdrop
 
@@ -186,7 +186,9 @@ class LocalFileCleaner:
 class EpisodeFinalizer:
     """
     ينسّق خطوات الإنهاء بالترتيب الصحيح:
-    MixDrop ← حفظ Supabase ← جودة ← تليجرام ← إغلاق تاسك ← تنظيف
+    MixDrop ← روابط ← تحديث ميديا ← جودة ← تليجرام ← إغلاق تاسك ← تنظيف
+
+    ✅ لا يُنشئ episode جديد أبداً — يعمل فقط على episode_id الممرر.
     """
 
     def __init__(self):
@@ -223,6 +225,7 @@ class EpisodeFinalizer:
         video_path: str,
         archive_url: str,
         url: str,
+        c_title: str = None,  # ← للتحقق فقط، مش للإنشاء
     ):
         voe_watch = upload_results.get("voe_watch", "Failed")
         vk_url    = upload_results.get("vk_url",    "Failed")
@@ -230,63 +233,69 @@ class EpisodeFinalizer:
         # 1. رفع MixDrop
         await self._mixdrop.upload(episode_id, video_path)
 
-        # 2. الحفظ النهائي الشامل في Supabase
-        save_res = self._save_to_supabase(
-            voe_watch, vk_url, loop_display_title, original_task_name,
-            meta_story, final_poster, meta_year, meta_rating,
-            video_path, archive_url, tmdb_data, meta_labels, meta_runtime, meta_duration,
+        # 2. ✅ حفظ الروابط على الـ episode الموجود — بدون إنشاء episode جديد
+        self._save_final_links(episode_id, voe_watch, vk_url, archive_url)
+
+        # 3. ✅ تحديث بيانات الميديا فقط (بدون مس episodes)
+        self._update_media_metadata(
+            media_id, tmdb_data, meta_story, final_poster,
+            meta_year, meta_rating, meta_labels, meta_runtime, meta_duration,
         )
 
-        if not save_res:
-            # فشل الحفظ الأساسي — نوقف هنا
-            if task_id:
-                self._tasks.close(task_id, "failed", "❌ فشل الحفظ النهائي في سوبابيز")
-            return
-
-        episode_id, media_id, meta_story, final_poster = save_res
         log.info("🏁 تم إغلاق المهمة بنجاح وحفظ كافة البيانات.")
 
-        # 3. تقييم الجودة
+        # 4. تقييم الجودة على episode_id الأصلي
         quality_pass, has_metadata = self._quality.evaluate(
             episode_id, media_id, meta_story, final_poster
         )
 
-        # 4. إغلاق التاسك
+        # 5. إغلاق التاسك
         if task_id:
             self._close_task(task_id, media_id, quality_pass, has_metadata)
 
-        # 5. إشعار تليجرام (فقط لو الجودة عدّت)
+        # 6. إشعار تليجرام (فقط لو الجودة عدّت)
         if quality_pass:
             self._telegram.notify(
                 loop_display_title, meta_story, final_poster,
                 meta_labels, meta_year, category,
             )
 
-        # 6. تنظيف الملف المحلي
+        # 7. تنظيف الملف المحلي
         self._cleaner.clean(video_path)
 
-        # 7. تحديث حالة الحلقة النهائية
+        # 8. تحديث حالة الحلقة النهائية
         self._episode.mark_complete(episode_id)
 
     # ── Helpers ──
 
-    def _save_to_supabase(self, voe_watch, vk_url, display_title, original_name,
-                          meta_story, final_poster, meta_year, meta_rating,
-                          video_path, archive_url, tmdb_data, meta_labels,
-                          meta_runtime, meta_duration):
+    def _save_final_links(self, episode_id, voe_watch, vk_url, archive_url):
+        """حفظ الروابط على الـ episode الموجود فقط — بدون إنشاء أي سجل جديد."""
         try:
-            return save_to_supabase(
-                voe_watch, vk_url, display_title, original_name,
-                meta_story, final_poster, meta_year, meta_rating,
-                video_path, archive_url,
-                tmdb_id=tmdb_data["tmdb_id"],
-                labels=meta_labels,
-                runtime=meta_runtime,
-                duration_iso=meta_duration,
-            )
+            save_links(episode_id, voe_watch, vk_url, archive_url)
+            log.info(f"✅ تم حفظ الروابط على episode_id={episode_id}")
         except Exception as e:
-            log.error(f"❌ فشل التحديث النهائي في سوبابيز: {e}")
-            return None
+            log.error(f"❌ فشل حفظ الروابط النهائية: {e}")
+
+    def _update_media_metadata(self, media_id, tmdb_data, meta_story, final_poster,
+                                meta_year, meta_rating, meta_labels, meta_runtime,
+                                meta_duration):
+        """تحديث بيانات الميديا فقط بدون مس الـ episodes."""
+        try:
+            payload = _clean_payload({
+                "story":        meta_story,
+                "poster_url":   final_poster,
+                "year":         str(meta_year) if meta_year else None,
+                "rating":       str(meta_rating) if meta_rating else None,
+                "labels":       meta_labels,
+                "runtime":      meta_runtime,
+                "duration_iso": meta_duration,
+                "tmdb_id":      str(tmdb_data.get("tmdb_id")) if tmdb_data.get("tmdb_id") else None,
+            })
+            if payload:
+                supabase.table("medias").update(payload).eq("id", media_id).execute()
+                log.info(f"✅ تم تحديث بيانات الميديا {media_id}")
+        except Exception as e:
+            log.warning(f"⚠️ فشل تحديث بيانات الميديا: {e}")
 
     def _close_task(self, task_id, media_id, quality_pass: bool, has_metadata: bool):
         if media_id and not quality_pass:

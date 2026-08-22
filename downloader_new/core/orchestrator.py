@@ -175,7 +175,7 @@ class DuplicateGuard:
             log.warning(f"⚠️ فشل تنظيف بيانات الحلقة {loop_display_title} - تجاوز فحص التكرار")
             return False, None
 
-        c_title, c_cat, c_season, c_ep = clean
+        c_title, _, c_season, c_ep = clean
         try:
             dup = check_media_duplicate(c_title, meta_year, "tv", c_season, c_ep)
             if dup["exists"]:
@@ -450,6 +450,8 @@ class EpisodeProcessor:
             video_path=vid_path,
             archive_url=archive_url,
             url=url,
+            c_title=tmdb_data.get("display_title"),  # ← أضف هذا السطر!
+
         )
 
     async def _upload(self, vid_path: str, label: str, media_id, e_id,
@@ -586,7 +588,7 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
         return
 
     # 7. الحجز الأولي في Supabase — بعد التأكد من الرابط والتكرار
-    e_id, media_id, meta_story, final_poster, temp_id = RecordInitializer().initialize(
+    e_id, media_id, meta_story, final_poster = RecordInitializer().initialize(
         display_title, original_task_name, tmdb_data, timestamp
     )
     if e_id is None and media_id is None:
@@ -605,7 +607,7 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
         }).eq("id", task_id).execute()
 
     try:
-        videos, vid_path, final_direct_url = PostDownloadProcessor().process(
+        videos, _, final_direct_url = PostDownloadProcessor().process(
             downloaded_path, media_id, e_id, extract_dir, is_local
         )
     except Exception as e:

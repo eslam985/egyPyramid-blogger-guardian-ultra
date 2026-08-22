@@ -62,8 +62,12 @@ def _clean_payload(payload: dict) -> dict:
 
 
 def _build_slug(title: str) -> str:
-    """توليد slug نظيف من العنوان."""
-    slug = title.lower().strip().replace(" ", "-")
+    """توليد slug نظيف من العنوان — بدون أرقام موسم/حلقة."""
+    from downloader_new.metadata.formatter import get_clean_media_data
+    clean = get_clean_media_data(title)
+    clean_title = clean[0] if (clean and len(clean) == 4) else title
+    
+    slug = clean_title.lower().strip().replace(" ", "-")
     slug = re.sub(r"[^a-z0-9\u0600-\u06FF-]", "", slug)
     slug = re.sub(r"-+", "-", slug).strip("-")
     return slug
