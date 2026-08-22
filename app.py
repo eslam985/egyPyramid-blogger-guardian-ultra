@@ -56,7 +56,7 @@ async def auto_feeder_loop():
         while True:
             try:
                 await asyncio.gather(
-                    run_scraper_async(),
+                    # run_scraper_async(),
                     run_series_scraper_async(),
                 )
             except Exception as fe:
