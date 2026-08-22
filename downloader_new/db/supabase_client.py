@@ -452,11 +452,8 @@ def save_to_supabase(
         if not c_title:
             log.warning(f"⚠️ c_title غير ممرر لـ '{display_title}'، سيُستخدم display_title.")
             c_title = display_title
-                # مش نعدل الـ c_cat لو كان tv
             if c_cat != "tv":
                 c_cat = "movie"
-            extracted_season_no = None
-            actual_ep_no        = None
 
         final_title = _resolve_final_title(original_task_name, c_title)
         base_slug   = generated_slug or _build_slug(c_title)
