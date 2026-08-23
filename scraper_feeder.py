@@ -1095,8 +1095,14 @@ def already_exists_episode(
         .limit(1)
         .execute()
     )
-    return bool(ep.data)
-
+    if not ep.data:
+        return False
+    
+    # 6. شيك في links → هل عندها روابط فعلية؟
+    ep_id = ep.data[0]["id"]
+    links = sb.table("links").select("id").eq("episode_id", ep_id).limit(1).execute()
+    return bool(links.data)
+    
 
 def insert_episode_task(
     sb: Client,
