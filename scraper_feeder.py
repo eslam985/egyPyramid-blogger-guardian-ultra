@@ -451,19 +451,8 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
             await srv.click()
             await page.wait_for_timeout(2000)
 
-            # فحص رابط ميت
-            iframe = await page.query_selector(".player--iframe iframe")
-            if iframe:
-                frame = await iframe.content_frame()
-                if frame:
-                    content = await frame.evaluate("document.body.innerHTML")
-                    if "can't find the" in content and "looking for" in content:
-                        log.error("  🚫 رابط Mixdrop ميت!")
-                        return None, "mixdrop_dead"
-
             src = await _get_iframe_src(page, timeout=15_000)
             if src:
-                # الخطأ كان هنا: كان يرجع streamtape_live بدل mixdrop_live
                 return src, "mixdrop_live"
     return None, None
 
@@ -475,19 +464,6 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
             log.info(f"  🎯 محاولة سحب Streamtape: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
-
-            # فحص رابط ميت
-            iframe = await page.query_selector(".player--iframe iframe")
-            if iframe:
-                frame = await iframe.content_frame()
-                if frame:
-                    content = await frame.evaluate("document.body.innerHTML")
-                    if (
-                        "video no longer available" in content.lower()
-                        or "not found" in content.lower()
-                    ):
-                        log.error("  🚫 رابط Streamtape ميت!")
-                        return None, "streamtape_dead"
 
             src = await _get_iframe_src(page, timeout=15_000)
             if src:
@@ -600,8 +576,6 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     if status == "streamtape_live":
         log.info(f"✅ Streamtape: {src}")
         add_url(src, status)
-    elif status == "streamtape_dead":
-        log.warning(f"💀 Streamtape ميت {src}")
     else:
         log.warning("لم يتم العثور ع سرفر Streamtape صالح")
 
@@ -611,8 +585,6 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     if status == "mixdrop_live":
         log.info(f"✅ MixDrop: {src}")
         add_url(src, status)
-    elif status == "mixdrop_dead":
-        log.warning(f"💀 MixDrop ميت {src}")
     else:
         log.warning("لم يتم العثور ع سرفر MixDrop صالح")
         
