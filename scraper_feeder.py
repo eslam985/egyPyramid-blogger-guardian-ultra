@@ -615,6 +615,16 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
         log.warning(f"💀 MixDrop ميت {src}")
     else:
         log.warning("لم يتم العثور ع سرفر MixDrop صالح")
+        
+        
+    # 8. VidTube
+    log.info("جار البحث عن سرفر VidTube")
+    src, status = await _extract_vidtube(page)
+    if status == "vidtube_live":
+        log.info(f"✅ VidTube: {src}")
+        add_url(src, status)
+    else:
+        log.warning("لم يتم العثور ع سرفر VidTube صالح")
 
     # 3. Doodstream
     log.info("جار البحث عن سرفر Doodstream")
@@ -661,14 +671,6 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     else:
         log.warning("لم يتم العثور ع سرفر Filelions صالح")
         
-    # 8. VidTube
-    log.info("جار البحث عن سرفر VidTube")
-    src, status = await _extract_vidtube(page)
-    if status == "vidtube_live":
-        log.info(f"✅ VidTube: {src}")
-        add_url(src, status)
-    else:
-        log.warning("لم يتم العثور ع سرفر VidTube صالح")
 
     if not primary_url:
         log.error("❌ لم يتم العثور على أي سيرفر صالح.")
@@ -1096,7 +1098,7 @@ def already_exists_episode(
     embed_url: Optional[str] = None,
 ) -> bool:
 
-    # 1. شيك في download_tasks بالـ embed URL
+    # 1. فحص مباشر بـ embed_url إن وجد
     if embed_url:
         q = (
             sb.table("download_tasks")
@@ -1108,23 +1110,9 @@ def already_exists_episode(
         if q.data:
             return True
 
-    # 2. شيك في download_tasks بالاسم
-    task_name_pattern = f"%{series_name.strip()}%الموسم {season_no}%الحلقة {ep_no}%"
-    q = (
-        sb.table("download_tasks")
-        .select("id")
-        .ilike("task_name", task_name_pattern)
-        .limit(1)
-        .execute()
-    )
-    if q.data:
-        return True
-
-    # 3. شيك في medias → هل المسلسل موجود؟
+    # 2. فحص في جدول medias ثم seasons ثم episodes مباشرة (بدون اشتراط جدول links)
     normalized = normalize_title(series_name, for_search=False, remove_year=True)
     
-    # الاعتماد على الفهرس المتاح لـ normalized_title
-    # تم إزالة شرط category لأنه قد يكون null، وطالما سنفحص جدول seasons لاحقاً فلا حاجة له.
     media = (
         sb.table("medias")
         .select("id")
@@ -1134,7 +1122,6 @@ def already_exists_episode(
     )
     
     if not media.data:
-        # محاولة بديلة إذا لم يتطابق الاسم المعياري
         media = (
             sb.table("medias")
             .select("id")
@@ -1147,7 +1134,6 @@ def already_exists_episode(
             
     media_id = media.data[0]["id"]
 
-    # 4. شيك في seasons → هل الموسم موجود؟
     season = (
         sb.table("seasons")
         .select("id")
@@ -1160,7 +1146,7 @@ def already_exists_episode(
         return False
     season_id = season.data[0]["id"]
 
-    # 5. شيك في episodes → هل الحلقة موجودة؟
+    # بمجرد أن سجل الحلقة موجود في جدول episodes، فهذا يثبت أنها حُمِلت ومعالجة مسبقاً
     ep = (
         sb.table("episodes")
         .select("id")
@@ -1169,14 +1155,7 @@ def already_exists_episode(
         .limit(1)
         .execute()
     )
-    if not ep.data:
-        return False
-    
-    # 6. شيك في links → هل عندها روابط فعلية؟
-    ep_id = ep.data[0]["id"]
-    links = sb.table("links").select("id").eq("episode_id", ep_id).limit(1).execute()
-    return bool(links.data)
-    
+    return bool(ep.data)
 
 def insert_episode_task(
     sb: Client,
