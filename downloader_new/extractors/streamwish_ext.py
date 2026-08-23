@@ -69,10 +69,8 @@ async def resolve_streamwish(embed_url: str) -> Optional[str]:
 
             # ── إرسال الـ Form مباشرة من داخل المتصفح (للحفاظ على الكوكيز وحماية Cloudflare) ──
             log.info("📤 StreamWish: إرسال النموذج من داخل المتصفح...")
-            await asyncio.gather(
-                page.wait_for_navigation(wait_until="domcontentloaded", timeout=30_000),
-                page.evaluate("document.getElementById('F1').submit()")
-            )
+            await page.evaluate("document.getElementById('F1').submit()")
+            await page.wait_for_load_state("domcontentloaded", timeout=30_000)
 
             # ── استخراج الرابط المباشر من الصفحة الناتجة ──────────────
             try:

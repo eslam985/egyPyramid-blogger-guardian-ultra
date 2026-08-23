@@ -25,9 +25,9 @@ from downloader_new.extractors.playwright_ext import resolve_direct_url
 from downloader_new.media.downloader import (
     build_ytdlp_command,
     download_video,
-    # is_direct_cdn_link,
-    # build_curl_command,
-    # download_video_curl,
+    is_direct_cdn_link,
+    build_curl_command,
+    download_video_curl,
 )
 from downloader_new.media.processor import extract_archive, apply_media_disguise
 from downloader_new.media.file_manager import (
@@ -256,10 +256,15 @@ class DownloadManager:
         for attempt_url in all_urls:
             try:
                 log.info(f"🎯 جاري المحاولة: {attempt_url[:60]}...")
-                if "vidtube.one" in attempt_url or "cdn-tube" in attempt_url:
-                    path = await self._download_vidtube(attempt_url, extract_dir, timestamp)
+                # استخراج الرابط المباشر لكل السيرفرات (بما فيها vidtube)
+                resolved_url = await resolve_direct_url(attempt_url)
+                
+                # استخدام curl المخصص للرابط المباشر لـ vidtube (أو cdn-video)، أو yt-dlp للبقية
+                if is_direct_cdn_link(resolved_url) or "vidtube" in attempt_url or "cdn-tube" in attempt_url:
+                    output_path = os.path.join(extract_dir, f"temp_dl_{timestamp}.mp4")
+                    curl_cmd = build_curl_command(resolved_url, output_path)
+                    path = await download_video_curl(curl_cmd, display_title, extract_dir, direct_url=resolved_url)
                 else:
-                    resolved_url = await resolve_direct_url(attempt_url)
                     smart_headers = get_smart_headers(resolved_url)
                     cmd = build_ytdlp_command(resolved_url, download_template, smart_headers)
                     path = await download_video(cmd, task_id, display_title, extract_dir)
@@ -275,12 +280,6 @@ class DownloadManager:
 
         raise RuntimeError(f"فشلت كل الروابط ({len(all_urls)}). آخر خطأ: {last_error}")
 
-    async def _download_vidtube(self, url: str, extract_dir: str, timestamp: int) -> str:
-        output_path = os.path.join(extract_dir, f"temp_dl_{timestamp}.mp4")
-        await resolve_direct_url(url, output_path=output_path)
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 1_000_000:
-            return output_path
-        raise RuntimeError(f"فشل تحميل vidtube — الملف غير موجود أو صغير جداً: {output_path}")
 
 
 # ──────────────────────────────────────────────
