@@ -75,40 +75,12 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
             log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
 
-            # لو محتاج تحميل → نستخدم page.request من نفس الـ browser session
-            if output_path:
-                log.info(f"⬇️ بدء التحميل بـ page.request...")
-                response = await page.request.get(direct_link, headers={
-                    "Referer": "https://down.vidtube.one/",
-                    "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-                    "Accept": "*/*",
-                    "Accept-Encoding": "identity",
-                    "Range": "bytes=0-1048576",  # ← طلب أول MB بس للتجربة
-                })
-                log.info(f"📡 Status: {response.status} | Headers: {dict(response.headers)}")
-                if response.ok:
-                    body = await response.body()
-                    with open(output_path, 'wb') as f:
-                        f.write(body)
-                    file_size = len(body)
-                    log.info(f"✅ حجم الملف: {file_size/1_000_000:.1f} MB")
-                    await browser.close()
-                    if file_size < 1_000_000:
-                        log.error(f"❌ الملف صغير جداً ({file_size} bytes)")
-                        os.remove(output_path)
-                        return None
-                    return output_path
-                else:
-                    log.error(f"❌ فشل page.request: {response.status}")
-                    await browser.close()
-                    return None
-
-            else:
-                await browser.close()
-                return direct_link
+            # لم نعد نستخدم المتصفح الوهمي للتحميل الفعلي. نرجع الرابط المباشر فقط.
+            await browser.close()
+            return direct_link
 
         except Exception as e:
-            log.error(f"❌ خطأ: {str(e)}")
+            log.error(f"❌ خطأ في Playwright: {str(e)}")
             await browser.close()
             return None
 
@@ -119,8 +91,9 @@ async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
     if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
         log.info("🎯 VidTube.. جاري الصيد...")
         try:
+            # تم حذف تمرير output_path لضمان عدم حدوث تحميل بداخل Playwright
             result = await asyncio.wait_for(
-                get_direct_link_via_playwright(raw_url, output_path=output_path),
+                get_direct_link_via_playwright(raw_url),
                 timeout=3600
             )
             if result:
@@ -166,16 +139,8 @@ async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
             raise RuntimeError("Timeout: Doodstream")
 
     elif "lulustream" in raw_url or "luluvdo" in raw_url:
-        log.info("🎯 LuluStream.. جاري الصيد...")
-        try:
-            direct_link = await asyncio.wait_for(resolve_lulustream(raw_url), timeout=120)
-            if direct_link == "404_DELETED":
-                raise RuntimeError("💀 LuluStream: الملف محذوف")
-            if direct_link:
-                return direct_link
-            raise RuntimeError("فشل صيد LuluStream")
-        except asyncio.TimeoutError:
-            raise RuntimeError("Timeout: LuluStream")
+        log.warning("⏭️ تخطي LuluStream مؤقتاً بناءً على الطلب (زر التحميل غير ظاهر).")
+        raise RuntimeError("تخطي LuluStream مؤقتاً")
         
     elif "streamwish" in raw_url:
         direct_link = await asyncio.wait_for(resolve_streamwish(raw_url), timeout=120)

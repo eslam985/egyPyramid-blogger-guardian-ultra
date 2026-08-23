@@ -78,8 +78,13 @@ async def resolve_doodstream(embed_url: str) -> Optional[str]:
             dl_page = await ctx.new_page()
             await dl_page.goto(download_page_url, wait_until="domcontentloaded", timeout=30_000)
 
-            # الرابط المباشر في .the_box a
-            direct_href = await dl_page.get_attribute(".the_box a", "href")
+            # انتظار قيام JS بملء رابط التحميل المباشر داخل .the_box a
+            try:
+                await dl_page.wait_for_selector(".the_box a[href*='http']", state="visible", timeout=15_000)
+                direct_href = await dl_page.get_attribute(".the_box a[href*='http']", "href")
+            except Exception:
+                direct_href = None
+
             await dl_page.close()
 
             if not direct_href:

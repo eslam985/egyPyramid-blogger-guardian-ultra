@@ -1,6 +1,6 @@
 from typing import Optional
 import random
-import httpx
+import asyncio
 from playwright.async_api import async_playwright
 from downloader_new.shared.logger import get_beast_logger
 
@@ -67,60 +67,27 @@ async def resolve_streamwish(embed_url: str) -> Optional[str]:
                 log.warning("⚠️ StreamWish: form #F1 لم يظهر")
                 return None
 
-            # ── سحب الـ form data ─────────────────────────────────────
-            op     = await page.get_attribute("input[name='op']", "value")
-            fid    = await page.get_attribute("input[name='id']", "value")
-            mode   = await page.get_attribute("input[name='mode']", "value")
-            fhash  = await page.get_attribute("input[name='hash']", "value")
-            action = await page.evaluate("document.getElementById('F1').action")
+            # ── إرسال الـ Form مباشرة من داخل المتصفح (للحفاظ على الكوكيز وحماية Cloudflare) ──
+            log.info("📤 StreamWish: إرسال النموذج من داخل المتصفح...")
+            await asyncio.gather(
+                page.wait_for_navigation(wait_until="domcontentloaded", timeout=30_000),
+                page.evaluate("document.getElementById('F1').submit()")
+            )
 
-            if not all([op, fid, fhash]):
-                log.warning("⚠️ StreamWish: form data ناقص")
-                return None
-
-            log.info(f"📋 StreamWish form: op={op} id={fid} mode={mode}")
-
-            # ── POST مباشر متجاوزاً الـ recaptcha ────────────────────
-            post_url = action if action else quality_url
-            form_data = {
-                "op":   op,
-                "id":   fid,
-                "mode": mode or "n",
-                "hash": fhash,
-            }
-
-            headers = {
-                "User-Agent":   ua,
-                "Referer":      quality_url,
-                "Origin":       base,
-                "Content-Type": "application/x-www-form-urlencoded",
-            }
-
-            log.info("📤 StreamWish: POST request لجلب الرابط المباشر...")
-            async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-                resp = await client.post(post_url, data=form_data, headers=headers)
-
-            log.info(f"🔍 StreamWish response snippet: {resp.text[1000:2500]}")
-            if resp.status_code not in (200, 302):
-                log.warning(f"⚠️ StreamWish POST فشل: HTTP {resp.status_code}")
-                return None
-
-            # ── استخراج الرابط المباشر ────────────────────────────────
-            from bs4 import BeautifulSoup
-            import re
-
-            soup = BeautifulSoup(resp.text, "html.parser")
-
-            # الرابط في .text-center a
-            direct_a = soup.select_one(".text-center a[href*='.mp4'], .text-center a.btn")
-            if direct_a:
-                direct_url = direct_a.get("href", "")
+            # ── استخراج الرابط المباشر من الصفحة الناتجة ──────────────
+            try:
+                await page.wait_for_selector(".text-center a[href*='.mp4'], .text-center a.btn", timeout=10_000)
+                direct_url = await page.get_attribute(".text-center a[href*='.mp4'], .text-center a.btn", "href")
                 if direct_url:
                     log.info(f"✅ StreamWish direct URL: {direct_url[:60]}...")
                     return direct_url
+            except Exception:
+                pass
 
-            # fallback: regex لأي .mp4
-            mp4_match = re.search(r'https?://[^\s"\']+\.mp4[^\s"\']*', resp.text)
+            # fallback: regex من محتوى الصفحة
+            page_text = await page.content()
+            import re
+            mp4_match = re.search(r'https?://[^\s"\']+\.mp4[^\s"\']*', page_text)
             if mp4_match:
                 direct_url = mp4_match.group(0)
                 log.info(f"✅ StreamWish direct URL (regex): {direct_url[:60]}...")
