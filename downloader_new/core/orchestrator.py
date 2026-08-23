@@ -233,21 +233,47 @@ class DownloadManager:
         return url, None
 
     async def _handle_remote_url(self, url: str, extract_dir: str, timestamp: int,
-                                  task_id, display_title: str) -> tuple[str, str | None]:
+                              task_id, display_title: str) -> tuple[str, str | None]:
         log.info("📡 رابط ويب، جاري التجهيز للسحب...")
 
         download_template = os.path.join(extract_dir, f"temp_dl_{timestamp}.%(ext)s")
 
-        if "vidtube.one" in url or "cdn-tube" in url:
-            path = await self._download_vidtube(url, extract_dir, timestamp)
-        else:
-            resolved_url = await resolve_direct_url(url)
-            smart_headers = get_smart_headers(resolved_url)
-            cmd = build_ytdlp_command(resolved_url, download_template, smart_headers)
-            path = await download_video(cmd, task_id, display_title, extract_dir)
+        # جيب الـ fallbacks من DB لو في task_id
+        fallback_urls = []
+        if task_id:
+            try:
+                res = supabase.table("download_tasks").select("fallback_urls").eq("id", task_id).execute()
+                fallback_urls = (res.data[0].get("fallback_urls") or []) if res.data else []
+                if fallback_urls:
+                    log.info(f"🔗 وجدنا {len(fallback_urls)} fallback(s) للمهمة")
+            except Exception as e:
+                log.warning(f"⚠️ فشل جلب الـ fallbacks: {e}")
 
-        # download_video يرمي RuntimeError لو فشل — لو وصلنا هنا يبقى نجح
-        return path, None
+        # حاول الـ primary الأول
+        all_urls = [url] + fallback_urls
+
+        last_error = None
+        for attempt_url in all_urls:
+            try:
+                log.info(f"🎯 جاري المحاولة: {attempt_url[:60]}...")
+                if "vidtube.one" in attempt_url or "cdn-tube" in attempt_url:
+                    path = await self._download_vidtube(attempt_url, extract_dir, timestamp)
+                else:
+                    resolved_url = await resolve_direct_url(attempt_url)
+                    smart_headers = get_smart_headers(resolved_url)
+                    cmd = build_ytdlp_command(resolved_url, download_template, smart_headers)
+                    path = await download_video(cmd, task_id, display_title, extract_dir)
+                
+                log.info(f"✅ نجح التحميل من: {attempt_url[:60]}")
+                return path, None
+
+            except Exception as e:
+                last_error = e
+                log.warning(f"⚠️ فشل: {attempt_url[:60]} — {e}")
+                if attempt_url != all_urls[-1]:
+                    log.info("🔄 جاري تجربة الرابط التالي...")
+
+        raise RuntimeError(f"فشلت كل الروابط ({len(all_urls)}). آخر خطأ: {last_error}")
 
     async def _download_vidtube(self, url: str, extract_dir: str, timestamp: int) -> str:
         output_path = os.path.join(extract_dir, f"temp_dl_{timestamp}.mp4")

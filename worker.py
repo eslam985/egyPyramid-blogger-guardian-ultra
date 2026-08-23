@@ -1,3 +1,4 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/worker.py
 import httpx
 
 # إجبار المكتبة عالمياً على إغلاق HTTP/2 وتفعيل HTTP/1.1 المستقر لمنع سقوط اتصال سوبابيس

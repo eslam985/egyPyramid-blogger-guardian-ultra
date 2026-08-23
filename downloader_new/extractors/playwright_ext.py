@@ -5,7 +5,8 @@ import asyncio
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.extractors.mixdrop_ext import get_mixdrop_direct_link
 from downloader_new.extractors.extract_streamtape import resolve_streamtape
-
+from downloader_new.extractors.doodstream_ext import resolve_doodstream
+from downloader_new.extractors.lulustream_ext import resolve_lulustream
 log = get_beast_logger("GuardianUltra")
 
 async def get_direct_link_via_playwright(embed_url, output_path=None):
@@ -112,81 +113,68 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
 
 async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
-    # === TEST مؤقت ===
+    """يستخرج الرابط المباشر من رابط embed واحد فقط. يرمي Exception لو فشل."""
+
     if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
-        import httpx
-            # استخراج الـ ID من أي شكل للرابط
-        file_id = raw_url.split("/")[-1].replace(".html", "").split("_")[0] 
-        test_url = f"https://down.vidtube.one/d/{file_id}_h"
-        try:
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                resp = await client.get(test_url, headers={
-                    "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
-                })
-                import re
-                match = re.search(r'href="(https://serv-stream[^"]+)"', resp.text)
-                if match:
-                    direct = match.group(1).replace("&amp;", "&")
-                    log.info(f"🧪 TEST رابط مباشر: {direct[:80]}")
-                    # جرب تحمله
-                    async with client.stream("GET", direct, headers={
-                        "Referer": "https://down.vidtube.one/",
-                        "User-Agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
-                    }) as r:
-                        log.info(f"🧪 TEST status: {r.status_code}")
-                else:
-                    log.info(f"🧪 TEST مش لاقي رابط في الصفحة")
-                    log.info(f"🧪 HTML snippet: {resp.text[2000:3500]}")
-        except Exception as e:
-            log.info(f"🧪 TEST error: {e}")
-    # === نهاية TEST ===
-    if "vidtube.one" in raw_url or "cdn-tube" in raw_url:
-        log.info("🎯 تم اكتشاف رابط VidTube/Lulu.. جاري استخراج الرابط المباشر...")
+        log.info("🎯 VidTube.. جاري الصيد...")
         try:
             result = await asyncio.wait_for(
                 get_direct_link_via_playwright(raw_url, output_path=output_path),
                 timeout=3600
             )
             if result:
-                log.info(f"✅ تم صيد الرابط بنجاح!")
-                # لو output_path موجود → result هو مسار الملف مش رابط
-                if output_path:
-                    return result  # مسار الملف
-                raw_url = result
-            else:
-                log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي.")
+                return result
+            raise RuntimeError("فشل صيد VidTube")
         except asyncio.TimeoutError:
-            log.error("⏳ تجاوز الوقت: Playwright توقف عن الاستجابة.")
+            raise RuntimeError("Timeout: VidTube")
 
     elif "mixdrop" in raw_url:
-        log.info("🎯 تم اكتشاف رابط MixDrop.. جاري الصيد...")
+        log.info("🎯 MixDrop.. جاري الصيد...")
         try:
-            # حماية لمنع السكربت من التعليق
             direct_link = await asyncio.wait_for(get_mixdrop_direct_link(raw_url), timeout=240)
-            
             if direct_link == "404_DELETED":
-                raise Exception("الملف محذوف نهائياً من المصدر (MixDrop 404)")
-            
+                raise RuntimeError("💀 MixDrop: الملف محذوف")
             if direct_link:
-                log.info(f"✅ تم صيد رابط MixDrop المباشر بنجاح.")
-                raw_url = direct_link
-            else:
-                log.warning("⚠️ فشل الصيد، سنحاول بالرابط الأصلي.")
+                return direct_link
+            raise RuntimeError("فشل صيد MixDrop")
         except asyncio.TimeoutError:
-            log.error("⏳ تجاوز الوقت: MixDrop توقف عن الاستجابة.")
-            raise Exception("Timeout: السكربت عالق في صفحة التحميل.")
+            raise RuntimeError("Timeout: MixDrop")
 
-    # 3. معالجة روابط Streamtape
     elif "streamtape" in raw_url or "stape" in raw_url or "shstream" in raw_url:
-        log.info("🎯 تم اكتشاف رابط Streamtape.. جاري الصيد...")
+        log.info("🎯 Streamtape.. جاري الصيد...")
         try:
             direct_link = await asyncio.wait_for(resolve_streamtape(raw_url), timeout=120)
+            if direct_link == "404_DELETED":
+                raise RuntimeError("💀 Streamtape: الملف محذوف")
             if direct_link:
-                log.info("✅ تم صيد رابط Streamtape المباشر بنجاح.")
-                raw_url = direct_link
-            else:
-                log.warning("⚠️ فشل الصيد من Streamtape، سنحاول بالرابط الأصلي.")
+                return direct_link
+            raise RuntimeError("فشل صيد Streamtape")
         except asyncio.TimeoutError:
-            log.error("⏳ تجاوز الوقت: Streamtape توقف عن الاستجابة.")
-            
+            raise RuntimeError("Timeout: Streamtape")
+
+    elif "doodstream" in raw_url or "playmogo" in raw_url:
+        log.info("🎯 Doodstream.. جاري الصيد...")
+        try:
+            direct_link = await asyncio.wait_for(resolve_doodstream(raw_url), timeout=120)
+            if direct_link == "404_DELETED":
+                raise RuntimeError("💀 Doodstream: الملف محذوف")
+            if direct_link:
+                return direct_link
+            raise RuntimeError("فشل صيد Doodstream")
+        except asyncio.TimeoutError:
+            raise RuntimeError("Timeout: Doodstream")
+
+    elif "lulustream" in raw_url or "luluvdo" in raw_url:
+        log.info("🎯 LuluStream.. جاري الصيد...")
+        try:
+            direct_link = await asyncio.wait_for(resolve_lulustream(raw_url), timeout=120)
+            if direct_link == "404_DELETED":
+                raise RuntimeError("💀 LuluStream: الملف محذوف")
+            if direct_link:
+                return direct_link
+            raise RuntimeError("فشل صيد LuluStream")
+        except asyncio.TimeoutError:
+            raise RuntimeError("Timeout: LuluStream")
+
+    # رابط مباشر مش محتاج استخراج
     return raw_url

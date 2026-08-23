@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║          TopCinema Smart Crawler - by Islam                      ║
-║          يجلب روابط LuluStream ويحقنها في Supabase               ║
+/media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/scraper_feeder.py
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -246,9 +246,13 @@ def get_idle_tasks_count(sb: Client) -> int:
 
 
 def insert_task(
-    sb: Client, movie_name: str, download_url: str, trailer_url: Optional[str] = None
+    sb: Client,
+    movie_name: str,
+    download_url: str,
+    trailer_url: Optional[str] = None,
+    fallback_urls: Optional[list] = None,
 ) -> bool:
-    """إدراج مهمة جديدة في download_tasks مع الـ trailer لو موجود."""
+    """إدراج مهمة جديدة في download_tasks مع الـ trailer والـ fallbacks."""
     try:
         payload = {
             "task_name": movie_name,
@@ -258,6 +262,7 @@ def insert_task(
             "download_speed": "0 MB/s",
             "status_message": "Waiting for Beast...",
             "trailer_url": trailer_url,
+            "fallback_urls": fallback_urls or [],
         }
         sb.table(TABLE_TASKS).insert(payload).execute()
         return True
@@ -298,7 +303,7 @@ async def random_delay():
 async def scrape_movie_links(page) -> list[str]:
     """استخراج روابط الأفلام من صفحة القائمة."""
     anchors = await page.query_selector_all(
-    "ul.Posts--List div.Small--Box:not(.Season) a.recent--block"
+        "ul.Posts--List div.Small--Box:not(.Season) a.recent--block"
     )
     links = []
     for a in anchors:
@@ -458,10 +463,38 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
                     log.error("  🚫 رابط Mixdrop ميت!")
                     return None, "mixdrop_dead"
 
+        # بعد — مش محتاج نفحص محتوى الـ iframe هنا خالص
+        # الفحص الحقيقي بيحصل في extract_streamtape.py وقت التحميل الفعلي
         src = await _get_iframe_src(page)
         if src:
-            return src, "mixdrop_live"
+            return src, "streamtape_live"
 
+    return None, None
+
+
+async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "Doodstream" in name:
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page)
+            if src:
+                return src, "doodstream_live"
+    return None, None
+
+
+async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "LuluStream" in name:
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page)
+            if src:
+                return src, "lulstream_live"
     return None, None
 
 
@@ -493,45 +526,95 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
             log.info(f"  🎯 محاولة سحب Streamtape: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
+
+            # فحص رابط ميت في Streamtape
+            iframe = await page.query_selector(".player--iframe iframe")
+            if iframe:
+                frame = await iframe.content_frame()
+                if frame:
+                    content = await frame.evaluate("document.body.innerHTML")
+                    if (
+                        "video no longer available" in content.lower()
+                        or "not found" in content.lower()
+                    ):
+                        log.error("  🚫 رابط Streamtape ميت!")
+                        return None, "streamtape_dead"
+
             src = await _get_iframe_src(page)
             if src:
                 return src, "streamtape_live"
     return None, None
 
 
-async def extract_embed_url(page) -> tuple[Optional[str], str]:
+async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     """
-    المنسق الرئيسي لاستخراج رابط التشغيل.
-    الأولوية الحالية: Streamtape ➔ MixDrop ➔ VidTube ➔ فشل.
+    يجمع كل الروابط المتاحة ويرجع:
+    (primary_url, primary_status, fallback_urls)
+    الأولوية: MixDrop → Streamtape → Doodstream → LuluStream
     """
+    primary_url = None
+    primary_status = "none"
+    fallbacks = []
 
-    # 1. الخيار الثاني: MixDrop (يتضمن فحص الروابط الميتة)
+    # 2. Streamtape
+    log.info("جار البحث عن سرفر Streamtape")
+    src2, status2 = await _extract_streamtape(page)
+    if src2 and status2 == "streamtape_live":
+        log.info(f"✅ Streamtape: {src2}")
+        if primary_url:
+            fallbacks.append(src2)
+        else:
+            primary_url = src2
+            primary_status = status2
+    elif status2 == "streamtape_dead":
+        log.warning("💀 Streamtape ميت")
+    else:
+        log.warning("لم يتم العثور ع سرفر Streamtape")
+
+    # 1. MixDrop
     log.info("جار البحث عن سرفر MixDrop")
     src, status = await _extract_mixdrop(page)
     if src and status == "mixdrop_live":
-        log.info(f"✅ تم سحب الرابط عبر MixDrop: {src}")
-        return src, status
-    log.warning("لم يتم العثور ع سرفر MixDrop")
+        log.info(f"✅ MixDrop: {src}")
+        primary_url = src
+        primary_status = status
+    elif status == "mixdrop_dead":
+        log.warning("💀 MixDrop ميت")
+    else:
+        log.warning("لم يتم العثور ع سرفر MixDrop")
 
-    # 1. الخيار الثاني Streamtape
-    log.info("جار البحث عن سرفر Streamtape")
-    src, status = await _extract_streamtape(page)
-    if src:
-        log.info(f"✅ تم سحب الرابط عبر Streamtape: {src}")
-        return src, status
-    log.warning("لم يتم العثور ع سرفر Streamtape")
+    # 3. Doodstream
+    log.info("جار البحث عن سرفر Doodstream")
+    src3, status3 = await _extract_doodstream(page)
+    if src3 and status3 == "doodstream_live":
+        log.info(f"✅ Doodstream: {src3}")
+        if primary_url:
+            fallbacks.append(src3)
+        else:
+            primary_url = src3
+            primary_status = status3
+    else:
+        log.warning("لم يتم العثور ع سرفر Doodstream")
 
-    # 3. الخيار الثالث والأخير: VidTube
-    log.info("جار البحث عن سرفر VidTube")
-    # src, status = await _extract_vidtube(page)
-    # if src:
-    #     log.info(f"✅ تم سحب الرابط عبر VidTube: {src}")
-    #     return src, status
-    log.warning("لم يتم العثور ع سرفر VidTube")
+    # 4. LuluStream
+    log.info("جار البحث عن سرفر LuluStream")
+    src4, status4 = await _extract_lulustream(page)
+    if src4 and status4 == "lulstream_live":
+        log.info(f"✅ LuluStream: {src4}")
+        if primary_url:
+            fallbacks.append(src4)
+        else:
+            primary_url = src4
+            primary_status = status4
+    else:
+        log.warning("لم يتم العثور ع سرفر LuluStream")
 
-    # 4. في حال فشل جميع السيرفرات
-    log.error("❌ لم يتم العثور على أي سيرفر صالح.")
-    return None, "none"
+    if not primary_url:
+        log.error("❌ لم يتم العثور على أي سيرفر صالح.")
+        return None, "none", []
+
+    log.info(f"📦 primary: {primary_status} | fallbacks: {len(fallbacks)}")
+    return primary_url, primary_status, fallbacks
 
 
 # ===========================================================================
@@ -615,8 +698,10 @@ async def process_single_movie(
         # ── 3. سحب رابط التشغيل (embed) ────────────────────────────
         watch_page = await browser.new_page(user_agent=pick_random_agent())
         await watch_page.goto(watch_url, wait_until="domcontentloaded", timeout=40_000)
-        await watch_page.wait_for_selector(".watch--servers--list ul li.server--item span", timeout=10000)
-        embed_url, server_status = await extract_embed_url(watch_page)
+        await watch_page.wait_for_selector(
+            ".watch--servers--list ul li.server--item span", timeout=10000
+        )
+        embed_url, server_status, fallback_urls = await extract_embed_url(watch_page)
         await watch_page.close()
         watch_page = None
 
@@ -634,7 +719,14 @@ async def process_single_movie(
             return
 
         # ── 5. الإدراج في قاعدة البيانات ────────────────────────────
-        ok = insert_task(sb, movie_title, embed_url, trailer_url=trailer_url)
+        # بعد
+        ok = insert_task(
+            sb,
+            movie_title,
+            embed_url,
+            trailer_url=trailer_url,
+            fallback_urls=fallback_urls,
+        )
         if ok:
             log.info(
                 f"  ✅ تم الإدراج بنجاح! | embed: {embed_url} | trailer: {trailer_url}"
@@ -809,8 +901,6 @@ def _print_summary(stats: dict) -> None:
     log.info(f"   🍏 روابط Mixdrop السليمة:          {stats['mixdrop_live']}")
     log.info(f"   📺 روابط VidTube المُنقذة:         {stats['vidtube_saved']}")
     log.info(f"{'═' * 55}")
-    
-    
 
 
 # ===========================================================================
@@ -818,7 +908,7 @@ def _print_summary(stats: dict) -> None:
 # ===========================================================================
 
 SERIES_CATEGORY_URL = "https://topcinemaa.co/category/مسلسلات-اجنبي"
-TARGET_SERIES = 1          # عدد المسلسلات الكاملة المستهدفة في كل جلسة
+TARGET_SERIES = 1  # عدد المسلسلات الكاملة المستهدفة في كل جلسة
 SAFE_SERIES_PAGE_COUNT = 62  # عدد الصفحات الاحتياطي لفئة المسلسلات
 
 
@@ -873,9 +963,7 @@ async def scrape_season_links(page) -> list[str]:
     استخراج روابط المواسم من صفحة /list/ الخاصة بالمسلسل.
     كل موسم له رابط /list/ خاص به أيضاً.
     """
-    anchors = await page.query_selector_all(
-        "ul.Posts--List div.Small--Box.Season a"
-    )
+    anchors = await page.query_selector_all("ul.Posts--List div.Small--Box.Season a")
     links = []
     for a in anchors:
         href = await a.get_attribute("href")
@@ -949,31 +1037,64 @@ def already_exists_episode(
 
     # 1. شيك في download_tasks بالـ embed URL
     if embed_url:
-        q = sb.table("download_tasks").select("id").eq("source_url", embed_url).limit(1).execute()
+        q = (
+            sb.table("download_tasks")
+            .select("id")
+            .eq("source_url", embed_url)
+            .limit(1)
+            .execute()
+        )
         if q.data:
             return True
 
     # 2. شيك في download_tasks بالاسم
     task_name_pattern = f"%{series_name}%الموسم {season_no}%الحلقة {ep_no} %"
-    q = sb.table("download_tasks").select("id").ilike("task_name", task_name_pattern).limit(1).execute()
+    q = (
+        sb.table("download_tasks")
+        .select("id")
+        .ilike("task_name", task_name_pattern)
+        .limit(1)
+        .execute()
+    )
     if q.data:
         return True
 
     # 3. شيك في medias → هل المسلسل موجود؟
     normalized = normalize_title(series_name, for_search=False, remove_year=True)
-    media = sb.table("medias").select("id").eq("normalized_title", normalized).eq("category", "tv").limit(1).execute()
+    media = (
+        sb.table("medias")
+        .select("id")
+        .eq("normalized_title", normalized)
+        .eq("category", "tv")
+        .limit(1)
+        .execute()
+    )
     if not media.data:
         return False
     media_id = media.data[0]["id"]
 
     # 4. شيك في seasons → هل الموسم موجود؟
-    season = sb.table("seasons").select("id").eq("media_id", media_id).eq("season_number", season_no).limit(1).execute()
+    season = (
+        sb.table("seasons")
+        .select("id")
+        .eq("media_id", media_id)
+        .eq("season_number", season_no)
+        .limit(1)
+        .execute()
+    )
     if not season.data:
         return False
     season_id = season.data[0]["id"]
 
     # 5. شيك في episodes → هل الحلقة موجودة؟
-    ep = sb.table("episodes").select("id").eq("season_id", season_id).eq("episode_number", ep_no).limit(1).execute()
+    ep = (
+        sb.table("episodes")
+        .select("id")
+        .eq("season_id", season_id)
+        .eq("episode_number", ep_no)
+        .limit(1)
+        .execute()
+    )
     return bool(ep.data)
 
 
@@ -982,8 +1103,8 @@ def insert_episode_task(
     task_name: str,
     embed_url: str,
     trailer_url: Optional[str] = None,
+    fallback_urls: Optional[list] = None,
 ) -> bool:
-    """إدراج حلقة مسلسل في download_tasks."""
     try:
         payload = {
             "task_name": task_name,
@@ -993,6 +1114,7 @@ def insert_episode_task(
             "download_speed": "0 MB/s",
             "status_message": "Waiting for Beast...",
             "trailer_url": trailer_url,
+            "fallback_urls": fallback_urls or [],
         }
         sb.table(TABLE_TASKS).insert(payload).execute()
         return True
@@ -1035,8 +1157,10 @@ async def process_single_episode(
         # الـ ep_url هو رابط /watch/ مباشرةً
         watch_page = await browser.new_page(user_agent=pick_random_agent())
         await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
-        await watch_page.wait_for_selector(".watch--servers--list ul li.server--item", timeout=15_000)
-        embed_url, server_status = await extract_embed_url(watch_page)
+        await watch_page.wait_for_selector(
+            ".watch--servers--list ul li.server--item", timeout=15_000
+        )
+        embed_url, server_status, fallback_urls = await extract_embed_url(watch_page)
         await watch_page.close()
         watch_page = None
 
@@ -1054,7 +1178,9 @@ async def process_single_episode(
             return
 
         # ── الإدراج ───────────────────────────────────────────────────
-        ok = insert_episode_task(sb, task_name, embed_url, trailer_url)
+        ok = insert_episode_task(
+            sb, task_name, embed_url, trailer_url, fallback_urls=fallback_urls
+        )
         if ok:
             log.info(f"    ✅ تم الإدراج: {task_name}")
             stats["ep_inserted"] += 1
@@ -1118,9 +1244,15 @@ async def process_single_season(
 
         log.info(f"    [{ep_idx}/{len(ep_links)}] 🎬 {ep_url}")
         await process_single_episode(
-            browser, sb, ep_url,
-            series_title, year, season_no, ep_idx,
-            stats, trailer_url,
+            browser,
+            sb,
+            ep_url,
+            series_title,
+            year,
+            season_no,
+            ep_idx,
+            stats,
+            trailer_url,
         )
         await random_delay()
 
@@ -1177,9 +1309,14 @@ async def process_single_series(
         # ── 3. لوب على المواسم ───────────────────────────────────────
         for season_idx, season_list_url in enumerate(season_links, 1):
             await process_single_season(
-                browser, sb, season_list_url,
-                series_title, year, season_idx,
-                stats, trailer_url,
+                browser,
+                sb,
+                season_list_url,
+                series_title,
+                year,
+                season_idx,
+                stats,
+                trailer_url,
             )
 
             # فحص الطابور بعد كل موسم — لو امتلأ نكمل المسلسل ونوقف بعده
@@ -1233,7 +1370,9 @@ async def run_series_scraper_async():
     idle_count = get_idle_tasks_count(sb)
     log.info(f"🔍 [Series] الطابور الحالي: {idle_count} مهمة idle")
     if idle_count >= MAX_IDLE_BUFFER:
-        log.warning(f"🛑 [Series] الطابور ممتلئ ({idle_count}/{MAX_IDLE_BUFFER}). إيقاف.")
+        log.warning(
+            f"🛑 [Series] الطابور ممتلئ ({idle_count}/{MAX_IDLE_BUFFER}). إيقاف."
+        )
         return
 
     # ── إحصاءات الجلسة ────────────────────────────────────────────────
@@ -1307,7 +1446,9 @@ async def run_series_scraper_async():
                     break
 
                 log.info(f"\n  [{s_idx}/{len(series_links)}] 🎬 {series_url}")
-                can_continue = await process_single_series(browser, sb, series_url, stats)
+                can_continue = await process_single_series(
+                    browser, sb, series_url, stats
+                )
 
                 if not can_continue:
                     log.warning("🛑 [Series] الطابور امتلأ بعد اكتمال المسلسل. إيقاف.")

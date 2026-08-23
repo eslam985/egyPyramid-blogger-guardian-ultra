@@ -1,3 +1,4 @@
+# /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/media/downloader.py
 import os
 import asyncio
 import time
@@ -11,6 +12,7 @@ log = get_beast_logger("downloader.py")
 # ──────────────────────────────────────────────
 # Helpers / URL Utils
 # ──────────────────────────────────────────────
+
 
 def is_direct_cdn_link(url: str) -> bool:
     """يكشف إذا كان الرابط مباشراً من CDN بدون حاجة لاستخراج."""
@@ -33,8 +35,10 @@ def _normalize_mixdrop_url(url: str) -> str:
 COMMON_HEADERS = [
     "--user-agent",
     "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-    "--add-header", "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
-    "--add-header", "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
+    "--add-header",
+    "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
+    "--add-header",
+    "Accept-Language: en-US,en;q=0.9,ar;q=0.8",
 ]
 
 FORMAT_SELECTOR = (
@@ -48,15 +52,25 @@ FORMAT_SELECTOR = (
 def build_curl_command(url: str, output_path: str) -> list:
     """أمر curl للروابط المباشرة من CDN."""
     return [
-        "curl", "-L", "-g",
-        "--retry", "5",
-        "--retry-delay", "3",
-        "--max-time", "3600",
-        "-H", "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-        "-H", "Referer: https://down.vidtube.one/",
-        "-H", "Origin: https://down.vidtube.one",
-        "-H", "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
-        "-o", output_path,
+        "curl",
+        "-L",
+        "-g",
+        "--retry",
+        "5",
+        "--retry-delay",
+        "3",
+        "--max-time",
+        "3600",
+        "-H",
+        "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "-H",
+        "Referer: https://down.vidtube.one/",
+        "-H",
+        "Origin: https://down.vidtube.one",
+        "-H",
+        "Accept: video/webp,video/apng,video/*,*/*;q=0.8",
+        "-o",
+        output_path,
         url,
     ]
 
@@ -67,16 +81,22 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
         url = _normalize_mixdrop_url(url)
 
     cmd = [
-        "yt-dlp", "-v",
+        "yt-dlp",
+        "-v",
         "--no-playlist",
         "--geo-bypass",
         *COMMON_HEADERS,
         "--no-check-certificate",
-        "--retries", "infinite",
-        "--socket-timeout", "120",
-        "--concurrent-fragments", "10",
-        "--file-access-retries", "infinite",
-        "--fragment-retries", "infinite",
+        "--retries",
+        "infinite",
+        "--socket-timeout",
+        "120",
+        "--concurrent-fragments",
+        "10",
+        "--file-access-retries",
+        "infinite",
+        "--fragment-retries",
+        "infinite",
         "--hls-use-mpegts",
         *smart_headers,
     ]
@@ -88,21 +108,31 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
         cmd.extend(["--extractor-args", "jwplayer:base-url=https://vidtube.one/"])
 
     if "cdn-video.xyz" in url or "serv-stream-cdn" in url:
-        cmd.extend([
-            "--referer", "https://down.vidtube.one/",
-            "--add-header", "Origin: https://down.vidtube.one",
-        ])
+        cmd.extend(
+            [
+                "--referer",
+                "https://down.vidtube.one/",
+                "--add-header",
+                "Origin: https://down.vidtube.one",
+            ]
+        )
 
-    cmd.extend([
-        "-f", FORMAT_SELECTOR,
-        "--merge-output-format", "mp4",
-        "--max-filesize", "1950M",
-        "--post-overwrites",
-        "--no-check-certificate",
-        "--newline",
-        url,
-        "-o", output_template,
-    ])
+    cmd.extend(
+        [
+            "-f",
+            FORMAT_SELECTOR,
+            "--merge-output-format",
+            "mp4",
+            "--max-filesize",
+            "1950M",
+            "--post-overwrites",
+            "--no-check-certificate",
+            "--newline",
+            url,
+            "-o",
+            output_template,
+        ]
+    )
 
     return cmd
 
@@ -110,6 +140,7 @@ def build_ytdlp_command(url: str, output_template: str, smart_headers: list) -> 
 # ──────────────────────────────────────────────
 # Progress Tracker
 # ──────────────────────────────────────────────
+
 
 class DownloadProgressTracker:
     """يتابع تقدم yt-dlp ويحدّث قاعدة البيانات كل 15 ثانية."""
@@ -132,12 +163,14 @@ class DownloadProgressTracker:
             return
 
         percent_int = int(float(match.group(1)))
-        total       = match.group(2)
-        speed       = match.group(3) or "---"
-        eta         = match.group(4) or "--:--"
+        total = match.group(2)
+        speed = match.group(3) or "---"
+        eta = match.group(4) or "--:--"
 
         if percent_int % 5 == 0 and percent_int != self._last_percent_log:
-            log.info(f"📥 {self._title[:15]}.. | {percent_int}% of {total} | ⚡ {speed} | ⏳ ETA: {eta}")
+            log.info(
+                f"📥 {self._title[:15]}.. | {percent_int}% of {total} | ⚡ {speed} | ⏳ ETA: {eta}"
+            )
             self._last_percent_log = percent_int
 
         self._maybe_update_db(percent_int, speed)
@@ -149,11 +182,13 @@ class DownloadProgressTracker:
         if now - self._last_db_update < self.DB_UPDATE_INTERVAL:
             return
         try:
-            supabase.table("download_tasks").update({
-                "progress_percent": percent,
-                "status_message": f"📥 جاري التحميل: {percent}%",
-                "download_speed": speed,
-            }).eq("id", self._task_id).execute()
+            supabase.table("download_tasks").update(
+                {
+                    "progress_percent": percent,
+                    "status_message": f"📥 جاري التحميل: {percent}%",
+                    "download_speed": speed,
+                }
+            ).eq("id", self._task_id).execute()
             self._last_db_update = now
         except Exception:
             pass
@@ -162,6 +197,7 @@ class DownloadProgressTracker:
 # ──────────────────────────────────────────────
 # File Finder
 # ──────────────────────────────────────────────
+
 
 class DownloadedFileFinder:
     """يبحث عن الملف الفعلي المحمّل في المجلدات المحتملة."""
@@ -188,7 +224,10 @@ class DownloadedFileFinder:
 # Downloaders
 # ──────────────────────────────────────────────
 
-async def download_video_curl(cmd: list, display_title: str, extract_dir: str, direct_url: str = None) -> str | None:
+
+async def download_video_curl(
+    cmd: list, display_title: str, extract_dir: str, direct_url: str = None
+) -> str | None:
     """تحميل مباشر بـ httpx للروابط CDN."""
     import httpx
 
@@ -218,12 +257,16 @@ async def download_video_curl(cmd: list, display_title: str, extract_dir: str, d
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total and int(downloaded / total * 100) % 10 == 0:
-                            log.info(f"📥 {display_title[:15]}.. | {downloaded/total*100:.0f}%")
+                            log.info(
+                                f"📥 {display_title[:15]}.. | {downloaded/total*100:.0f}%"
+                            )
 
         file_size = os.path.getsize(output_path)
         if file_size < 1_000_000:
             os.remove(output_path)
-            raise RuntimeError(f"الملف المحمّل صغير جداً ({file_size} bytes) — يُعدّ فاشلاً")
+            raise RuntimeError(
+                f"الملف المحمّل صغير جداً ({file_size} bytes) — يُعدّ فاشلاً"
+            )
 
         log.info(f"✅ httpx اكتمل: {output_path} ({file_size/1_000_000:.1f} MB)")
         return output_path
@@ -233,7 +276,9 @@ async def download_video_curl(cmd: list, display_title: str, extract_dir: str, d
         raise
 
 
-async def download_video(cmd: list, task_id, display_title: str, extract_dir: str) -> str:
+async def download_video(
+    cmd: list, task_id, display_title: str, extract_dir: str
+) -> str:
     """
     ينفّذ yt-dlp ويتابع التقدم.
     يُرجع مسار الملف المحمّل.
@@ -259,14 +304,16 @@ async def download_video(cmd: list, task_id, display_title: str, extract_dir: st
 
     # ── التحقق من وجود الملف أولاً حتى لو returncode != 0 ──
     finder = DownloadedFileFinder()
-    found  = finder.find(extract_dir, os.getcwd())
+    found = finder.find(extract_dir, os.getcwd())
 
     if found:
         log.info(f"✅ تم اكتمال التحميل الفعلي: {found}")
         return found
 
     # ── لا يوجد ملف = فشل حقيقي ──
-    dir_contents = os.listdir(extract_dir) if os.path.exists(extract_dir) else "المجلد غير موجود"
+    dir_contents = (
+        os.listdir(extract_dir) if os.path.exists(extract_dir) else "المجلد غير موجود"
+    )
     error_msg = (
         f"فشل التحميل (exit code: {process.returncode}) — "
         f"المجلد فارغ. المحتوى: {dir_contents}"

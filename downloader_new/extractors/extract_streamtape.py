@@ -71,10 +71,19 @@ async def resolve_streamtape(embed_url: str) -> Optional[str]:
                 return final_url
 
             # فحص محتوى الصفحة لمعرفة سبب الفشل بدقة
+            # في extract_streamtape.py — في النهاية بعد فشل استخراج الـ href
             page_text = await page.inner_text("body")
-            is_dead = "video no longer available" in page_text.lower() or "not found" in page_text.lower()
-            
-            log.warning(f"❌ Streamtape failed. Actual href: '{href}' | Is File Deleted: {is_dead}")
+            is_dead = (
+                "video not found" in page_text.lower() 
+                or "got deleted" in page_text.lower()
+                or "not found" in page_text.lower()
+            )
+
+            if is_dead:
+                log.warning("💀 Streamtape: الفيديو محذوف")
+                return "404_DELETED"  # ← نفس اتفاقية mixdrop
+
+            log.warning(f"❌ Streamtape failed. href: '{href}'")
             return None
 
         except Exception as e:
