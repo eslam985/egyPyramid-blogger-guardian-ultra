@@ -39,7 +39,7 @@ async def resolve_doodstream(embed_url: str) -> Optional[str]:
 
             # ── فحص رابط ميت ──────────────────────────────────────────
             content = await page.content()
-            if "video you are looking for is not found" in content.lower() or "Not Found" in content:
+            if "video you are looking for is not found" in content.lower():
                 log.warning("💀 Doodstream: الفيديو محذوف")
                 return "404_DELETED"
 

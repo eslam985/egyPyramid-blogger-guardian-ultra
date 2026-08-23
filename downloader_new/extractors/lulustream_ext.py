@@ -57,13 +57,13 @@ async def resolve_lulustream(embed_url: str) -> Optional[str]:
                 await page.wait_for_selector(
                     "button[data-bs-target='#modal-download']",
                     state="visible",
-                    timeout=15_000,
+                    timeout=40_000,
                 )
                 await page.click("button[data-bs-target='#modal-download']")
                 await page.wait_for_selector(
                     ".modal-body a.btn",
                     state="visible",
-                    timeout=10_000,
+                    timeout=40_000,
                 )
             except Exception:
                 log.warning("⚠️ LuluStream: modal التحميل لم يظهر")
