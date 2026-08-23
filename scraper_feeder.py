@@ -443,99 +443,31 @@ async def _get_iframe_src(page, timeout=15_000) -> Optional[str]:
         return None
 
 async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
-    """محاولة استخراج رابط MixDrop مع فحص صفحات الـ 404."""
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
-        if "Mixdrop" not in name:
-            continue
-
-        log.info(f"  🎯 محاولة سحب MixDrop: {name}")
-        await srv.click()
-        await page.wait_for_timeout(2000)
-
-        # فحص رابط ميت في MixDrop
-        iframe = await page.query_selector(".player--iframe iframe")
-        if iframe:
-            frame = await iframe.content_frame()
-            if frame:
-                content = await frame.evaluate("document.body.innerHTML")
-                if "can't find the" in content and "looking for" in content:
-                    log.error("  🚫 رابط Mixdrop ميت!")
-                    return None, "mixdrop_dead"
-
-        # بعد — مش محتاج نفحص محتوى الـ iframe هنا خالص
-        # الفحص الحقيقي بيحصل في extract_streamtape.py وقت التحميل الفعلي
-        src = await _get_iframe_src(page, timeout=15_000)
-        if src:
-            return src, "streamtape_live"
-
-    return None, None
-
-
-async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
-    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
-    for srv in servers:
-        try:
-            name = (await srv.inner_text()).strip()
-        except Exception:
-            continue
-        if "Doodstream" in name:
-            log.info(f"  🎯 محاولة سحب Doodstream: {name}")
+        if "Mixdrop" in name or "mixdrop" in name.lower():
+            log.info(f"  🎯 محاولة سحب MixDrop: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page, timeout=8_000)
+
+            # فحص رابط ميت
+            iframe = await page.query_selector(".player--iframe iframe")
+            if iframe:
+                frame = await iframe.content_frame()
+                if frame:
+                    content = await frame.evaluate("document.body.innerHTML")
+                    if "can't find the" in content and "looking for" in content:
+                        log.error("  🚫 رابط Mixdrop ميت!")
+                        return None, "mixdrop_dead"
+
+            src = await _get_iframe_src(page, timeout=15_000)
             if src:
-                return src, "doodstream_live"
+                # الخطأ كان هنا: كان يرجع streamtape_live بدل mixdrop_live
+                return src, "mixdrop_live"
     return None, None
-
-
-async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
-    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
-    for srv in servers:
-        name = (await srv.inner_text()).strip()
-        if "LuluStream" in name:
-            await srv.click()
-            await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page, timeout=8_000)
-            if src:
-                return src, "lulstream_live"
-    return None, None
-
-async def _extract_streamwish(page) -> tuple[Optional[str], Optional[str]]:
-    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
-    for srv in servers:
-        name = (await srv.inner_text()).strip()
-        if "StreamWish" in name:
-            log.info(f"  🎯 محاولة سحب StreamWish: {name}")
-            await srv.click()
-            await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page, timeout=8_000)
-            if src:
-                return src, "streamwish_live"
-    return None, None
-
-async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
-    """محاولة استخراج رابط VidTube (متعدد الجودات)."""
-    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
-    for srv in servers:
-        name = (await srv.inner_text()).strip()
-        if (
-            "متعدد الجودات" in name
-            or "VideoTube" in name
-            or "videotube" in name.lower()
-        ):
-            log.info(f"  🎯 محاولة سحب VidTube: {name}")
-            await srv.click()
-            await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page, timeout=8_000)
-            if src:
-                return src, "vidtube_live"
-    return None, None
-
 
 async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
-    """محاولة استخراج رابط Streamtape كبديل."""
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
@@ -544,7 +476,7 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
             await srv.click()
             await page.wait_for_timeout(2000)
 
-            # فحص رابط ميت في Streamtape
+            # فحص رابط ميت
             iframe = await page.query_selector(".player--iframe iframe")
             if iframe:
                 frame = await iframe.content_frame()
@@ -562,72 +494,181 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "streamtape_live"
     return None, None
 
+async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        try:
+            name = (await srv.inner_text()).strip()
+        except Exception:
+            continue
+        if "Doodstream" in name or "doodstream" in name.lower():
+            log.info(f"  🎯 محاولة سحب Doodstream: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "doodstream_live"
+    return None, None
+
+async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "LuluStream" in name or "lulustream" in name.lower():
+            log.info(f"  🎯 محاولة سحب LuluStream: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "lulstream_live"
+    return None, None
+
+async def _extract_streamwish(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "StreamWish" in name or "streamwish" in name.lower():
+            log.info(f"  🎯 محاولة سحب StreamWish: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "streamwish_live"
+    return None, None
+
+async def _extract_updown(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "UpDown" in name or "updown" in name.lower():
+            log.info(f"  🎯 محاولة سحب UpDown: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "updown_live"
+    return None, None
+
+async def _extract_filelions(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "Filelions" in name or "filelions" in name.lower():
+            log.info(f"  🎯 محاولة سحب Filelions: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "filelions_live"
+    return None, None
+
+async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "متعدد الجودات" in name or "VideoTube" in name or "videotube" in name.lower():
+            log.info(f"  🎯 محاولة سحب VidTube: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "vidtube_live"
+    return None, None
 
 async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     """
     يجمع كل الروابط المتاحة ويرجع:
     (primary_url, primary_status, fallback_urls)
-    الأولوية: MixDrop → Streamtape → Doodstream → LuluStream
     """
     primary_url = None
     primary_status = "none"
     fallbacks = []
 
+    def add_url(src, status):
+        nonlocal primary_url, primary_status
+        if src:
+            if not primary_url:
+                primary_url = src
+                primary_status = status
+            else:
+                if src not in fallbacks and src != primary_url:
+                    fallbacks.append(src)
+
     # 1. Streamtape
     log.info("جار البحث عن سرفر Streamtape")
-    src2, status2 = await _extract_streamtape(page)
-    if src2 and status2 == "streamtape_live":
-        log.info(f"✅ Streamtape: {src2}")
-        if primary_url:
-            fallbacks.append(src2)
-        else:
-            primary_url = src2
-            primary_status = status2
-    elif status2 == "streamtape_dead":
-        log.warning(f"💀 Streamtape ميت {src2}")
-        
+    src, status = await _extract_streamtape(page)
+    if status == "streamtape_live":
+        log.info(f"✅ Streamtape: {src}")
+        add_url(src, status)
+    elif status == "streamtape_dead":
+        log.warning(f"💀 Streamtape ميت {src}")
     else:
-        log.warning("لم يتم العثور ع سرفر Streamtape")
+        log.warning("لم يتم العثور ع سرفر Streamtape صالح")
 
     # 2. MixDrop
     log.info("جار البحث عن سرفر MixDrop")
     src, status = await _extract_mixdrop(page)
-    if src and status == "mixdrop_live":
+    if status == "mixdrop_live":
         log.info(f"✅ MixDrop: {src}")
-        primary_url = src
-        primary_status = status
+        add_url(src, status)
     elif status == "mixdrop_dead":
         log.warning(f"💀 MixDrop ميت {src}")
     else:
-        log.warning("لم يتم العثور ع سرفر MixDrop")
+        log.warning("لم يتم العثور ع سرفر MixDrop صالح")
 
     # 3. Doodstream
     log.info("جار البحث عن سرفر Doodstream")
-    src3, status3 = await _extract_doodstream(page)
-    if src3 and status3 == "doodstream_live":
-        log.info(f"✅ Doodstream: {src3}")
-        if primary_url:
-            fallbacks.append(src3)
-        else:
-            primary_url = src3
-            primary_status = status3
+    src, status = await _extract_doodstream(page)
+    if status == "doodstream_live":
+        log.info(f"✅ Doodstream: {src}")
+        add_url(src, status)
     else:
-        log.warning("لم يتم العثور ع سرفر Doodstream")
-    
+        log.warning("لم يتم العثور ع سرفر Doodstream صالح")
 
     # 4. StreamWish
     log.info("جار البحث عن سرفر StreamWish")
-    # 4. StreamWish
-    src4, status4 = await _extract_streamwish(page)
-    if src4 and status4 == "streamwish_live":
-        log.info(f"✅ StreamWish: {src4}")
-        if primary_url:
-            fallbacks.append(src4)
-        else:
-            primary_url = src4
-            primary_status = status4
+    src, status = await _extract_streamwish(page)
+    if status == "streamwish_live":
+        log.info(f"✅ StreamWish: {src}")
+        add_url(src, status)
     else:
-        log.warning("لم يتم العثور ع سرفر StreamWish")
+        log.warning("لم يتم العثور ع سرفر StreamWish صالح")
+        
+    # 5. LuluStream
+    log.info("جار البحث عن سرفر LuluStream")
+    src, status = await _extract_lulustream(page)
+    if status == "lulstream_live":
+        log.info(f"✅ LuluStream: {src}")
+        add_url(src, status)
+    else:
+        log.warning("لم يتم العثور ع سرفر LuluStream صالح")
+        
+    # 6. UpDown
+    log.info("جار البحث عن سرفر UpDown")
+    src, status = await _extract_updown(page)
+    if status == "updown_live":
+        log.info(f"✅ UpDown: {src}")
+        add_url(src, status)
+    else:
+        log.warning("لم يتم العثور ع سرفر UpDown صالح")
+
+    # 7. Filelions
+    log.info("جار البحث عن سرفر Filelions")
+    src, status = await _extract_filelions(page)
+    if status == "filelions_live":
+        log.info(f"✅ Filelions: {src}")
+        add_url(src, status)
+    else:
+        log.warning("لم يتم العثور ع سرفر Filelions صالح")
+        
+    # 8. VidTube
+    log.info("جار البحث عن سرفر VidTube")
+    src, status = await _extract_vidtube(page)
+    if status == "vidtube_live":
+        log.info(f"✅ VidTube: {src}")
+        add_url(src, status)
+    else:
+        log.warning("لم يتم العثور ع سرفر VidTube صالح")
 
     if not primary_url:
         log.error("❌ لم يتم العثور على أي سيرفر صالح.")
