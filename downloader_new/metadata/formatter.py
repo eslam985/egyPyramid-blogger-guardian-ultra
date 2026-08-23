@@ -3,7 +3,7 @@ import re
 from urllib.parse import unquote
 from downloader_new.shared.logger import get_beast_logger
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("formatter:")
 
 def normalize_title(title, for_search=False, remove_year=True):
     if not title:

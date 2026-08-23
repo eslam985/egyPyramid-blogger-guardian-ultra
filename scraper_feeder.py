@@ -1110,22 +1110,23 @@ def already_exists_episode(
         if q.data:
             return True
 
-    # 2. فحص في جدول medias ثم seasons ثم episodes مباشرة (بدون اشتراط جدول links)
-    normalized = normalize_title(series_name, for_search=False, remove_year=True)
-    
+    # 2. تنظيف الاسم تماماً ليتطابق مع حقل normalized_title في جدول medias (مثل "revenge")
+    clean_name = normalize_title(series_name, for_search=False, remove_year=True)
+
     media = (
         sb.table("medias")
         .select("id")
-        .eq("normalized_title", normalized)
+        .eq("normalized_title", clean_name)
         .limit(1)
         .execute()
     )
     
     if not media.data:
+        # بحث بديل بالاسم النظيف حصراً وليس النص الخام
         media = (
             sb.table("medias")
             .select("id")
-            .ilike("title", f"%{series_name.strip()}%")
+            .ilike("title", f"%{clean_name}%")
             .limit(1)
             .execute()
         )
@@ -1146,7 +1147,6 @@ def already_exists_episode(
         return False
     season_id = season.data[0]["id"]
 
-    # بمجرد أن سجل الحلقة موجود في جدول episodes، فهذا يثبت أنها حُمِلت ومعالجة مسبقاً
     ep = (
         sb.table("episodes")
         .select("id")
