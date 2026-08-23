@@ -7,7 +7,8 @@ from downloader_new.extractors.mixdrop_ext import get_mixdrop_direct_link
 from downloader_new.extractors.extract_streamtape import resolve_streamtape
 from downloader_new.extractors.doodstream_ext import resolve_doodstream
 from downloader_new.extractors.lulustream_ext import resolve_lulustream
-log = get_beast_logger("GuardianUltra")
+from downloader_new.extractors.streamwish_ext import resolve_streamwish
+log = get_beast_logger("playwright_ext:")
 
 async def get_direct_link_via_playwright(embed_url, output_path=None):
     file_id = embed_url.split("embed-")[-1].replace(".html", "")
@@ -175,6 +176,13 @@ async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
             raise RuntimeError("فشل صيد LuluStream")
         except asyncio.TimeoutError:
             raise RuntimeError("Timeout: LuluStream")
-
+        
+    elif "streamwish" in raw_url:
+        direct_link = await asyncio.wait_for(resolve_streamwish(raw_url), timeout=120)
+        if direct_link == "404_DELETED":
+            raise RuntimeError("💀 StreamWish: الملف محذوف")
+        if direct_link:
+            return direct_link
+        raise RuntimeError("فشل صيد StreamWish")
     # رابط مباشر مش محتاج استخراج
     return raw_url

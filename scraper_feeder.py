@@ -498,6 +498,18 @@ async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "lulstream_live"
     return None, None
 
+async def _extract_streamwish(page) -> tuple[Optional[str], Optional[str]]:
+    servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
+    for srv in servers:
+        name = (await srv.inner_text()).strip()
+        if "StreamWish" in name:
+            log.info(f"  🎯 محاولة سحب StreamWish: {name}")
+            await srv.click()
+            await page.wait_for_timeout(2000)
+            src = await _get_iframe_src(page, timeout=8_000)
+            if src:
+                return src, "streamwish_live"
+    return None, None
 
 async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
     """محاولة استخراج رابط VidTube (متعدد الجودات)."""
@@ -597,18 +609,19 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     else:
         log.warning("لم يتم العثور ع سرفر Doodstream")
 
-    # 4. LuluStream
-    log.info("جار البحث عن سرفر LuluStream")
-    src4, status4 = await _extract_lulustream(page)
-    if src4 and status4 == "lulstream_live":
-        log.info(f"✅ LuluStream: {src4}")
+    # 4. StreamWish
+    log.info("جار البحث عن سرفر StreamWish")
+    # 4. StreamWish
+    src4, status4 = await _extract_streamwish(page)
+    if src4 and status4 == "streamwish_live":
+        log.info(f"✅ StreamWish: {src4}")
         if primary_url:
             fallbacks.append(src4)
         else:
             primary_url = src4
             primary_status = status4
     else:
-        log.warning("لم يتم العثور ع سرفر LuluStream")
+        log.warning("لم يتم العثور ع سرفر StreamWish")
 
     if not primary_url:
         log.error("❌ لم يتم العثور على أي سيرفر صالح.")

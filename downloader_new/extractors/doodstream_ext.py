@@ -38,8 +38,17 @@ async def resolve_doodstream(embed_url: str) -> Optional[str]:
             await page.goto(target, wait_until="domcontentloaded", timeout=30_000)
 
             # ── فحص رابط ميت ──────────────────────────────────────────
-            content = await page.content()
-            if "video you are looking for is not found" in content.lower():
+            # إلى — نفس منطق watcher_dood
+            page_text = (await page.content()).lower()
+
+            # Cloudflare block → مش محذوف، في مشكلة تانية
+            if "just a moment" in page_text or "cloudflare" in page_text:
+                log.warning("⚠️ Doodstream: Cloudflare block")
+                return None
+
+            # رسائل حذف صريحة فقط
+            deleted_markers = ["no_video", "looking for is not found"]
+            if any(marker in page_text for marker in deleted_markers):
                 log.warning("💀 Doodstream: الفيديو محذوف")
                 return "404_DELETED"
 
