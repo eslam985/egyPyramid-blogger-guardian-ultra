@@ -57,6 +57,7 @@ class TaskRepository:
             })
             .eq("id", job_id)
             .eq("status", "idle")
+            .select()  # <--- إضافة هذه الكلمة لكي يعيد السجل وتعمل الـ True بنجاح
             .execute()
         )
         return bool(res.data)
@@ -187,6 +188,8 @@ class WorkerScheduler:
                         continue
 
                     self._processor.run(job, self._pyramid)
+                    sleep_time = self.INITIAL_SLEEP
+                    continue
 
                 else:
                     log.info(f"😴 لا توجد مهام حالياً | النوم: {sleep_time} ثانية")
