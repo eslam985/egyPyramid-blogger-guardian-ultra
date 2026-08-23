@@ -152,7 +152,7 @@ async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
         except asyncio.TimeoutError:
             raise RuntimeError("Timeout: Streamtape")
 
-    elif "doodstream" in raw_url or "playmogo" in raw_url:
+    elif "doodstream" in raw_url or "playmogo" in raw_url or "d0o0d" in raw_url:
         log.info("🎯 Doodstream.. جاري الصيد...")
         try:
             direct_link = await asyncio.wait_for(resolve_doodstream(raw_url), timeout=120)
