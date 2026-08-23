@@ -699,7 +699,7 @@ async def process_single_movie(
         watch_page = await browser.new_page(user_agent=pick_random_agent())
         await watch_page.goto(watch_url, wait_until="domcontentloaded", timeout=40_000)
         await watch_page.wait_for_selector(
-            ".watch--servers--list ul li.server--item span", timeout=10000
+            ".watch--servers--list ul li.server--item span", timeout=40_000
         )
         embed_url, server_status, fallback_urls = await extract_embed_url(watch_page)
         await watch_page.close()
@@ -1164,7 +1164,7 @@ async def process_single_episode(
         watch_page = await browser.new_page(user_agent=pick_random_agent())
         await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
         await watch_page.wait_for_selector(
-            ".watch--servers--list ul li.server--item", timeout=15_000
+            ".watch--servers--list ul li.server--item", timeout=40_000
         )
         embed_url, server_status, fallback_urls = await extract_embed_url(watch_page)
         await watch_page.close()
