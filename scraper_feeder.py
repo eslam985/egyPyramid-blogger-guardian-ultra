@@ -434,12 +434,13 @@ async def scrape_trailer_url(page) -> Optional[str]:
 # ===========================================================================
 
 
-async def _get_iframe_src(page) -> Optional[str]:
-    """انتظار واستخراج src من الـ iframe الرئيسي للمشغل."""
-    await page.wait_for_selector(".player--iframe iframe[src]", timeout=15_000)
-    iframe = await page.query_selector(".player--iframe iframe")
-    return (await iframe.get_attribute("src")) if iframe else None
-
+async def _get_iframe_src(page, timeout=15_000) -> Optional[str]:
+    try:
+        await page.wait_for_selector(".player--iframe iframe[src]", timeout=timeout)
+        iframe = await page.query_selector(".player--iframe iframe")
+        return (await iframe.get_attribute("src")) if iframe else None
+    except:
+        return None
 
 async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
     """محاولة استخراج رابط MixDrop مع فحص صفحات الـ 404."""
@@ -465,7 +466,7 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
 
         # بعد — مش محتاج نفحص محتوى الـ iframe هنا خالص
         # الفحص الحقيقي بيحصل في extract_streamtape.py وقت التحميل الفعلي
-        src = await _get_iframe_src(page)
+        src = await _get_iframe_src(page, timeout=15_000)
         if src:
             return src, "streamtape_live"
 
@@ -479,7 +480,7 @@ async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
         if "Doodstream" in name:
             await srv.click()
             await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page)
+            src = await _get_iframe_src(page, timeout=8_000)
             if src:
                 return src, "doodstream_live"
     return None, None
@@ -492,7 +493,7 @@ async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
         if "LuluStream" in name:
             await srv.click()
             await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page)
+            src = await _get_iframe_src(page, timeout=8_000)
             if src:
                 return src, "lulstream_live"
     return None, None
@@ -511,7 +512,7 @@ async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
             log.info(f"  🎯 محاولة سحب VidTube: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
-            src = await _get_iframe_src(page)
+            src = await _get_iframe_src(page, timeout=8_000)
             if src:
                 return src, "vidtube_live"
     return None, None
@@ -540,7 +541,7 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
                         log.error("  🚫 رابط Streamtape ميت!")
                         return None, "streamtape_dead"
 
-            src = await _get_iframe_src(page)
+            src = await _get_iframe_src(page, timeout=15_000)
             if src:
                 return src, "streamtape_live"
     return None, None
