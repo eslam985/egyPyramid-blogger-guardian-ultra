@@ -573,7 +573,7 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     primary_status = "none"
     fallbacks = []
 
-    # 2. Streamtape
+    # 1. Streamtape
     log.info("جار البحث عن سرفر Streamtape")
     src2, status2 = await _extract_streamtape(page)
     if src2 and status2 == "streamtape_live":
@@ -584,11 +584,12 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
             primary_url = src2
             primary_status = status2
     elif status2 == "streamtape_dead":
-        log.warning("💀 Streamtape ميت")
+        log.warning(f"💀 Streamtape ميت {src2}")
+        
     else:
         log.warning("لم يتم العثور ع سرفر Streamtape")
 
-    # 1. MixDrop
+    # 2. MixDrop
     log.info("جار البحث عن سرفر MixDrop")
     src, status = await _extract_mixdrop(page)
     if src and status == "mixdrop_live":
@@ -596,7 +597,7 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
         primary_url = src
         primary_status = status
     elif status == "mixdrop_dead":
-        log.warning("💀 MixDrop ميت")
+        log.warning(f"💀 MixDrop ميت {src}")
     else:
         log.warning("لم يتم العثور ع سرفر MixDrop")
 
@@ -612,6 +613,7 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
             primary_status = status3
     else:
         log.warning("لم يتم العثور ع سرفر Doodstream")
+    
 
     # 4. StreamWish
     log.info("جار البحث عن سرفر StreamWish")
@@ -1066,7 +1068,7 @@ def already_exists_episode(
             return True
 
     # 2. شيك في download_tasks بالاسم
-    task_name_pattern = f"%{series_name}%الموسم {season_no}%الحلقة {ep_no} %"
+    task_name_pattern = f"%{series_name.strip()}%الموسم {season_no}%الحلقة {ep_no}%"
     q = (
         sb.table("download_tasks")
         .select("id")
@@ -1079,16 +1081,29 @@ def already_exists_episode(
 
     # 3. شيك في medias → هل المسلسل موجود؟
     normalized = normalize_title(series_name, for_search=False, remove_year=True)
+    
+    # الاعتماد على الفهرس المتاح لـ normalized_title
+    # تم إزالة شرط category لأنه قد يكون null، وطالما سنفحص جدول seasons لاحقاً فلا حاجة له.
     media = (
         sb.table("medias")
         .select("id")
         .eq("normalized_title", normalized)
-        .eq("category", "tv")
         .limit(1)
         .execute()
     )
+    
     if not media.data:
-        return False
+        # محاولة بديلة إذا لم يتطابق الاسم المعياري
+        media = (
+            sb.table("medias")
+            .select("id")
+            .ilike("title", f"%{series_name.strip()}%")
+            .limit(1)
+            .execute()
+        )
+        if not media.data:
+            return False
+            
     media_id = media.data[0]["id"]
 
     # 4. شيك في seasons → هل الموسم موجود؟

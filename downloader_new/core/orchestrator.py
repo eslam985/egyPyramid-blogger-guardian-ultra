@@ -561,12 +561,53 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
     if dup_guard.fast_check(clean_local, extracted_year, pre_category, pre_season, pre_ep):
         return
 
-    # 4. التحميل أولاً — قبل أي API أو سجلات
+    # 4. جلب TMDB — للحصول على البيانات الدقيقة قبل التحميل
+    meta      = MetadataResolver().resolve(name, meta_data)
+    tmdb_data = meta["tmdb_data"]
+    pre_category = meta["pre_category"]
+    pre_season   = meta["pre_season"]
+    pre_ep       = meta["pre_ep"]
+
+    # 5. بناء الاسم المعروض + فحص تكرار دقيق (قبل التحميل)
+    display_title = build_display_title(original_task_name, tmdb_data["display_title"])
+    clean_res_db  = get_clean_media_data(display_title)
+    if clean_res_db and len(clean_res_db) == 4:
+        clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
+        if category_search == "movie" and any(kw in original_task_name for kw in ["الموسم", "الحلقة", "مسلسل"]):
+            category_search = "tv"
+            current_season_no = pre_season
+            current_ep_no = pre_ep
+    else:
+        clean_title_search  = display_title
+        if any(kw in original_task_name for kw in ["الموسم", "الحلقة", "مسلسل", "Season", "Episode"]):
+            category_search = "tv"
+        else:
+            category_search = "movie"
+        current_season_no   = pre_season
+        current_ep_no       = pre_ep
+
+    if dup_guard.precise_check(clean_title_search, tmdb_data["year"],
+                                category_search, current_season_no, current_ep_no):
+        log.info(f"✅ تم العثور على الحلقة/الفيلم بالفعل، سيتم إيقاف المهمة وتخطي التحميل.")
+        if task_id:
+            supabase.table("download_tasks").update({
+                "status": "completed",
+                "status_message": "✅ متوفرة مسبقاً (تم تخطي التحميل)",
+                "progress_percent": 100
+            }).eq("id", task_id).execute()
+        return
+
+    # 6. التحميل الفعلي — يتم الآن فقط بعد التأكد من أن العمل غير موجود
     is_local    = os.path.exists(url)
     extract_dir = os.path.join(BASE_DIR, f"extracted_{timestamp}")
     os.makedirs(extract_dir, exist_ok=True)
 
     try:
+        if task_id:
+            supabase.table("download_tasks").update({
+                "status_message": "📥 جاري التحميل...",
+            }).eq("id", task_id).execute()
+            
         downloaded_path, _ = await DownloadManager().acquire(
             url, extract_dir, timestamp, task_id, original_task_name
         )
@@ -577,38 +618,6 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
                 "status": "failed",
                 "status_message": f"❌ فشل التحميل: {str(e)[:100]}",
             }).eq("id", task_id).execute()
-        shutil.rmtree(extract_dir, ignore_errors=True)
-        return
-
-    # 5. جلب TMDB — بعد التأكد إن الرابط شغال
-    meta      = MetadataResolver().resolve(name, meta_data)
-    tmdb_data = meta["tmdb_data"]
-    pre_category = meta["pre_category"]
-    pre_season   = meta["pre_season"]
-    pre_ep       = meta["pre_ep"]
-
-    # 6. بناء الاسم المعروض + فحص تكرار دقيق
-    display_title = build_display_title(original_task_name, tmdb_data["display_title"])
-    clean_res_db  = get_clean_media_data(display_title)
-    if clean_res_db and len(clean_res_db) == 4:
-        clean_title_search, category_search, current_season_no, current_ep_no = clean_res_db
-        # تأكيد: لو الاسم الأصلي يقول tv، نثق فيه على tmdb
-        if category_search == "movie" and any(kw in original_task_name for kw in ["الموسم", "الحلقة", "مسلسل"]):
-            category_search = "tv"
-            current_season_no = pre_season
-            current_ep_no = pre_ep
-    else:
-        clean_title_search  = display_title
-        # لو الاسم الأصلي فيه مؤشرات مسلسل، نحكم بـ tv مش movie
-        if any(kw in original_task_name for kw in ["الموسم", "الحلقة", "مسلسل", "Season", "Episode"]):
-            category_search = "tv"
-        else:
-            category_search = "movie"
-        current_season_no   = pre_season
-        current_ep_no       = pre_ep
-
-    if dup_guard.precise_check(clean_title_search, tmdb_data["year"],
-                                category_search, current_season_no, current_ep_no):
         shutil.rmtree(extract_dir, ignore_errors=True)
         return
 
