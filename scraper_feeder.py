@@ -476,8 +476,12 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
 async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
-        name = (await srv.inner_text()).strip()
+        try:
+            name = (await srv.inner_text()).strip()
+        except Exception:
+            continue
         if "Doodstream" in name:
+            log.info(f"  🎯 محاولة سحب Doodstream: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)

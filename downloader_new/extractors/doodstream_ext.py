@@ -37,23 +37,7 @@ async def resolve_doodstream(embed_url: str) -> Optional[str]:
         try:
             await page.goto(target, wait_until="domcontentloaded", timeout=30_000)
 
-            # ── فحص رابط ميت ──────────────────────────────────────────
-            # إلى — نفس منطق watcher_dood
-            page_text = (await page.content()).lower()
-
-            # Cloudflare block → مش محذوف، في مشكلة تانية
-            if "just a moment" in page_text or "cloudflare" in page_text:
-                log.warning("⚠️ Doodstream: Cloudflare block")
-                return None
-
-            # رسائل حذف صريحة فقط
-            deleted_markers = ["no_video", "looking for is not found"]
-            if any(marker in page_text for marker in deleted_markers):
-                log.warning("💀 Doodstream: الفيديو محذوف")
-                return "404_DELETED"
-
             # ── انتظار ظهور .download-content بعد العداد ─────────────
-            # الموقع ممكن يغير مدة العداد، فبننتظر فعلياً حتى 30 ثانية
             log.info("⏳ Doodstream: انتظار انتهاء العداد وظهور زر التحميل...")
             try:
                 await page.wait_for_selector(
@@ -62,6 +46,15 @@ async def resolve_doodstream(embed_url: str) -> Optional[str]:
                     timeout=30_000,
                 )
             except Exception:
+                # لو مش ظهر → فحص لو محذوف فعلاً
+                page_text = (await page.content()).lower()
+                if "just a moment" in page_text or "cloudflare" in page_text:
+                    log.warning("⚠️ Doodstream: Cloudflare block")
+                    return None
+                deleted_markers = ["no_video", "looking for is not found"]
+                if any(marker in page_text for marker in deleted_markers):
+                    log.warning("💀 Doodstream: الفيديو محذوف")
+                    return "404_DELETED"
                 log.warning("⚠️ Doodstream: زر التحميل لم يظهر بعد العداد")
                 return None
 

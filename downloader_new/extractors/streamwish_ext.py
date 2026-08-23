@@ -100,6 +100,7 @@ async def resolve_streamwish(embed_url: str) -> Optional[str]:
             async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
                 resp = await client.post(post_url, data=form_data, headers=headers)
 
+            log.info(f"🔍 StreamWish response snippet: {resp.text[1000:2500]}")
             if resp.status_code not in (200, 302):
                 log.warning(f"⚠️ StreamWish POST فشل: HTTP {resp.status_code}")
                 return None
