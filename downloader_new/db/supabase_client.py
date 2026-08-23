@@ -304,6 +304,7 @@ def upsert_episode(
         supabase.table("episodes")
         .select("id")
         .eq("media_id", media_id)
+        .eq("season_id", season_id)
         .eq("episode_number", episode_number)
         .execute()
     )

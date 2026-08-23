@@ -5,7 +5,7 @@ from bidi.algorithm import get_display
 import arabic_reshaper
 from downloader_new.shared.logger import get_beast_logger
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("processor.py")
 
 
 def apply_media_disguise(vid_path, idx, display_title, LOGO_FILE):
