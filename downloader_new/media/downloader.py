@@ -307,7 +307,19 @@ async def download_video(
     found = finder.find(extract_dir, os.getcwd())
 
     if found:
-        log.info(f"✅ تم اكتمال التحميل الفعلي: {found}")
+        file_size_bytes = os.path.getsize(found)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        MIN_SIZE_MB = 40  # الحد الأدنى المقبول لحجم الحلقة بالميغابايت
+
+        if file_size_mb < MIN_SIZE_MB:
+            log.warning(f"⚠️ الملف المحمّل صغير جداً ({file_size_mb:.2f}MB)، غالباً صفحة خطأ أو ملف وهمي. يتم حذفه.")
+            try:
+                os.remove(found)
+            except Exception:
+                pass
+            raise RuntimeError(f"Downloaded file is too small: {file_size_mb:.2f}MB")
+
+        log.info(f"✅ تم اكتمال التحميل الفعلي: {found} ({file_size_mb:.1f} MB)")
         return found
 
     # ── لا يوجد ملف = فشل حقيقي ──
