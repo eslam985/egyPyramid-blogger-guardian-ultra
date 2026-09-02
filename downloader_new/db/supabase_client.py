@@ -245,11 +245,10 @@ def upsert_media(
 # Section 4: Season Operations — عمليات جدول seasons
 # ===========================================================================
 
-def upsert_season(media_id: int, season_number: int, base_slug: str) -> Optional[int]:
+def upsert_season(media_id: int, season_number: int) -> Optional[int]:
     """
     إيجاد أو إنشاء موسم وإعادة الـ ID.
     """
-    season_slug = f"{base_slug}-season-{season_number}"
     log.info(f"📡 معالجة الموسم رقم {season_number} للميديا {media_id}...")
 
     try:
@@ -270,7 +269,6 @@ def upsert_season(media_id: int, season_number: int, base_slug: str) -> Optional
         new_season = supabase.table("seasons").insert({
             "media_id":      media_id,
             "season_number": season_number,
-            "slug":          season_slug,
         }).execute()
 
         if new_season.data:
@@ -300,14 +298,19 @@ def upsert_episode(
     """
     ep_slug = f"{base_slug}-episode-{episode_number}"
 
-    existing = (
+    query = (
         supabase.table("episodes")
         .select("id")
         .eq("media_id", media_id)
-        .eq("season_id", season_id)
         .eq("episode_number", episode_number)
-        .execute()
     )
+
+    if season_id is None:
+        query = query.is_("season_id", "null")
+    else:
+        query = query.eq("season_id", season_id)
+
+    existing = query.execute()
 
     if existing.data:
         e_id = existing.data[0]["id"]
@@ -484,7 +487,7 @@ def save_to_supabase(
         season_id = None
         if c_cat == "tv":
             season_number = extracted_season_no or 1
-            season_id = upsert_season(media_id, season_number, final_slug)
+            season_id = upsert_season(media_id, season_number)
 
         # ── 4. الحلقة (Episode) ──────────────────────────────────────
         ep_number  = actual_ep_no or 1
