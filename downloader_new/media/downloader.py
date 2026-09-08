@@ -309,7 +309,7 @@ async def download_video(
     if found:
         file_size_bytes = os.path.getsize(found)
         file_size_mb = file_size_bytes / (1024 * 1024)
-        MIN_SIZE_MB = 40  # الحد الأدنى المقبول لحجم الحلقة بالميغابايت
+        MIN_SIZE_MB = 20  # الحد الأدنى المقبول لحجم الحلقة بالميغابايت
 
         if file_size_mb < MIN_SIZE_MB:
             log.warning(f"⚠️ الملف المحمّل صغير جداً ({file_size_mb:.2f}MB)، غالباً صفحة خطأ أو ملف وهمي. يتم حذفه.")

@@ -15,7 +15,7 @@ from supabase import create_client, Client as SupabaseClient
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.metadata.formatter import normalize_title
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("supabase_client.py")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
