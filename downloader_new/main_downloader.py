@@ -2,6 +2,7 @@
 import os
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.core.orchestrator import pyramid_ultimate_beast
+
 # إعدادات النظام - توضع هنا لضمان تطبيقها على كل الاستيرادات التالية
 os.environ["PYROGRAM_MAX_CONCURRENT_TRANSMISSIONS"] = "1"
 os.environ["PYROGRAM_SLEEP_THRESHOLD"] = "300"
@@ -18,6 +19,7 @@ load_dotenv()
 nest_asyncio.apply()
 log = get_beast_logger("GuardianUltra")
 
+
 async def run_pyramid_tasks(task_list):
     if not task_list:
         log.warning("⚠️ تنبيه: قائمة المهام فارغة!")
@@ -27,7 +29,7 @@ async def run_pyramid_tasks(task_list):
         url = task.get("url")
         name = task.get("name")
         episode_id = task.get("episode_id")  # 👈 جلب الـ ID من المهمة
-        trailer_url = task.get("trailer_url") # استخراج رابط التريلر إن وُجد
+        trailer_url = task.get("trailer_url")  # استخراج رابط التريلر إن وُجد
 
         if not url:
             continue
@@ -35,7 +37,9 @@ async def run_pyramid_tasks(task_list):
         log.info(f"\n🎬 معالجة ({i}/{len(task_list)}): {name}")
         try:
             # تمرير الـ episode_id للوحش عشان يوصل لـ Supabase
-            await pyramid_ultimate_beast(url, name, task_id=episode_id, meta_data={"trailer_url": trailer_url})
+            await pyramid_ultimate_beast(
+                url, name, task_id=episode_id, meta_data={"trailer_url": trailer_url}
+            )
         except Exception as e:
             log.error(f"❌ خطأ في '{name}': {e}")
 
