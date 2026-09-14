@@ -516,9 +516,10 @@ class DownloadFailureHandler:
             supabase.table("medias").delete().eq("id", media_id).execute()
             log.info(f"🧹 تم حذف سجل الميديا الفارغ (ID: {media_id})")
             if task_id:
+                clean_reason = str(reason)[:150]
                 supabase.table("download_tasks").update({
                     "status": "failed",
-                    "status_message": f"❌ فشل: {reason}",
+                    "status_message": f"❌ فشل: {clean_reason}",
                 }).eq("id", task_id).execute()
         except Exception as e:
             log.warning(f"⚠️ فشل تنظيف الميديا: {e}")
@@ -633,13 +634,16 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
 
     # 8. المعالجة وفك الضغط
     if task_id:
-        supabase.table("download_tasks").update({
-            "status_message": "⚙️ جاري فحص الملف ومعالجته...",
-            "progress_percent": 91,
-            "download_speed": "Processing",
-        }).eq("id", task_id).execute()
+        try:
+            supabase.table("download_tasks").update({
+                "status_message": "⚙️ جاري فحص الملف ومعالجته...",
+                "progress_percent": 91,
+                "download_speed": "Processing",
+            }).eq("id", task_id).execute()
+        except Exception as e:
+            log.warning(f"⚠️ فشل تحديث حالة التاسك في الخطوة 8 (تجاوز): {e}")
 
-    try:
+    try:    
         videos, _, final_direct_url = PostDownloadProcessor().process(
             downloaded_path, media_id, e_id, extract_dir, is_local
         )
