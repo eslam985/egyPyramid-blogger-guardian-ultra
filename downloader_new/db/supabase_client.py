@@ -409,6 +409,10 @@ def save_links(
     archive_url: Optional[str],
 ) -> None:
     """حفظ روابط التشغيل في جدول links مع retry لكل رابط."""
+    if not episode_id:
+        log.error("❌ فشل حفظ الروابط: episode_id غير موجود أو None")
+        return
+
     entries = _build_link_entries(episode_id, current_voe, current_vk, archive_url)
 
     for entry in entries:

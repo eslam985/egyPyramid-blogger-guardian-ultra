@@ -335,7 +335,7 @@ class MultiEpisodeSplitter:
     """
 
     async def split_if_needed(self, videos: list, display_title: str,
-                               task_id, extract_dir: str) -> bool:
+                                task_id, extract_dir: str) -> bool:
         if len(videos) <= 1:
             return False
 
@@ -422,7 +422,16 @@ class EpisodeProcessor:
             f"{display_title} {os.path.basename(vid_path)}"
             if len(videos) > 1 else display_title
         )
-        
+
+        # التحقق من وجود e_id وفي حال غيابه يتم جلبه باستخدام media_id
+        if not e_id and media_id:
+            ep_res = supabase.table("episodes").select("id").eq("media_id", media_id).limit(1).execute()
+            if ep_res.data:
+                e_id = ep_res.data[0]["id"]
+            else:
+                log.error(f"❌ لم يتم العثور على episode_id مرتبط بـ media_id: {media_id}")
+                return
+
         # فحص تكرار الحلقة لو مسلسل
         if category_search == "tv":
             should_skip, _ = self._dup.episode_check(loop_display_title, meta_year)
