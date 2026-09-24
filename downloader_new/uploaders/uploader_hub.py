@@ -19,6 +19,20 @@ st_login = os.getenv("STREAMTAPE_LOGIN")
 st_key = os.getenv("STREAMTAPE_KEY")
 dood_api_key = os.getenv("DOOD_API_KEY")
 
+async def run_with_timeout(coro, timeout_sec=900):
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout_sec)
+    except asyncio.TimeoutError:
+        log.error("⚠️ تجاوزت إحدى السيرفرات الوقت الأقصى (Timeout) وتم إلغاؤها لمنع تجمد السكربت.")
+        return None
+    except Exception as e:
+        log.error(f"⚠️ حدث خطأ أثناء التنفيذ: {e}")
+        return None
+
+async def delayed_upload(coro, delay_sec):
+    if delay_sec > 0:
+        await asyncio.sleep(delay_sec)
+    return await coro
 
 async def upload_to_all_servers(
     video_path: str,
@@ -56,21 +70,19 @@ async def upload_to_all_servers(
     log.info(
         f"remote_source for parallel uploads: {remote_source} | video_path: {video_path}"
     )
-    if remote_source:
-        task_voe = upload_to_voe_api(video_path, remote_source)
-        await asyncio.sleep(15)
-        task_dood = upload_to_doodstream(dood_api_key, remote_source, final_file_name)
-        await asyncio.sleep(15)
-        task_tape = upload_to_streamtape(
-            st_login, st_key, remote_source, final_file_name
-        )
-        await asyncio.sleep(15)
-        task_lulu = upload_to_lulustream(lu_key, remote_source, final_file_name)
-    else:
-        task_voe = task_dood = task_tape = task_lulu = asyncio.sleep(0, result=None)
-
     loop = asyncio.get_event_loop()
-    task_vk = loop.run_in_executor(None, upload_to_vk_local, episode_label, video_path)
+    task_vk_raw = loop.run_in_executor(None, upload_to_vk_local, episode_label, video_path)
+    # تخصيص 20 دقيقة كحد أقصى لرفع VK لكونه رفعاً فعلياً من جهازك
+    task_vk = run_with_timeout(task_vk_raw, 1200)
+
+    if remote_source:
+        # كل سيرفر سيتم تغليفه بـ 15 دقيقة كحد أقصى (900 ثانية) + وقت تأخير حقيقي لا يوقف السكربت
+        task_voe = run_with_timeout(delayed_upload(upload_to_voe_api(video_path, remote_source), 0), 900)
+        task_dood = run_with_timeout(delayed_upload(upload_to_doodstream(dood_api_key, remote_source, final_file_name), 15), 900)
+        task_tape = run_with_timeout(delayed_upload(upload_to_streamtape(st_login, st_key, remote_source, final_file_name), 30), 900)
+        task_lulu = run_with_timeout(delayed_upload(upload_to_lulustream(lu_key, remote_source, final_file_name), 45), 900)
+    else:
+        task_voe = task_dood = task_tape = task_lulu = run_with_timeout(asyncio.sleep(0, result=None), 5)
 
     vk_result, file_id, d_url, s_url, lu_url = await asyncio.gather(
         task_vk, task_voe, task_dood, task_tape, task_lulu

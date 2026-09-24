@@ -4,25 +4,9 @@ import time
 import httpx
 import asyncio
 from downloader_new.shared.logger import get_beast_logger
-from functools import partial
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("Veo_Loger")
 VOE_API_KEY = os.getenv("VOE_API_KEY")
-# 1. استيراد القاعدة الأساسية أولاً
-try:
-    from tqdm.auto import tqdm as tqdm_base
-except ImportError:
-    import tqdm as tqdm_base
-# 2. التعريف المعدل لبيئة السيرفرات (Hugging Face)
-tqdm_custom = partial(
-    tqdm_base,
-    dynamic_ncols=False,
-    mininterval=10.0,
-    ascii=True,  # ✅ هذا يكفي لجعل اللوجات نصوص بسيطة
-)
-# 3. توحيد الاسم عالمياً لخدمة أي مكتبات خارجية ولإصلاح أخطاء Ruff
-tqdm = tqdm_custom
-
 
 async def upload_to_voe_api(file_path, identifier):
     try:
@@ -37,16 +21,27 @@ async def upload_to_voe_api(file_path, identifier):
             )
             params = {"key": VOE_API_KEY, "url": remote_url}
 
-            # 1. طلب الرفع مع محاولات إعادة في حال تذبذب الرابط
+            # 1. طلب الرفع مع معالجة الـ Rate Limit
             res = {}
-            for attempt in range(3):
+            for attempt in range(5):  # زيادة المحاولات لتفادي الـ Rate Limit
                 try:
                     response = await client.get(
                         "https://voe.sx/api/upload/url", params=params, timeout=30
                     )
+                    
+                    # فحص الـ Rate Limit
+                    if response.status_code == 429:
+                        wait_time = 15 * (attempt + 1)
+                        log.warning(f"⚠️ Voe [Rate Limit]: تم حظر الطلب مؤقتاً (429). الانتظار {wait_time} ثانية... (المحاولة {attempt+1})")
+                        await asyncio.sleep(wait_time)
+                        continue
+
                     res = response.json()
                     if res.get("status") == 200:
+                        log.info("✅ Voe: تم قبول طلب الرفع بنجاح.")
                         break
+                    else:
+                        log.warning(f"⚠️ Voe: فشل الطلب بالرد: {res}")
                 except Exception as e:
                     log.warning(f"⚠️ Voe: فشل اتصال في المحاولة {attempt+1}: {e}")
 
@@ -57,59 +52,51 @@ async def upload_to_voe_api(file_path, identifier):
                 return None
 
             file_code = res.get("result", {}).get("file_code")
-
-            log.info(f"⏳ جاري متابعة حالة الرفع على Voe...")
+            
+            log.info(f"⏳ Voe: جاري متابعة حالة الرفع للملف ({file_code})...")
             start_time = time.time()
 
-            # تعريف شريط واحد فقط بتنسيق كامل ونظيف
-            # ... قبل الحلقة ...
             check_count = 0
-            pbar_voe = tqdm_custom(total=100, desc="⏳ Voe Polling")
+            last_status = None
 
             while time.time() - start_time < 800:
                 try:
                     status_response = await client.get(
-                        f"https://voe.sx/api/file/status?key={VOE_API_KEY}&file_code={file_code}"
+                        f"https://voe.sx/api/file/status?key={VOE_API_KEY}&file_code={file_code}",
+                        timeout=15
                     )
+                    
+                    if status_response.status_code == 429:
+                        log.warning("⚠️ Voe [Rate Limit]: جاري تخفيف الضغط أثناء فحص الحالة...")
+                        await asyncio.sleep(25)
+                        continue
+
                     status_res = status_response.json()
-                    status = status_res.get("result", {}).get("status")
+                    status = status_res.get("result", {}).get("status", "unknown")
+
+                    # تسجيل الحالة فقط إذا تغيرت لمنع الـ Spam في اللوج
+                    if status != last_status:
+                        log.info(f"🔄 Voe Status: الحالة الآن [{status}]")
+                        last_status = status
 
                     check_count += 1
 
                     if status == "finished":
-                        pbar_voe.update(100 - pbar_voe.n)
-                        pbar_voe.set_description("✅ Voe: Finished!")
-                        pbar_voe.close()
+                        log.info("✅ Voe: تم الرفع والمعالجة بنجاح!")
                         return file_code
 
-                    # المحاكاة الذكية: لو بيحمل حرك الشريط لغاية 40% ولو بيعالج حركه لغاية 80%
-                    # المحاكاة الذكية: تعيين القيمة مباشرة بدلاً من update التراكمي في بعض الأحيان
-                    if status == "downloading":
-                        pbar_voe.n = min(40, pbar_voe.n + 5)
-                    elif status == "processing":
-                        pbar_voe.n = min(80, pbar_voe.n + 5)
-
-                    pbar_voe.refresh()  # مهم جداً لرؤية الحركة فوراً
-
-                    pbar_voe.set_description(
-                        f"⏳ Voe Status: {status if status else 'Queued'}"
-                    )
-                    pbar_voe.refresh()
-
-                    # صمام الأمان: لو السيرفر استهبل أكتر من دقيقتين والملف اترفع فعلاً
+                    # صمام الأمان: لو السيرفر تأخر أكثر من اللازم (5 فحوصات = 125 ثانية تقريباً)
                     if check_count >= 5:
-                        pbar_voe.set_description(
-                            "⚠️ Voe Slow Response - Proceeding to VK..."
-                        )
-                        pbar_voe.close()
+                        log.info("⚠️ Voe: تأخر رد السيرفر النهائي، سيتم المتابعة وتجاوز الانتظار...")
                         return file_code
 
-                except:
-                    pass
+                except Exception as e:
+                    # نستخدم debug هنا لتجنب تشويه اللوج إذا حدثت مشكلة شبكة عابرة
+                    log.debug(f"⚠️ Voe: خطأ أثناء فحص الحالة (سيتم التجاهل والمحاولة لاحقاً): {e}")
 
                 await asyncio.sleep(25)
 
-            pbar_voe.close()
+            log.warning("❌ Voe: انتهى وقت الانتظار (Timeout) المخصص للمعالجة.")
             return file_code
     except Exception as e:
         log.error(f"⚠️ خطأ Voe API: {e}")
