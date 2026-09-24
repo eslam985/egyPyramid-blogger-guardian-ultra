@@ -439,7 +439,9 @@ def build_fallback_result(original_input: str, year: str | None) -> dict:
 # Section 6: OMDb Result Builder — تجميع نتيجة OMDb
 # ===========================================================================
 
-def build_metadata_from_omdb(omdb_data: dict, year: str | None) -> dict:
+def build_metadata_from_omdb(
+    omdb_data: dict, year: str | None, original_input: str | None = None
+) -> dict:
     """تحويل بيانات OMDb الخام لـ metadata dict موحد."""
     imdb_id = omdb_data.get("imdbID")
     if imdb_id:
@@ -447,20 +449,24 @@ def build_metadata_from_omdb(omdb_data: dict, year: str | None) -> dict:
         release_year = omdb_data.get("Year", year or "N/A")
 
         db_check = is_media_data_complete(imdb_id, title, release_year)
-        if db_check.get("exists") and db_check.get("is_complete"):
-            log.info(f"⚡ قاعدة البيانات: تم العثور على العمل مكتمل البيانات (تخطي جلب البيانات ورفع الصورة): {title}")
-            media = db_check["data"]
-            return {
-                "tmdb_id": imdb_id,
-                "display_title": media.get("title"),  # استبدل باسم العمود الفعلي
-                "story": media.get("story"),
-                "poster": media.get("poster_url"),
-                "labels": media.get("labels"),        # استبدل باسم العمود الفعلي
-                "duration": media.get("duration_iso"),    # استبدل باسم العمود الفعلي
-                "rating": media.get("rating"),        # استبدل باسم العمود الفعلي
-                "runtime": media.get("runtime"),      # استبدل باسم العمود الفعلي
-                "year": media.get("year")             # استبدل باسم العمود الفعلي
-            }
+        if db_check.get("exists"):
+            if db_check.get("is_complete"):
+                log.info(
+                    "⚡ قاعدة البيانات: تم العثور على العمل مكتمل البيانات "
+                    f"(تخطي جلب البيانات ورفع الصورة): {original_input or title or 'unknown'}"
+                )
+                media = db_check["data"]
+                return {
+                    "tmdb_id": media.get("tmdb_id"),
+                    "display_title": media.get("title"),       # Not Null in DB
+                    "story": media.get("story"),               # Nullable
+                    "poster": media.get("poster_url"),         # Nullable
+                    "labels": media.get("labels"),             # Nullable
+                    "duration": media.get("duration_iso"),     # Nullable
+                    "rating": media.get("rating"),             # Nullable
+                    "runtime": media.get("runtime"),           # Nullable
+                    "year": media.get("year")                  # Not Null in DB
+                }
 
     story = translate_text(omdb_data.get("Plot", ""))
     labels = translate_genres(omdb_data.get("Genre", "أفلام"))
@@ -502,20 +508,25 @@ def build_metadata_from_tmdb(
 ) -> dict:
     """جلب وتحويل بيانات TMDB الكاملة لـ metadata dict موحد."""
     db_check = is_media_data_complete(tmdb_id, original_input, None)
-    if db_check.get("exists") and db_check.get("is_complete"):
-        log.info(f"⚡ قاعدة البيانات: تم العثور على العمل مكتمل البيانات (تخطي جلب البيانات ورفع الصورة): {original_input}")
-        media = db_check["data"]
-        return {
-            "tmdb_id": tmdb_id,
-            "display_title": media.get("title"),  # استبدل باسم العمود الفعلي
-            "story": media.get("story"),
-            "poster": media.get("poster_url"),
-            "labels": media.get("labels"),        # استبدل باسم العمود الفعلي
-            "duration": media.get("duration_iso"),    # استبدل باسم العمود الفعلي
-            "rating": media.get("rating"),        # استبدل باسم العمود الفعلي
-            "runtime": media.get("runtime"),      # استبدل باسم العمود الفعلي
-            "year": media.get("year")             # استبدل باسم العمود الفعلي
-        }
+    if db_check.get("exists"):
+        if db_check.get("is_complete"):
+            media = db_check["data"]
+            title_in_db = media.get("title") or original_input
+            log.info(
+                "⚡ قاعدة البيانات: تم العثور على العمل مكتمل البيانات "
+                f"(تخطي جلب البيانات ورفع الصورة): {title_in_db}"
+            )
+            return {
+                "tmdb_id": media.get("tmdb_id"),
+                "display_title": media.get("title"),       # Not Null in DB
+                "story": media.get("story"),               # Nullable
+                "poster": media.get("poster_url"),         # Nullable
+                "labels": media.get("labels"),             # Nullable
+                "duration": media.get("duration_iso"),     # Nullable
+                "rating": media.get("rating"),             # Nullable
+                "runtime": media.get("runtime"),           # Nullable
+                "year": media.get("year")                  # Not Null in DB
+            }
 
     en_data = fetch_tmdb_details(tmdb_id, content_type, language="en")
     ar_data = fetch_tmdb_details(tmdb_id, content_type, language="ar")
