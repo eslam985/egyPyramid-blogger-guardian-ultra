@@ -216,7 +216,6 @@ def already_exists(sb: Client, movie_name: str, download_url: Optional[str]) -> 
     يُعيد True لو الفيلم موجود في أي منهما.
     """
     if _is_duplicate_in_tasks(sb, movie_name, download_url):
-        log.info(f"♻️ موجود في download_tasks: {movie_name}")
         return True
 
     if _is_duplicate_in_medias(sb, movie_name):
@@ -291,7 +290,6 @@ def pick_random_agent() -> str:
 async def random_delay():
     """تأخير عشوائي بين الطلبات لتجنب الحجب."""
     t = random.uniform(DELAY_MIN, DELAY_MAX)
-    log.info(f"💤 انتظار {t:.1f} ثانية...")
     await asyncio.sleep(t)
 
 
@@ -407,7 +405,6 @@ async def scrape_trailer_url(page) -> Optional[str]:
     try:
         trailer_btn = await page.query_selector(".ShowTrailerSingle")
         if not trailer_btn:
-            log.info("  🎬 لا يوجد زر تريلر في هذه الصفحة.")
             return None
 
         await trailer_btn.click()
@@ -418,7 +415,6 @@ async def scrape_trailer_url(page) -> Optional[str]:
             return None
 
         src = await iframe.get_attribute("src")
-        log.info(f"  🎬 تم سحب رابط التريلر: {src}")
         return src
 
     except PlaywrightTimeout:
@@ -442,12 +438,12 @@ async def _get_iframe_src(page, timeout=15_000) -> Optional[str]:
     except:
         return None
 
+
 async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
         if "Mixdrop" in name or "mixdrop" in name.lower():
-            log.info(f"  🎯 محاولة سحب MixDrop: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
 
@@ -456,12 +452,12 @@ async def _extract_mixdrop(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "mixdrop_live"
     return None, None
 
+
 async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
         if "Streamtape" in name or "streamtape" in name.lower():
-            log.info(f"  🎯 محاولة سحب Streamtape: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
 
@@ -469,6 +465,7 @@ async def _extract_streamtape(page) -> tuple[Optional[str], Optional[str]]:
             if src:
                 return src, "streamtape_live"
     return None, None
+
 
 async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
@@ -478,7 +475,6 @@ async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
         except Exception:
             continue
         if "Doodstream" in name or "doodstream" in name.lower():
-            log.info(f"  🎯 محاولة سحب Doodstream: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)
@@ -486,12 +482,12 @@ async def _extract_doodstream(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "doodstream_live"
     return None, None
 
+
 async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
         if "LuluStream" in name or "lulustream" in name.lower():
-            log.info(f"  🎯 محاولة سحب LuluStream: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)
@@ -499,12 +495,12 @@ async def _extract_lulustream(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "lulstream_live"
     return None, None
 
+
 async def _extract_streamwish(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
         if "StreamWish" in name or "streamwish" in name.lower():
-            log.info(f"  🎯 محاولة سحب StreamWish: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)
@@ -512,12 +508,12 @@ async def _extract_streamwish(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "streamwish_live"
     return None, None
 
+
 async def _extract_updown(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
         if "UpDown" in name or "updown" in name.lower():
-            log.info(f"  🎯 محاولة سحب UpDown: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)
@@ -525,12 +521,12 @@ async def _extract_updown(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "updown_live"
     return None, None
 
+
 async def _extract_filelions(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
         if "Filelions" in name or "filelions" in name.lower():
-            log.info(f"  🎯 محاولة سحب Filelions: {name}")
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)
@@ -538,18 +534,23 @@ async def _extract_filelions(page) -> tuple[Optional[str], Optional[str]]:
                 return src, "filelions_live"
     return None, None
 
+
 async def _extract_vidtube(page) -> tuple[Optional[str], Optional[str]]:
     servers = await page.query_selector_all(".watch--servers--list ul li.server--item")
     for srv in servers:
         name = (await srv.inner_text()).strip()
-        if "متعدد الجودات" in name or "VideoTube" in name or "videotube" in name.lower():
-            log.info(f"  🎯 محاولة سحب VidTube: {name}")
+        if (
+            "متعدد الجودات" in name
+            or "VideoTube" in name
+            or "videotube" in name.lower()
+        ):
             await srv.click()
             await page.wait_for_timeout(2000)
             src = await _get_iframe_src(page, timeout=8_000)
             if src:
                 return src, "vidtube_live"
     return None, None
+
 
 async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     """
@@ -571,84 +572,65 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
                     fallbacks.append(src)
 
     # 1. Streamtape
-    log.info("جار البحث عن سرفر Streamtape")
     src, status = await _extract_streamtape(page)
     if status == "streamtape_live":
-        log.info(f"✅ Streamtape: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر Streamtape صالح")
 
     # 2. MixDrop
-    log.info("جار البحث عن سرفر MixDrop")
     src, status = await _extract_mixdrop(page)
     if status == "mixdrop_live":
-        log.info(f"✅ MixDrop: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر MixDrop صالح")
-        
-        
+
     # 8. VidTube
-    log.info("جار البحث عن سرفر VidTube")
     src, status = await _extract_vidtube(page)
     if status == "vidtube_live":
-        log.info(f"✅ VidTube: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر VidTube صالح")
 
     # 3. Doodstream
-    log.info("جار البحث عن سرفر Doodstream")
     src, status = await _extract_doodstream(page)
     if status == "doodstream_live":
-        log.info(f"✅ Doodstream: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر Doodstream صالح")
 
     # 4. StreamWish
-    log.info("جار البحث عن سرفر StreamWish")
     src, status = await _extract_streamwish(page)
     if status == "streamwish_live":
-        log.info(f"✅ StreamWish: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر StreamWish صالح")
-        
+
     # 5. LuluStream
-    log.info("جار البحث عن سرفر LuluStream")
     src, status = await _extract_lulustream(page)
     if status == "lulstream_live":
-        log.info(f"✅ LuluStream: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر LuluStream صالح")
-        
+
     # 6. UpDown
-    log.info("جار البحث عن سرفر UpDown")
     src, status = await _extract_updown(page)
     if status == "updown_live":
-        log.info(f"✅ UpDown: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر UpDown صالح")
 
     # 7. Filelions
-    log.info("جار البحث عن سرفر Filelions")
     src, status = await _extract_filelions(page)
     if status == "filelions_live":
-        log.info(f"✅ Filelions: {src}")
         add_url(src, status)
     else:
         log.warning("لم يتم العثور ع سرفر Filelions صالح")
-        
 
     if not primary_url:
         log.error("❌ لم يتم العثور على أي سيرفر صالح.")
         return None, "none", []
 
-    log.info(f"📦 primary: {primary_status} | fallbacks: {len(fallbacks)}")
     return primary_url, primary_status, fallbacks
 
 
@@ -681,7 +663,6 @@ def should_stop_after_page(crawl_mode: str, found_new: bool, idle_count: int) ->
         return True
 
     if not found_new:
-        log.warning("🔄 صفحة مكررة، الانتقال للتالية...")
         return False  # ← دايماً كمّل، الإيقاف بالهدف بس
 
     return False
@@ -724,11 +705,8 @@ async def process_single_movie(
 
         # ── 2. فحص تكرار مبكر بالاسم (قبل فتح صفحة المشاهدة الثقيلة) ──
         if already_exists(sb, movie_title, None):
-            log.info(f"  ♻️ [{movie_title}] موجود مسبقاً. تخطي...")
             stats["skipped"] += 1
             return
-
-        log.info(f"  🔗 صفحة المشاهدة: {watch_url}")
 
         # ── 3. سحب رابط التشغيل (embed) ────────────────────────────
         watch_page = await browser.new_page(user_agent=pick_random_agent())
@@ -749,7 +727,6 @@ async def process_single_movie(
 
         # ── 4. فحص تكرار نهائي برابط الـ embed ─────────────────────
         if already_exists(sb, movie_title, embed_url):
-            log.info("  ♻️ الرابط موجود مسبقاً، تخطي...")
             stats["skipped"] += 1
             return
 
@@ -763,9 +740,6 @@ async def process_single_movie(
             fallback_urls=fallback_urls,
         )
         if ok:
-            log.info(
-                f"  ✅ تم الإدراج بنجاح! | embed: {embed_url} | trailer: {trailer_url}"
-            )
             stats["inserted"] += 1
             stats["found_new_in_page"] = True
         else:
@@ -1092,7 +1066,7 @@ def already_exists_episode(
         .limit(1)
         .execute()
     )
-    
+
     if not media.data:
         # بحث بديل بالاسم النظيف حصراً وليس النص الخام
         media = (
@@ -1104,7 +1078,7 @@ def already_exists_episode(
         )
         if not media.data:
             return False
-            
+
     media_id = media.data[0]["id"]
 
     season = (
@@ -1128,6 +1102,7 @@ def already_exists_episode(
         .execute()
     )
     return bool(ep.data)
+
 
 def insert_episode_task(
     sb: Client,
@@ -1180,7 +1155,6 @@ async def process_single_episode(
         )
         # ── فحص تكرار مبكر بدون embed ────────────────────────────────
         if already_exists_episode(sb, series_title, season_no, ep_no):
-            log.info(f"    ♻️ موجودة مسبقاً: {task_name}")
             stats["ep_skipped"] += 1
             return
 
@@ -1204,7 +1178,6 @@ async def process_single_episode(
 
         # ── فحص تكرار نهائي برابط الـ embed ──────────────────────────
         if already_exists_episode(sb, series_title, season_no, ep_no, embed_url):
-            log.info(f"    ♻️ الرابط موجود: {task_name}")
             stats["ep_skipped"] += 1
             return
 
@@ -1213,7 +1186,6 @@ async def process_single_episode(
             sb, task_name, embed_url, trailer_url, fallback_urls=fallback_urls
         )
         if ok:
-            log.info(f"    ✅ تم الإدراج: {task_name}")
             stats["ep_inserted"] += 1
         else:
             stats["ep_failed"] += 1
@@ -1272,7 +1244,6 @@ async def process_single_season(
                 f"سيتم إكمال بقية الحلقات ثم الإيقاف."
             )
             # نكمّل الموسم لآخره — الإيقاف بيحصل في process_single_series
-
         log.info(f"    [{ep_idx}/{len(ep_links)}] 🎬 {ep_url}")
         await process_single_episode(
             browser,
