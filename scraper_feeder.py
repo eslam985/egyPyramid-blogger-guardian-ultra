@@ -596,36 +596,26 @@ async def extract_embed_url(page) -> tuple[Optional[str], str, list]:
     src, status = await _extract_doodstream(page)
     if status == "doodstream_live":
         add_url(src, status)
-    else:
-        log.warning("لم يتم العثور ع سرفر Doodstream صالح")
 
     # 4. StreamWish
     src, status = await _extract_streamwish(page)
     if status == "streamwish_live":
         add_url(src, status)
-    else:
-        log.warning("لم يتم العثور ع سرفر StreamWish صالح")
 
     # 5. LuluStream
     src, status = await _extract_lulustream(page)
     if status == "lulstream_live":
         add_url(src, status)
-    else:
-        log.warning("لم يتم العثور ع سرفر LuluStream صالح")
 
     # 6. UpDown
     src, status = await _extract_updown(page)
     if status == "updown_live":
         add_url(src, status)
-    else:
-        log.warning("لم يتم العثور ع سرفر UpDown صالح")
 
     # 7. Filelions
     src, status = await _extract_filelions(page)
     if status == "filelions_live":
         add_url(src, status)
-    else:
-        log.warning("لم يتم العثور ع سرفر Filelions صالح")
 
     if not primary_url:
         log.error("❌ لم يتم العثور على أي سيرفر صالح.")
@@ -1244,7 +1234,6 @@ async def process_single_season(
                 f"سيتم إكمال بقية الحلقات ثم الإيقاف."
             )
             # نكمّل الموسم لآخره — الإيقاف بيحصل في process_single_series
-        log.info(f"    [{ep_idx}/{len(ep_links)}] 🎬 {ep_url}")
         await process_single_episode(
             browser,
             sb,
@@ -1446,8 +1435,6 @@ async def run_series_scraper_async():
                 if stats["series_completed"] >= TARGET_SERIES:
                     should_stop = True
                     break
-
-                log.info(f"\n  [{s_idx}/{len(series_links)}] 🎬 {series_url}")
                 can_continue = await process_single_series(
                     browser, sb, series_url, stats
                 )
