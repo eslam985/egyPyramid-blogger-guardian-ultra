@@ -65,7 +65,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("TopCrawler")
-
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ===========================================================================
 # Section 3: Supabase Client — الاتصال بقاعدة البيانات
