@@ -14,8 +14,9 @@ from deep_translator import GoogleTranslator
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.metadata.images import upload_poster_to_cloudinary
 from downloader_new.shared.helpers import minutes_to_iso, is_mostly_english
+from downloader_new.db.supabase_client import is_media_data_complete
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("tmdb_client.py")
 translator = GoogleTranslator(source="auto", target="ar")
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -95,28 +96,6 @@ DEFAULT_METADATA = {
     "year": "غير محدد",
 }
 
-# ---------------------------------------------------------------------------
-# Local Cache System - نظام الحفظ المحلي لمنع تكرار الرفع
-# ---------------------------------------------------------------------------
-CACHE_DIR = os.path.join(os.getcwd(), "downloader_new", "metadata")
-os.makedirs(CACHE_DIR, exist_ok=True)
-CACHE_FILE = os.path.join(CACHE_DIR, "tmdb_cache.json")
-
-def _load_cache() -> dict:
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def _save_cache(cache_data: dict):
-    try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache_data, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        log.warning(f"⚠️ فشل حفظ الكاش: {e}")
 
 
 # ===========================================================================
@@ -460,16 +439,28 @@ def build_fallback_result(original_input: str, year: str | None) -> dict:
 # Section 6: OMDb Result Builder — تجميع نتيجة OMDb
 # ===========================================================================
 
-
 def build_metadata_from_omdb(omdb_data: dict, year: str | None) -> dict:
     """تحويل بيانات OMDb الخام لـ metadata dict موحد."""
     imdb_id = omdb_data.get("imdbID")
-    cache = _load_cache()
-    cache_key = f"omdb_{imdb_id}"
+    if imdb_id:
+        title = omdb_data.get("Title", "")
+        release_year = omdb_data.get("Year", year or "N/A")
 
-    if imdb_id and cache_key in cache:
-        log.info(f"⚡ الكاش: تم العثور على العمل (تخطي رفع الصورة لـ Cloudinary): {cache[cache_key]['display_title']}")
-        return cache[cache_key]
+        db_check = is_media_data_complete(imdb_id, title, release_year)
+        if db_check.get("exists") and db_check.get("is_complete"):
+            log.info(f"⚡ قاعدة البيانات: تم العثور على العمل مكتمل البيانات (تخطي جلب البيانات ورفع الصورة): {title}")
+            media = db_check["data"]
+            return {
+                "tmdb_id": imdb_id,
+                "display_title": media.get("title"),  # استبدل باسم العمود الفعلي
+                "story": media.get("story"),
+                "poster": media.get("poster_url"),
+                "labels": media.get("labels"),        # استبدل باسم العمود الفعلي
+                "duration": media.get("duration_iso"),    # استبدل باسم العمود الفعلي
+                "rating": media.get("rating"),        # استبدل باسم العمود الفعلي
+                "runtime": media.get("runtime"),      # استبدل باسم العمود الفعلي
+                "year": media.get("year")             # استبدل باسم العمود الفعلي
+            }
 
     story = translate_text(omdb_data.get("Plot", ""))
     labels = translate_genres(omdb_data.get("Genre", "أفلام"))
@@ -498,10 +489,6 @@ def build_metadata_from_omdb(omdb_data: dict, year: str | None) -> dict:
         "year": release_year,
     }
 
-    if imdb_id:
-        cache[cache_key] = result
-        _save_cache(cache)
-
     return result
 
 
@@ -514,12 +501,21 @@ def build_metadata_from_tmdb(
     tmdb_id: str, content_type: str, original_input: str
 ) -> dict:
     """جلب وتحويل بيانات TMDB الكاملة لـ metadata dict موحد."""
-    cache = _load_cache()
-    cache_key = f"tmdb_{tmdb_id}"
-
-    if cache_key in cache:
-        log.info(f"⚡ الكاش: تم العثور على العمل (تخطي رفع الصورة لـ Cloudinary): {cache[cache_key]['display_title']}")
-        return cache[cache_key]
+    db_check = is_media_data_complete(tmdb_id, original_input, None)
+    if db_check.get("exists") and db_check.get("is_complete"):
+        log.info(f"⚡ قاعدة البيانات: تم العثور على العمل مكتمل البيانات (تخطي جلب البيانات ورفع الصورة): {original_input}")
+        media = db_check["data"]
+        return {
+            "tmdb_id": tmdb_id,
+            "display_title": media.get("title"),  # استبدل باسم العمود الفعلي
+            "story": media.get("story"),
+            "poster": media.get("poster_url"),
+            "labels": media.get("labels"),        # استبدل باسم العمود الفعلي
+            "duration": media.get("duration_iso"),    # استبدل باسم العمود الفعلي
+            "rating": media.get("rating"),        # استبدل باسم العمود الفعلي
+            "runtime": media.get("runtime"),      # استبدل باسم العمود الفعلي
+            "year": media.get("year")             # استبدل باسم العمود الفعلي
+        }
 
     en_data = fetch_tmdb_details(tmdb_id, content_type, language="en")
     ar_data = fetch_tmdb_details(tmdb_id, content_type, language="ar")
@@ -562,9 +558,6 @@ def build_metadata_from_tmdb(
         "runtime": runtime_str,
         "year": release_year,
     }
-
-    cache[cache_key] = result
-    _save_cache(cache)
 
     return result
 

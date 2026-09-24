@@ -148,7 +148,27 @@ def find_existing_media(tmdb_id: Optional[str], title: str, year: Optional[str])
 
     return _find_media_by_smart_pattern(title, year)
 
+def is_media_data_complete(tmdb_id: Optional[str], title: str, year: Optional[str]) -> dict:
+    """
+    التحقق مما إذا كان العمل موجوداً في قاعدة البيانات وبياناته (القصة والبوستر) مكتملة.
+    يُستخدم لتخطي جلب البيانات من TMDB ورفع الصور إذا كانت موجودة مسبقاً.
+    """
+    media = find_existing_media(tmdb_id, title, year)
+    if not media:
+        return {"exists": False, "is_complete": False, "data": None}
 
+    # التحقق من اكتمال البيانات الأساسية (القصة والبوستر)
+    story = media.get("story")
+    poster = media.get("poster_url")
+    
+    has_story = story and story not in _USELESS_VALUES
+    has_poster = poster and poster not in _USELESS_VALUES and "via.placeholder.com" not in poster
+
+    return {
+        "exists": True,
+        "is_complete": bool(has_story and has_poster),
+        "data": media
+    }
 # ===========================================================================
 # Section 3: Media Operations — عمليات جدول medias
 # ===========================================================================
