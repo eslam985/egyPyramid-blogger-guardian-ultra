@@ -6,6 +6,7 @@ import asyncio
 import random
 import subprocess
 import string
+from datetime import datetime, timezone
 
 from downloader_new.db.supabase_client import supabase, initialize_supabase_record
 from downloader_new.metadata.formatter import (
@@ -454,6 +455,7 @@ class EpisodeProcessor:
                 supabase.table("episodes").update({
                     "status_message": "🚀 جاري الضخ للسيرفرات الخماسية عبر الرابط المباشر...",
                     "progress_percent": 85,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }).eq("id", e_id).execute()
             except Exception:
                 pass
@@ -602,7 +604,8 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
             supabase.table("download_tasks").update({
                 "status": "completed",
                 "status_message": "✅ متوفرة مسبقاً (تم تخطي التحميل)",
-                "progress_percent": 100
+                "progress_percent": 100,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", task_id).execute()
         return
 
@@ -648,6 +651,7 @@ async def pyramid_ultimate_beast(url: str, name: str, task_id=None, meta_data=No
                 "status_message": "⚙️ جاري فحص الملف ومعالجته...",
                 "progress_percent": 91,
                 "download_speed": "Processing",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", task_id).execute()
         except Exception as e:
             log.warning(f"⚠️ فشل تحديث حالة التاسك في الخطوة 8 (تجاوز): {e}")

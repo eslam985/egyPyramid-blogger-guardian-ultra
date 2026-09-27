@@ -2,11 +2,13 @@
 import random
 import string
 import os
+from datetime import datetime, timezone
+
 from tqdm import tqdm as tqdm_std
 from downloader_new.db.supabase_client import supabase
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.uploaders.telegram import ProgressStream
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("archive.py")
 
 
 def Upload_To_Archive(
@@ -31,6 +33,7 @@ def Upload_To_Archive(
                 {
                     "status_message": "☁️ جاري الأرشفة (النسخة الخام)...",
                     "progress_percent": 92,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("id", task_id).execute()
         # -------------------------
@@ -40,6 +43,7 @@ def Upload_To_Archive(
                 {
                     "status_message": "☁️ جاري الرفع للأرشيف (نسخة احتياطية)",
                     "progress_percent": 0,  # تصفير العداد للبدء في حساب الرفع
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("id", e_id).execute()
 

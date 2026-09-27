@@ -1,10 +1,11 @@
 import os
+from datetime import datetime, timezone
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.db.supabase_client import supabase, save_links, _clean_payload
 from downloader_new.uploaders.telegram import send_to_telegram
 from downloader_new.uploaders.others import upload_to_mixdrop
 
-log = get_beast_logger("GuardianUltra")
+log = get_beast_logger("task_runner.py")
 
 mix_user = os.getenv("MIXDROP_EMAIL")
 mix_key  = os.getenv("MIXDROP_API_KEY")
@@ -31,6 +32,7 @@ class EpisodeRepository:
         supabase.table("episodes").update({
             "status_message": message,
             "progress_percent": progress,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", episode_id).execute()
 
     def mark_complete(self, episode_id):
@@ -39,6 +41,7 @@ class EpisodeRepository:
                 "progress_percent": 100,
                 "status_message": "✅ اكتملت المعالجة والرفع بنجاح",
                 "download_speed": "Done",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", episode_id).execute()
         except Exception as e:
             log.warning(f"⚠️ فشل تحديث حالة الحلقة: {e}")
@@ -73,6 +76,7 @@ class TaskRepository:
                 "status": status,
                 "progress_percent": 100,
                 "status_message": message,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }).eq("id", task_id).execute()
             log.info(f"✅ تم إغلاق التاسك {task_id} بحالة: {status}")
         except Exception as e:

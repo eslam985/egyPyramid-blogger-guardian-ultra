@@ -1,6 +1,6 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/worker.py
 import httpx
-
+from datetime import datetime, timezone
 # إجبار المكتبة عالمياً على إغلاق HTTP/2 وتفعيل HTTP/1.1 المستقر لمنع سقوط اتصال سوبابيس
 def _patch_httpx_client(client_class):
     orig_init = client_class.__init__
@@ -54,6 +54,7 @@ class TaskRepository:
                 "status": "processing",
                 "status_message": "🚀 الوحش بدأ السحب والتحليل...",
                 "progress_percent": 5,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             })
             .eq("id", job_id)
             .eq("status", "idle")

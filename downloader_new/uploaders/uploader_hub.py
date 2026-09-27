@@ -1,6 +1,7 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/uploaders/uploader_hub.py
 import asyncio
 import os
+from datetime import datetime, timezone
 
 # استيراد كائن supabase الجاهز من مجلد db
 from downloader_new.db.supabase_client import supabase
@@ -55,6 +56,7 @@ async def upload_to_all_servers(
             {
                 "status_message": "🚀 ضخ السيرفرات: VK, Voe, Dood, Tape, Lulu",
                 "progress_percent": 95,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", task_id).execute()
 
@@ -63,6 +65,7 @@ async def upload_to_all_servers(
             {
                 "status_message": "🚀 جاري ضخ الملف لـ VK والرفع المتوازي للبقية...",
                 "progress_percent": 90,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", e_id).execute()
 

@@ -9,6 +9,7 @@ import re
 import os
 import time
 from typing import Optional
+from datetime import datetime, timezone
 
 from supabase import create_client, Client as SupabaseClient
 
@@ -338,6 +339,7 @@ def upsert_episode(
             "identifier": identifier,
             "season_id":  season_id,
             "slug":       ep_slug,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", e_id).execute()
         return e_id
 
@@ -349,6 +351,7 @@ def upsert_episode(
         "identifier":     identifier,
         "status_message": "Waiting...",
         "progress_percent": 0,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
 
     return new_ep.data[0]["id"] if new_ep.data else None

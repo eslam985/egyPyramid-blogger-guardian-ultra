@@ -3,6 +3,7 @@ import os
 import asyncio
 import time
 import re
+from datetime import datetime, timezone
 
 from downloader_new.db.supabase_client import supabase
 from downloader_new.shared.logger import get_beast_logger
@@ -187,6 +188,7 @@ class DownloadProgressTracker:
                     "progress_percent": percent,
                     "status_message": f"📥 جاري التحميل: {percent}%",
                     "download_speed": speed,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("id", self._task_id).execute()
             self._last_db_update = now
