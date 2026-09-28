@@ -960,19 +960,14 @@ async def scrape_series_title_and_year(page) -> tuple[str, Optional[str]]:
 async def scrape_season_links(page) -> list[str]:
     """
     استخراج روابط المواسم من صفحة /list/ الخاصة بالمسلسل.
-    كل موسم له رابط /list/ خاص به أيضاً.
     """
     anchors = await page.query_selector_all("ul.Posts--List div.Small--Box.Season a")
     links = []
     for a in anchors:
         href = await a.get_attribute("href")
         if href:
-            # استخدام الرابط كما هو بدون إضافة /list/
-            links.append(href)
-            
-    # عكس المصفوفة لتبدأ من الموسم الأول (الأقدم) وصولاً للأحدث
+            links.append(href.rstrip("/") + "/list/")
     return list(reversed(links))
-
 
 async def scrape_season_number(page) -> int:
     """استخراج رقم الموسم الحالي من صفحة الموسم."""
