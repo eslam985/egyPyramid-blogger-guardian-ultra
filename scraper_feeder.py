@@ -969,24 +969,36 @@ async def scrape_season_links(page) -> list[str]:
             links.append(href.rstrip("/") + "/list/")
     return list(reversed(links))
 
-async def scrape_season_number(page) -> int:
+async def scrape_season_number(page) -> Optional[int]:
     """استخراج رقم الموسم الحالي من صفحة الموسم."""
+    arabic_to_int = {
+        "الاول": 1, "الأول": 1, "الثاني": 2, "الثالث": 3, "الرابع": 4,
+        "الخامس": 5, "السادس": 6, "السابع": 7, "الثامن": 8, "التاسع": 9,
+        "العاشر": 10, "الحادي عشر": 11, "الثاني عشر": 12
+    }
     try:
-        # نحاول من العنوان
         title_el = await page.query_selector("h1.post-title")
         if title_el:
             text = await title_el.inner_text()
             m = re.search(r"(?:الموسم|موسم|Season)\s*(\d+)", text, re.IGNORECASE)
             if m:
                 return int(m.group(1))
-        # fallback: من الـ URL
-        url = page.url
-        m = re.search(r"الموسم[- _]?(\d+)|season[- _]?(\d+)", url, re.IGNORECASE)
+            for ar_word, num in arabic_to_int.items():
+                if f"الموسم {ar_word}" in text or f"موسم {ar_word}" in text:
+                    return num
+
+        import urllib.parse
+        url = urllib.parse.unquote(page.url)
+        m = re.search(r"(?:الموسم|season)[- _]?(\d+)", url, re.IGNORECASE)
         if m:
-            return int(m.group(1) or m.group(2))
+            return int(m.group(1))
+        for ar_word, num in arabic_to_int.items():
+            if f"الموسم-{ar_word}" in url or f"الموسم_{ar_word}" in url:
+                return num
     except Exception:
         pass
-    return 1
+    # نرجع None بدلاً من 1 لمنع تخريب الترتيب الصحيح
+    return None
 
 
 async def scrape_episode_links(page) -> list[str]:
@@ -1001,7 +1013,7 @@ async def scrape_episode_links(page) -> list[str]:
     return list(reversed(links))
 
 
-async def scrape_episode_number(page) -> int:
+async def scrape_episode_number(page) -> Optional[int]:
     """استخراج رقم الحلقة من صفحتها."""
     try:
         title_el = await page.query_selector("h1.post-title")
@@ -1016,7 +1028,7 @@ async def scrape_episode_number(page) -> int:
             return int(m.group(1) or m.group(2))
     except Exception:
         pass
-    return 1
+    return None
 
 
 # ===========================================================================
@@ -1030,9 +1042,16 @@ def already_exists_episode(
     season_no: int,
     ep_no: int,
     embed_url: Optional[str] = None,
+    task_name: Optional[str] = None,
 ) -> bool:
 
-    # 1. فحص مباشر بـ embed_url إن وجد
+    # 1. فحص بـ task_name لمنع خطأ Unique Constraint
+    if task_name:
+        q = sb.table("download_tasks").select("id").eq("task_name", task_name).limit(1).execute()
+        if q.data:
+            return True
+
+    # 2. فحص مباشر بـ embed_url إن وجد
     if embed_url:
         q = (
             sb.table("download_tasks")
@@ -1152,7 +1171,7 @@ async def process_single_episode(
         )
 
         # ── فحص تكرار مبكر بدون embed ────────────────────────────────
-        if already_exists_episode(sb, series_title, season_no, ep_no):
+        if already_exists_episode(sb, series_title, season_no, ep_no, task_name=task_name):
             stats["ep_skipped"] += 1
             await watch_page.close()
             watch_page = None
