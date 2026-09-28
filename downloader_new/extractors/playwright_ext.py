@@ -14,68 +14,69 @@ log = get_beast_logger("playwright_ext:")
 
 async def get_direct_link_via_playwright(embed_url, output_path=None):
     file_id = embed_url.split("embed-")[-1].replace(".html", "")
-    quality_page_url = f"https://down.vidtube.one/d/{file_id}"
+    # الذهاب مباشرة لصفحة التحميل الخاصة بأعلى جودة (_h)
+    download_page_url = f"https://down.vidtube.one/d/{file_id}_h"
 
-    log.info(f"🔍 الخطوة 1: صفحة اختيار الجودة: {quality_page_url}")
+    log.info(f"🔍 الانتقال مباشرة لصفحة التحميل: {download_page_url}")
 
-    async with AsyncSession(impersonate="chrome") as session:
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--headless=new",
+                "--no-sandbox", 
+                "--disable-blink-features=AutomationControlled", 
+                "--disable-dev-shm-usage",
+            ]
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 720},
+            java_script_enabled=True,
+        )
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        """)
+        page = await context.new_page()
+        await page.add_init_script("window.chrome = { runtime: {} };")
+
         try:
-            # 1. جلب صفحة اختيار الجودة
-            response = await session.get(quality_page_url, timeout=30)
-            if response.status_code != 200:
-                log.error(f"❌ خطأ HTTP: {response.status_code}")
-                return None
-            
-            html_content = response.text
-            if "Just a moment" in html_content:
-                log.error("❌ تم اكتشاف حماية Cloudflare ولم تتجاوزها البصمة.")
-                return None
-
-            # استخراج روابط الجودة باستخدام Regex
-            quality_links = re.findall(r'href="(/d/[^"]+)"', html_content)
-
-            if not quality_links:
-                log.error("❌ لم يتم العثور على روابط الجودة في HTML.")
-                return None
-
-            best_quality_href = quality_links[0]
-            log.info(f"🎯 أعلى جودة متاحة: {best_quality_href}")
-
-            download_page_url = (
-                best_quality_href
-                if best_quality_href.startswith("http")
-                else f"https://down.vidtube.one{best_quality_href}"
+            # حظر السكربت الإعلاني فقط
+            await page.route(
+                "**/*",
+                lambda route: route.abort()
+                if "omoonsih.net" in route.request.url
+                else route.continue_()
             )
 
-            # 2. جلب صفحة التحميل المباشر
-            log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
-            resp_download = await session.get(download_page_url, timeout=30)
-            if resp_download.status_code != 200:
-                log.error(f"❌ خطأ HTTP في صفحة التحميل: {resp_download.status_code}")
-                return None
-            
-            download_html = resp_download.text
+            await page.goto(download_page_url, wait_until="domcontentloaded", timeout=45000)
 
-            # استخراج رابط التحميل المباشر
-            match = re.search(r'class="[^"]*submit-btn[^"]*"[^>]*href="([^"]+)"', download_html)
-            if not match:
-                match = re.search(r'href="([^"]+)"[^>]*class="[^"]*submit-btn[^"]*"', download_html)
+            # انتظار تخطي صفحة Cloudflare (Just a moment...) إن وجدت
+            try:
+                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=15000)
+            except Exception:
+                pass
 
-            if not match:
-                log.error("❌ لم يتم العثور على زر التحميل المباشر.")
-                return None
+            # انتظار ظهور زر التحميل المباشر فوراً
+            btn_selector = "a.btn-gradient.submit-btn"
+            await page.wait_for_selector(btn_selector, timeout=20000)
 
-            direct_link = match.group(1)
+            direct_link = await page.get_attribute(btn_selector, "href")
 
             if not direct_link or "http" not in direct_link:
                 log.error("❌ الرابط المستخرج غير صالح.")
+                await browser.close()
                 return None
 
             log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
+            await browser.close()
             return direct_link
 
         except Exception as e:
-            log.error(f"❌ خطأ في curl_cffi: {str(e)}")
+            log.error(f"❌ خطأ في Playwright: {str(e)}")
+            await browser.close()
             return None
 
 
