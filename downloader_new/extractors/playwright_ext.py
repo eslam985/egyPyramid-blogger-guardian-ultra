@@ -14,7 +14,6 @@ log = get_beast_logger("playwright_ext:")
 
 async def get_direct_link_via_playwright(embed_url, output_path=None):
     file_id = embed_url.split("embed-")[-1].replace(".html", "")
-    # الذهاب مباشرة لصفحة التحميل الخاصة بأعلى جودة (_h)
     download_page_url = f"https://down.vidtube.one/d/{file_id}_h"
 
     log.info(f"🔍 الانتقال مباشرة لصفحة التحميل: {download_page_url}")
@@ -23,16 +22,21 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
         browser = await p.chromium.launch(
             headless=True,
             args=[
-                "--headless=new",
-                "--no-sandbox", 
-                "--disable-blink-features=AutomationControlled", 
-                "--disable-dev-shm-usage",
-            ]
+                  "--headless=new",
+                  "--no-sandbox", 
+                  "--disable-blink-features=AutomationControlled", 
+                  "--disable-dev-shm-usage",
+                  "--disable-web-security",
+                  ]
         )
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 720},
             java_script_enabled=True,
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
         )
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -43,7 +47,8 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
         await page.add_init_script("window.chrome = { runtime: {} };")
 
         try:
-            # حظر السكربت الإعلاني فقط
+            # 1. حظر الإعلانات والسكربتات الخبيثة والصور لتسريع العملية
+            # حظر السكربت الإعلاني فقط، والسماح بالصور والخطوط لأن كلاود فلير يحتاجها لفحص المتصفح
             await page.route(
                 "**/*",
                 lambda route: route.abort()
@@ -53,13 +58,16 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
             await page.goto(download_page_url, wait_until="domcontentloaded", timeout=45000)
 
-            # انتظار تخطي صفحة Cloudflare (Just a moment...) إن وجدت
+            # انتظار تخطي صفحة Cloudflare (Just a moment...)
             try:
-                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=15000)
+                log.info("⏳ جاري انتظار تخطي حماية Cloudflare...")
+                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=20000)
             except Exception:
                 pass
 
-            # انتظار ظهور زر التحميل المباشر فوراً
+            page_title = await page.title()
+            log.info(f"📄 عنوان الصفحة الفعلي الآن: {page_title}")
+
             btn_selector = "a.btn-gradient.submit-btn"
             await page.wait_for_selector(btn_selector, timeout=20000)
 
@@ -78,7 +86,6 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
             log.error(f"❌ خطأ في Playwright: {str(e)}")
             await browser.close()
             return None
-
 
 async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
     """يستخرج الرابط المباشر من رابط embed واحد فقط. يرمي Exception لو فشل."""
