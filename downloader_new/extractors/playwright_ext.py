@@ -39,7 +39,7 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
         await page.add_init_script("window.chrome = { runtime: {} };")
 
         try:
-            await page.goto(quality_page_url, wait_until="networkidle", timeout=45000)
+            await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(3000)
 
             quality_selector = "a.btn.btn-light"
@@ -60,7 +60,7 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
                 download_page_url = best_quality_href
 
             log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
-            await page.goto(download_page_url, wait_until="networkidle", timeout=45000)
+            await page.goto(download_page_url, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(2000)
 
             btn_selector = "a.btn-gradient.submit-btn"
