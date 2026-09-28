@@ -967,8 +967,11 @@ async def scrape_season_links(page) -> list[str]:
     for a in anchors:
         href = await a.get_attribute("href")
         if href:
-            links.append(href.rstrip("/") + "/list/")
-    return links
+            # استخدام الرابط كما هو بدون إضافة /list/
+            links.append(href)
+            
+    # عكس المصفوفة لتبدأ من الموسم الأول (الأقدم) وصولاً للأحدث
+    return list(reversed(links))
 
 
 async def scrape_season_number(page) -> int:
@@ -1138,20 +1141,28 @@ async def process_single_episode(
     """معالجة حلقة واحدة: سحب embed → فحص تكرار → إدراج."""
     watch_page = None
     try:
+        # ── سحب رابط المشاهدة (watch URL) من صفحة الحلقة ────────────
+        watch_page = await browser.new_page(user_agent=pick_random_agent())
+        await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
+
+        # استخراج رقم الحلقة الفعلي من الصفحة
+        actual_ep = await scrape_episode_number(watch_page)
+        if actual_ep:
+            ep_no = actual_ep
+
         # ── بناء اسم المهمة ───────────────────────────────────────────
         year_suffix = f" {year}" if year else ""
         task_name = (
             f"مسلسل {series_title} الموسم {season_no} الحلقة {ep_no} مترجم{year_suffix}"
         )
+
         # ── فحص تكرار مبكر بدون embed ────────────────────────────────
         if already_exists_episode(sb, series_title, season_no, ep_no):
             stats["ep_skipped"] += 1
+            await watch_page.close()
+            watch_page = None
             return
 
-        # ── سحب رابط المشاهدة (watch URL) من صفحة الحلقة ────────────
-        # الـ ep_url هو رابط /watch/ مباشرةً
-        watch_page = await browser.new_page(user_agent=pick_random_agent())
-        await watch_page.goto(ep_url, wait_until="domcontentloaded", timeout=40_000)
         await watch_page.wait_for_selector(
             ".watch--servers--list ul li.server--item", timeout=40_000
         )
@@ -1212,6 +1223,9 @@ async def process_single_season(
         await list_page.goto(
             season_list_url, wait_until="domcontentloaded", timeout=30_000
         )
+        actual_season = await scrape_season_number(list_page)
+        if actual_season:
+            season_no = actual_season
         ep_links = await scrape_episode_links(list_page)
     except Exception as exc:
         log.error(f"  ❌ فشل تحميل قائمة حلقات الموسم {season_no}: {exc}")
