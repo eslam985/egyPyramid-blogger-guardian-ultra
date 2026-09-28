@@ -1,7 +1,9 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/playwright_ext.py
 import os
 from playwright.async_api import async_playwright
+from curl_cffi.requests import AsyncSession
 import asyncio
+import re
 from downloader_new.shared.logger import get_beast_logger
 from downloader_new.extractors.mixdrop_ext import get_mixdrop_direct_link
 from downloader_new.extractors.extract_streamtape import resolve_streamtape
@@ -16,66 +18,27 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
     log.info(f"🔍 الخطوة 1: صفحة اختيار الجودة: {quality_page_url}")
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                  "--headless=new",
-                  "--no-sandbox", 
-                  "--disable-blink-features=AutomationControlled", 
-                  "--disable-dev-shm-usage",
-                  "--disable-web-security",
-                  ]
-        )
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 720},
-            java_script_enabled=True,
-            extra_http_headers={
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            }
-        )
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-        """)
-        page = await context.new_page()
-        await page.add_init_script("window.chrome = { runtime: {} };")
-
+    async with AsyncSession(impersonate="chrome") as session:
         try:
-            # 1. حظر الإعلانات والسكربتات الخبيثة والصور لتسريع العملية
-            # حظر السكربت الإعلاني فقط، والسماح بالصور والخطوط لأن كلاود فلير يحتاجها لفحص المتصفح
-            await page.route(
-                "**/*",
-                lambda route: route.abort()
-                if "omoonsih.net" in route.request.url
-                else route.continue_()
-            )
-
-            await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=45000)
-
-            # انتظار تخطي صفحة Cloudflare (Just a moment...)
-            try:
-                log.info("⏳ جاري انتظار تخطي حماية Cloudflare...")
-                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=20000)
-            except Exception:
-                pass
-
-            page_title = await page.title()
-            log.info(f"📄 عنوان الصفحة الفعلي الآن: {page_title}")
-
-            quality_selector = 'a[href*="/d/"]'
-            await page.wait_for_selector(quality_selector, timeout=15000)
-            quality_links = await page.query_selector_all(quality_selector)
-
-            if not quality_links:
-                log.error("❌ لم يتم العثور على روابط الجودة.")
-                await browser.close()
+            # 1. جلب صفحة اختيار الجودة
+            response = await session.get(quality_page_url, timeout=30)
+            if response.status_code != 200:
+                log.error(f"❌ خطأ HTTP: {response.status_code}")
+                return None
+            
+            html_content = response.text
+            if "Just a moment" in html_content:
+                log.error("❌ تم اكتشاف حماية Cloudflare ولم تتجاوزها البصمة.")
                 return None
 
-            best_quality_href = await quality_links[0].get_attribute("href")
+            # استخراج روابط الجودة باستخدام Regex
+            quality_links = re.findall(r'href="(/d/[^"]+)"', html_content)
+
+            if not quality_links:
+                log.error("❌ لم يتم العثور على روابط الجودة في HTML.")
+                return None
+
+            best_quality_href = quality_links[0]
             log.info(f"🎯 أعلى جودة متاحة: {best_quality_href}")
 
             download_page_url = (
@@ -84,27 +47,35 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
                 else f"https://down.vidtube.one{best_quality_href}"
             )
 
-            # 3. الانتقال لصفحة التحميل المباشر
+            # 2. جلب صفحة التحميل المباشر
             log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
-            await page.goto(download_page_url, wait_until="domcontentloaded", timeout=30000)
+            resp_download = await session.get(download_page_url, timeout=30)
+            if resp_download.status_code != 200:
+                log.error(f"❌ خطأ HTTP في صفحة التحميل: {resp_download.status_code}")
+                return None
+            
+            download_html = resp_download.text
 
-            btn_selector = "a.btn-gradient.submit-btn"
-            await page.wait_for_selector(btn_selector, timeout=20000)
+            # استخراج رابط التحميل المباشر
+            match = re.search(r'class="[^"]*submit-btn[^"]*"[^>]*href="([^"]+)"', download_html)
+            if not match:
+                match = re.search(r'href="([^"]+)"[^>]*class="[^"]*submit-btn[^"]*"', download_html)
 
-            direct_link = await page.get_attribute(btn_selector, "href")
+            if not match:
+                log.error("❌ لم يتم العثور على زر التحميل المباشر.")
+                return None
+
+            direct_link = match.group(1)
 
             if not direct_link or "http" not in direct_link:
                 log.error("❌ الرابط المستخرج غير صالح.")
-                await browser.close()
                 return None
 
             log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
-            await browser.close()
             return direct_link
 
         except Exception as e:
-            log.error(f"❌ خطأ في Playwright: {str(e)}")
-            await browser.close()
+            log.error(f"❌ خطأ في curl_cffi: {str(e)}")
             return None
 
 
