@@ -1,6 +1,7 @@
 # /media/es/DDrive/projects/apps-python/egyPyramid-guardian-ultra/downloader_new/extractors/playwright_ext.py
 import os
 from playwright.async_api import async_playwright
+from curl_cffi.requests import AsyncSession
 import asyncio
 import re
 from downloader_new.shared.logger import get_beast_logger
@@ -15,56 +16,86 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
     file_id = embed_url.split("embed-")[-1].replace(".html", "")
     download_page_url = f"https://down.vidtube.one/d/{file_id}_h"
 
-    log.info(f"🔍 جلب الرابط عبر أمر curl المباشر: {download_page_url}")
+    log.info(f"🔍 الانتقال مباشرة لصفحة التحميل: {download_page_url}")
 
-    curl_cmd = [
-        "curl", "-s", "-L", download_page_url,
-        "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "-H", "Accept-Language: en-US,en;q=0.9",
-        "-H", "Connection: keep-alive"
-    ]
-
-    try:
-        # تنفيذ أمر curl بشكل غير متزامن داخل بايثون
-        process = await asyncio.create_subprocess_exec(
-            *curl_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                  "--headless=new",
+                  "--no-sandbox", 
+                  "--disable-blink-features=AutomationControlled", 
+                  "--disable-dev-shm-usage",
+                  "--disable-web-security",
+                  ]
         )
-        stdout, stderr = await process.communicate()
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 720},
+            java_script_enabled=True,
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
+        )
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        """)
+        page = await context.new_page()
+        await page.add_init_script("window.chrome = { runtime: {} };")
 
-        if process.returncode != 0:
-            log.error(f"❌ خطأ في تنفيذ curl: {stderr.decode('utf-8', errors='ignore')}")
+        try:
+            # 1. طلب سريع عبر محرك شبكة المتصفح (بصمة Chromium حقيقية)
+            resp = await context.request.get(download_page_url, timeout=15000)
+            if resp.status == 200:
+                html_text = await resp.text()
+                if "submit-btn" in html_text and "Just a moment" not in html_text:
+                    match = re.search(r'class="[^"]*submit-btn[^"]*"[^>]*href="([^"]+)"', html_text) or \
+                            re.search(r'href="([^"]+)"[^>]*class="[^"]*submit-btn[^"]*"', html_text)
+                    if match:
+                        direct_link = match.group(1)
+                        if direct_link and "http" in direct_link:
+                            log.info(f"✅ تم صيد الرابط المباشر فوراً (Fast Path): {direct_link[:60]}...")
+                            await browser.close()
+                            return direct_link
+
+            # 2. في حال فشل الطلب المباشر، فتح الصفحة كاملة بالمتصفح
+            log.info("⏳ جاري فتح الصفحة كاملة بالمتصفح لتجاوز الحماية...")
+            page = await context.new_page()
+            await page.route(
+                "**/*",
+                lambda route: route.abort()
+                if "omoonsih.net" in route.request.url
+                else route.continue_()
+            )
+
+            await page.goto(download_page_url, wait_until="domcontentloaded", timeout=45000)
+
+            try:
+                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=20000)
+            except Exception:
+                pass
+
+            btn_selector = "a.btn-gradient.submit-btn"
+            await page.wait_for_selector(btn_selector, timeout=20000)
+
+            direct_link = await page.get_attribute(btn_selector, "href")
+
+            if not direct_link or "http" not in direct_link:
+                log.error("❌ الرابط المستخرج غير صالح.")
+                await browser.close()
+                return None
+
+            log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
+            await browser.close()
+            return direct_link
+
+        except Exception as e:
+            log.error(f"❌ خطأ في Playwright: {str(e)}")
+            await browser.close()
             return None
-
-        html_content = stdout.decode('utf-8', errors='ignore')
-
-        if "Just a moment" in html_content:
-            log.error("❌ تم اكتشاف حماية Cloudflare.")
-            return None
-
-        # استخراج رابط التحميل المباشر من الـ HTML
-        match = re.search(r'class="[^"]*submit-btn[^"]*"[^>]*href="([^"]+)"', html_content)
-        if not match:
-            match = re.search(r'href="([^"]+)"[^>]*class="[^"]*submit-btn[^"]*"', html_content)
-
-        if not match:
-            log.error("❌ لم يتم العثور على زر التحميل المباشر.")
-            return None
-
-        direct_link = match.group(1)
-
-        if not direct_link or "http" not in direct_link:
-            log.error("❌ الرابط المستخرج غير صالح.")
-            return None
-
-        log.info(f"✅ تم صيد الرابط بنجاح: {direct_link[:60]}...")
-        return direct_link
-
-    except Exception as e:
-        log.error(f"❌ خطأ أثناء تنفيذ عملية curl: {str(e)}")
-        return None
 
 async def resolve_direct_url(raw_url: str, output_path: str = None) -> str:
     """يستخرج الرابط المباشر من رابط embed واحد فقط. يرمي Exception لو فشل."""
