@@ -39,11 +39,21 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
         await page.add_init_script("window.chrome = { runtime: {} };")
 
         try:
-            await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=45000)
-            await page.wait_for_timeout(3000)
+            # 1. حظر الإعلانات والسكربتات الخبيثة والصور لتسريع العملية
+            await page.route(
+                "**/*",
+                lambda route: route.abort()
+                if route.request.resource_type in ["image", "media", "font"]
+                or "omoonsih.net" in route.request.url
+                else route.continue_()
+            )
 
-            quality_selector = "a.btn.btn-light"
-            await page.wait_for_selector(quality_selector, state="visible", timeout=15000)
+            # 2. الانتقال لصفحة الجودة
+            await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=30000)
+
+            # البحث عن أزرار الجودات
+            quality_selector = 'a[href*="/d/"]'
+            await page.wait_for_selector(quality_selector, timeout=15000)
             quality_links = await page.query_selector_all(quality_selector)
 
             if not quality_links:
@@ -54,17 +64,18 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
             best_quality_href = await quality_links[0].get_attribute("href")
             log.info(f"🎯 أعلى جودة متاحة: {best_quality_href}")
 
-            if best_quality_href.startswith("/"):
-                download_page_url = f"https://down.vidtube.one{best_quality_href}"
-            else:
-                download_page_url = best_quality_href
+            download_page_url = (
+                best_quality_href
+                if best_quality_href.startswith("http")
+                else f"https://down.vidtube.one{best_quality_href}"
+            )
 
+            # 3. الانتقال لصفحة التحميل المباشر
             log.info(f"🔍 الخطوة 2: صفحة التحميل: {download_page_url}")
-            await page.goto(download_page_url, wait_until="domcontentloaded", timeout=45000)
-            await page.wait_for_timeout(2000)
+            await page.goto(download_page_url, wait_until="domcontentloaded", timeout=30000)
 
             btn_selector = "a.btn-gradient.submit-btn"
-            await page.wait_for_selector(btn_selector, state="visible", timeout=20000)
+            await page.wait_for_selector(btn_selector, timeout=20000)
 
             direct_link = await page.get_attribute(btn_selector, "href")
 
@@ -74,8 +85,6 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
                 return None
 
             log.info(f"✅ تم صيد الرابط: {direct_link[:60]}...")
-
-            # لم نعد نستخدم المتصفح الوهمي للتحميل الفعلي. نرجع الرابط المباشر فقط.
             await browser.close()
             return direct_link
 
