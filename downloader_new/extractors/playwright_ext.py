@@ -19,15 +19,16 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", 
+            args=[
+                  "--headless=new",
+                  "--no-sandbox", 
                   "--disable-blink-features=AutomationControlled", 
-                  "--disable-dev-shm-usage",
                   "--disable-dev-shm-usage",
                   "--disable-web-security",
                   ]
         )
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 720},
             java_script_enabled=True,
             extra_http_headers={
@@ -45,24 +46,26 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
         try:
             # 1. حظر الإعلانات والسكربتات الخبيثة والصور لتسريع العملية
+            # حظر السكربت الإعلاني فقط، والسماح بالصور والخطوط لأن كلاود فلير يحتاجها لفحص المتصفح
             await page.route(
                 "**/*",
                 lambda route: route.abort()
-                if route.request.resource_type in ["image", "media", "font"]
-                or "omoonsih.net" in route.request.url
+                if "omoonsih.net" in route.request.url
                 else route.continue_()
             )
 
-            # 2. الانتقال لصفحة الجودة
-            await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=30000)
-            page_title = await page.title()
-            log.info(f"📄 عنوان الصفحة الفعلي: {page_title}")
+            await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=45000)
+
+            # انتظار تخطي صفحة Cloudflare (Just a moment...)
             try:
-                # انتظار تجاوز صفحة الحماية إذا كانت موجودة
-                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=10000)
+                log.info("⏳ جاري انتظار تخطي حماية Cloudflare...")
+                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=20000)
             except Exception:
                 pass
-            # البحث عن أزرار الجودات
+
+            page_title = await page.title()
+            log.info(f"📄 عنوان الصفحة الفعلي الآن: {page_title}")
+
             quality_selector = 'a[href*="/d/"]'
             await page.wait_for_selector(quality_selector, timeout=15000)
             quality_links = await page.query_selector_all(quality_selector)
