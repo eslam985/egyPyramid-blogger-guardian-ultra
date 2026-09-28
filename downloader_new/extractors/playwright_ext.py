@@ -19,7 +19,12 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"]
+            args=["--no-sandbox", 
+                  "--disable-blink-features=AutomationControlled", 
+                  "--disable-dev-shm-usage",
+                  "--disable-dev-shm-usage",
+                  "--disable-web-security",
+                  ]
         )
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
@@ -50,7 +55,13 @@ async def get_direct_link_via_playwright(embed_url, output_path=None):
 
             # 2. الانتقال لصفحة الجودة
             await page.goto(quality_page_url, wait_until="domcontentloaded", timeout=30000)
-
+            page_title = await page.title()
+            log.info(f"📄 عنوان الصفحة الفعلي: {page_title}")
+            try:
+                # انتظار تجاوز صفحة الحماية إذا كانت موجودة
+                await page.wait_for_function("!document.title.includes('Just a moment')", timeout=10000)
+            except Exception:
+                pass
             # البحث عن أزرار الجودات
             quality_selector = 'a[href*="/d/"]'
             await page.wait_for_selector(quality_selector, timeout=15000)
